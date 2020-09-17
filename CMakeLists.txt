@@ -10,15 +10,15 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-set(GAME "nethack")
+set(GAME "citizenhack")
 set(GAME_ARCHIVE "nhdat")
 
 # Config
-set(HACK_DIRECTORY      "${CMAKE_INSTALL_PREFIX}/lib/nethack"   CACHE PATH      "The HACKDIR")
-set(HACK_DUMPLOG        ON                                      CACHE BOOL      "Enable the dumplog feature")
-set(HACK_DUMPLOG_FILE   "/tmp/nethack.%n.%d.log"                CACHE STRING    "The dumplog file template")
-set(HACK_DATABASE       ON                                      CACHE BOOL      "Enable the database file")
-set(HACK_WIN_CURSES     ON                                      CACHE BOOL      "Enable ncurses graphics")
+set(HACK_DIRECTORY      "${CMAKE_INSTALL_PREFIX}/lib/citizenhack"   CACHE PATH      "The HACKDIR")
+set(HACK_DUMPLOG        ON                                          CACHE BOOL      "Enable the dumplog feature")
+set(HACK_DUMPLOG_FILE   "/tmp/citizenhack.%n.%d.log"                CACHE STRING    "The dumplog file template")
+set(HACK_DATABASE       ON                                          CACHE BOOL      "Enable the database file")
+set(HACK_WIN_CURSES     ON                                          CACHE BOOL      "Enable ncurses graphics")
 
 if (HACK_WIN_CURSES)
     set(SUGGESTED_HACK_WIN_DEFAULT "curses")

@@ -463,7 +463,7 @@ struct obj *otmp UNUSED;
     static const char *junk[] = {
         "Report bugs to <%s>.", /*** must be first entry ***/
         "Please disregard previous letter.",
-        "Welcome to NetHack.",
+        "Welcome to CitizenHack.",
 #ifdef AMIGA
         "Only Amiga makes it possible.",
         "CATS have all the answers.",
