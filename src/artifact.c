@@ -199,6 +199,9 @@ aligntyp alignment; /* target alignment, or A_NONE */
             otmp = oname(otmp, a->name);
             otmp->oartifact = m;
             artiexist[m] = TRUE;
+
+            if (otmp->otyp == WAN_WISHING)
+                otmp->spe = 5;
         }
     } else {
         /* nothing appropriate could be found; return original object */

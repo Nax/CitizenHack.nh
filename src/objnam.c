@@ -3400,7 +3400,8 @@ struct obj *no_wish;
         && strncmpi(bp, "leather armor", 13)
         && strncmpi(bp, "tooled horn", 11)
         && strncmpi(bp, "food ration", 11)
-        && strncmpi(bp, "meat ring", 9))
+        && strncmpi(bp, "meat ring", 9)
+        && strncmpi(bp, "Wand of Wonder", 14))
         for (i = 0; i < (int) (sizeof wrpsym); i++) {
             register int j = strlen(wrp[i]);
 
@@ -4005,6 +4006,7 @@ struct obj *no_wish;
             otmp->oerodeproof = (Luck >= 0 || wizard);
     }
 
+#if 0
     /* set otmp->recharged */
     if (oclass == WAND_CLASS) {
         /* prevent wishing abuse */
@@ -4012,6 +4014,7 @@ struct obj *no_wish;
             rechrg = 1;
         otmp->recharged = (unsigned) rechrg;
     }
+#endif
 
     /* set poisoned */
     if (ispoisoned) {
@@ -4088,7 +4091,8 @@ struct obj *no_wish;
     /* more wishing abuse: don't allow wishing for certain artifacts */
     /* and make them pay; charge them for the wish anyway! */
     if ((is_quest_artifact(otmp)
-         || (otmp->oartifact && rn2(nartifact_exist()) > 1)) && !wizard) {
+         || (otmp->oartifact && rn2(nartifact_exist()) > 2)
+         || (otmp->oartifact == ART_WAND_OF_WONDERS)) && !wizard) {
         artifact_exists(otmp, safe_oname(otmp), FALSE);
         obfree(otmp, (struct obj *) 0);
         otmp = (struct obj *) &zeroobj;

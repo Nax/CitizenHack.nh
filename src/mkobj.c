@@ -1018,12 +1018,14 @@ boolean artif;
             break;
         case WAND_CLASS:
             if (otmp->otyp == WAN_WISHING)
-                otmp->spe = rnd(3);
+                otmp->spe = 3;
             else
                 otmp->spe =
                     rn1(5, (objects[otmp->otyp].oc_dir == NODIR) ? 11 : 4);
             blessorcurse(otmp, 17);
             otmp->recharged = 0; /* used to control recharging */
+            if (artif && !rn2(20))
+                otmp = mk_artifact(otmp, (aligntyp) A_NONE);
             break;
         case RING_CLASS:
             if (objects[otmp->otyp].oc_charged) {

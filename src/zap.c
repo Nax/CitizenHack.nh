@@ -2174,11 +2174,11 @@ register struct obj *obj;
         break;
     case WAN_WISHING:
         known = TRUE;
-        if (Luck + rn2(5) < 0) {
+        if (Luck + rn2(5) < 0 && !obj->oartifact) {
             pline("Unfortunately, nothing happens.");
             break;
         }
-        makewish();
+        makewish(!!obj->oartifact);
         break;
     case WAN_ENLIGHTENMENT:
         known = TRUE;
@@ -5283,7 +5283,8 @@ int triesleft;
 }
 
 void
-makewish()
+makewish(ident)
+int ident;
 {
     char buf[BUFSZ] = DUMMY;
     char promptbuf[BUFSZ];
@@ -5333,6 +5334,9 @@ makewish()
     u.uconduct.wishes++;
 
     if (otmp != &zeroobj) {
+        if (ident) {
+            identify(otmp);
+        }
         const char
             *verb = ((Is_airlevel(&u.uz) || u.uinwater) ? "slip" : "drop"),
             *oops_msg = (u.uswallow

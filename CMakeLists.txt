@@ -65,26 +65,31 @@ endif()
 file(MAKE_DIRECTORY ${HACKDIR} ${HACKDIR_DATA} ${GENERATED_DIR_DUMMY} "${GENERATED_DIR}/include" "${GENERATED_DIR}/src" "${GENERATED_DIR}/dat" "${CMAKE_BINARY_DIR}/stamps/lev")
 
 function(add_makedef flag)
+    cmake_parse_arguments(ADD_MAKEDEF "" "" "OUTPUT;DEPENDS" ${ARGN})
     set(outputs "")
-    foreach(o ${ARGN})
+    foreach(o ${ADD_MAKEDEF_OUTPUT})
         list(APPEND outputs "${GENERATED_DIR}/${o}")
     endforeach()
     add_custom_command(
         OUTPUT ${outputs}
+        DEPENDS ${ADD_MAKEDEF_DEPENDS}
         COMMAND makedefs "${GENERATED_DIR_DUMMY}/" "-${flag}"
         VERBATIM
     )
 endfunction()
 
-add_makedef(d "dat/data")
-add_makedef(p "include/pm.h")
-add_makedef(o "include/onames.h")
-add_makedef(v "include/date.h" "dat/options")
-add_makedef(e "dat/dungeon.pdf")
-add_makedef(q "dat/quest.dat")
-add_makedef(s "dat/bogusmon" "dat/engrave" "dat/epitaph")
-add_makedef(r "dat/rumors")
-add_makedef(h "dat/oracles")
+add_makedef(d
+    OUTPUT "dat/data"
+    DEPENDS "${CMAKE_SOURCE_DIR}/dat/data.base"
+)
+add_makedef(p OUTPUT "include/pm.h")
+add_makedef(o OUTPUT "include/onames.h")
+add_makedef(v OUTPUT "include/date.h" "dat/options")
+add_makedef(e OUTPUT "dat/dungeon.pdf")
+add_makedef(q OUTPUT "dat/quest.dat")
+add_makedef(s OUTPUT "dat/bogusmon" "dat/engrave" "dat/epitaph")
+add_makedef(r OUTPUT "dat/rumors")
+add_makedef(h OUTPUT "dat/oracles")
 
 # Dungeon Compiler
 bison_target(dgn_parser "${CMAKE_SOURCE_DIR}/util/dgn_comp.y" "${GENERATED_DIR}/src/dgn_parser.c" DEFINES_FILE "${GENERATED_DIR}/include/dgn_comp.h")

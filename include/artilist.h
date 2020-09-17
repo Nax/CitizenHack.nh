@@ -162,6 +162,10 @@ STATIC_OVL NEARDATA struct artifact artilist[] = {
     A("Sunsword", LONG_SWORD, (SPFX_RESTR | SPFX_DFLAG2), 0, M2_UNDEAD,
       PHYS(5, 0), DFNS(AD_BLND), NO_CARY, 0, A_LAWFUL, NON_PM, NON_PM, 1500L,
       NO_COLOR),
+    
+    A("The Wand of Wonders", WAN_WISHING, SPFX_RESTR, 0, 0,
+      NO_ATTK, NO_DFNS, NO_CARY, 0, A_NONE, NON_PM, NON_PM, 7500L,
+      NO_COLOR),
 
     /*
      *      The artifacts for the quest dungeon, all self-willed.

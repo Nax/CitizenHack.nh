@@ -200,7 +200,7 @@ dosit()
                     You_feel("your luck is changing.");
                     change_luck(1);
                 } else
-                    makewish();
+                    makewish(FALSE);
                 break;
             case 7:
               {
