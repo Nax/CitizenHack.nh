@@ -2140,6 +2140,10 @@ const char *
 Hello(mtmp)
 struct monst *mtmp;
 {
+    if (mtmp && mtmp->data == &mons[PM_ARCH_SHOPKEEPER]) {
+        return "Bonjour";
+    }
+
     switch (Role_switch) {
     case PM_KNIGHT:
         return "Salutations"; /* Olde English */
@@ -2161,8 +2165,13 @@ struct monst *mtmp;
 }
 
 const char *
-Goodbye()
+Goodbye(mtmp)
+struct monst *mtmp;
 {
+    if (mtmp && mtmp->data == &mons[PM_ARCH_SHOPKEEPER]) {
+        return "Au revoir";
+    }
+
     switch (Role_switch) {
     case PM_KNIGHT:
         return "Fare thee well"; /* Olde English */

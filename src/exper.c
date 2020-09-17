@@ -212,7 +212,7 @@ const char *drainer; /* cause of death, if drain should be fatal */
         return;
 
     if (u.ulevel > 1) {
-        pline("%s level %d.", Goodbye(), u.ulevel--);
+        pline("%s level %d.", Goodbye(0), u.ulevel--);
         /* remove intrinsic abilities */
         adjabil(u.ulevel + 1, u.ulevel);
         reset_rndmonst(NON_PM); /* new monster selection */

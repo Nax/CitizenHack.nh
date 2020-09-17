@@ -2703,6 +2703,13 @@ struct permonst _mons2[] = {
         M1_HUMANOID | M1_SLITHY | M1_THICK_HIDE | M1_POIS,
         M2_STALK | M2_HOSTILE | M2_COLLECT | M2_MAGIC, M3_INFRAVISIBLE,
         12, CLR_ORANGE),
+    MON("arch-shopkeeper", S_HUMAN, LVL(50, 20, 0, 50, 0), (G_NOGEN | G_UNIQ),
+        A(ATTK(AT_WEAP, AD_PHYS, 4, 4), ATTK(AT_WEAP, AD_PHYS, 4, 4), NO_ATTK,
+          NO_ATTK, NO_ATTK, NO_ATTK),
+        SIZ(WT_HUMAN, 400, MS_SELL, MZ_HUMAN), 0, 0,
+        M1_HUMANOID | M1_OMNIVORE, M2_NOPOLY | M2_HUMAN | M2_PEACEFUL
+        | M2_STRONG | M2_COLLECT | M2_MAGIC,
+        M3_INFRAVISIBLE, 15, HI_LORD),
 
     /*
      * dummy monster needed for visual interface

@@ -509,6 +509,9 @@ const char *const *nlp;
         /* special-case minetown lighting shk */
         shname = "+Izchak";
         shk->female = FALSE;
+    } else if (Is_market_level(&u.uz)) {
+        shname = "-One-Eyed Sam";
+        shk->female = TRUE;
     } else {
         /* We want variation from game to game, without needing the save
            and restore support which would be necessary for randomization;
@@ -590,6 +593,7 @@ shkinit(shp, sroom)
 const struct shclass *shp;
 struct mkroom *sroom;
 {
+    int montype;
     register int sh, sx, sy;
     struct monst *shk;
     struct eshk *eshkp;
@@ -652,7 +656,12 @@ struct mkroom *sroom;
         (void) rloc(m_at(sx, sy), FALSE); /* insurance */
 
     /* now initialize the shopkeeper monster structure */
-    if (!(shk = makemon(&mons[PM_SHOPKEEPER], sx, sy, MM_ESHK)))
+    if (Is_market_level(&u.uz)) {
+        montype = PM_ARCH_SHOPKEEPER;
+    } else {
+        montype = PM_SHOPKEEPER;
+    }
+    if (!(shk = makemon(&mons[montype], sx, sy, MM_ESHK)))
         return -1;
     eshkp = ESHK(shk); /* makemon(...,MM_ESHK) allocates this */
     shk->isshk = shk->mpeaceful = 1;

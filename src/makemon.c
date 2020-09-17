@@ -695,6 +695,19 @@ register struct monst *mtmp;
             mkmonmoney(mtmp, (long) rn1(10, 20));
         } else if (quest_mon_represents_role(ptr, PM_MONK)) {
             (void) mongets(mtmp, rn2(11) ? ROBE : CLOAK_OF_MAGIC_RESISTANCE);
+        } else if (ptr == &mons[PM_ARCH_SHOPKEEPER]) {
+            (void) mongets(mtmp, SKELETON_KEY);
+            (void) mongets(mtmp, WAN_DEATH);
+            (void) mongets(mtmp, HELM_OF_BRILLIANCE);
+            (void) mongets(mtmp, GAUNTLETS_OF_POWER);
+            (void) mongets(mtmp, SPEED_BOOTS);
+            (void) mongets(mtmp, SILVER_DRAGON_SCALE_MAIL);
+            (void) mongets(mtmp, T_SHIRT);
+            (void) mongets(mtmp, AMULET_OF_LIFE_SAVING);
+            (void) mongets(mtmp, CLOAK_OF_PROTECTION);
+            (void) mongets(mtmp, SHIELD_OF_REFLECTION);
+            for (int i = 0; i < 8; ++i)
+                (void) mongets(mtmp, POT_FULL_HEALING);
         }
         break;
     case S_NYMPH:

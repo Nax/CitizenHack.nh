@@ -442,7 +442,7 @@ boolean newlev;
         return;
     }
 
-    if (rob_shop(shkp)) {
+    if (rob_shop(shkp) && !Is_market_level(&u.uz)) {
         call_kops(shkp, (!newlev && levl[u.ux0][u.uy0].edge));
     }
 }
@@ -463,7 +463,7 @@ xchar x, y;
     if (!eshkp->billct && !eshkp->debit) /* bill is settled */
         return;
 
-    if (rob_shop(shkp)) {
+    if (rob_shop(shkp) && !Is_market_level(&u.uz)) {
         /*[might want to set 2nd arg based on distance from shop doorway]*/
         call_kops(shkp, FALSE);
     }
@@ -609,9 +609,9 @@ char *enterstring;
                   Shknam(shkp), noit_mhis(shkp));
     } else {
         if (!Deaf && !muteshk(shkp))
-            verbalize("%s, %s!  Welcome%s to %s %s!", Hello(shkp), plname,
+            verbalize("%s, %s!  Welcome%s to %s %s!%s", Hello(shkp), plname,
                       eshkp->visitct++ ? " again" : "",
-                      s_suffix(shkname(shkp)), shtypes[rt - SHOPBASE].name);
+                      s_suffix(shkname(shkp)), shtypes[rt - SHOPBASE].name, shkp->mnum == PM_ARCH_SHOPKEEPER ? " Shop quickly." : "");
         else
             You("enter %s %s%s!",
                 s_suffix(shkname(shkp)),
@@ -2165,6 +2165,17 @@ register struct monst *shkp; /* if angry, impose a surcharge */
        from the multiplier/divisor calculation */
     if (shkp && ESHK(shkp)->surcharge)
         tmp += (tmp + 2L) / 3L;
+
+    /* Black Market */
+    if (Is_market_level(&u.uz)) {
+        /* Base cost is much higher */
+        tmp *= 10;
+        if (obj->oartifact)
+            tmp *= 4;
+        if (objects[obj->otyp].oc_magic)
+            tmp *= 3;
+    }
+
     return tmp;
 }
 
@@ -3021,6 +3032,25 @@ int deliberate;
     auto_credit = FALSE;
 }
 
+STATIC_OVL const char*
+generous(gold)
+long gold;
+{
+    if (gold < 1)
+        return "extremely cheap";
+    if (gold < 10)
+        return "very cheap";
+    if (gold < 100)
+        return "cheap";
+    if (gold < 1000)
+        return "modest";
+    if (gold < 10000)
+        return "generous";
+    if (gold < 100000)
+        return "very generous";
+    return "extremely generous";
+}
+
 void
 sellobj(obj, x, y)
 register struct obj *obj;
@@ -3057,6 +3087,20 @@ xchar x, y;
         ltmp = set_cost(obj, shkp);
 
     offer = ltmp + cltmp;
+
+    /* Black market: just steal items */
+    if (Is_market_level(&u.uz)) {
+        rouse_shk(shkp, TRUE); /* wake up sleeping or paralyzed shk */
+        eshkp = ESHK(shkp);
+
+        if (ANGRY(shkp))
+            pline("%s seems indifferent.", Shknam(shkp));
+        else if (!Deaf && !muteshk(shkp))
+            verbalize("Thank you for your %s donation.", generous(isgold ? obj->quan : offer + gltmp));
+        else
+            pline("%s looks amused.", Shknam(shkp));
+        return;
+    }
 
     /* get one case out of the way: nothing to sell, and no gold */
     if (!(isgold || cgold)

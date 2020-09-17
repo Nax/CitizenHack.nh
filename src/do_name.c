@@ -1720,7 +1720,7 @@ boolean called;
             return buf;
         }
         Strcat(buf, shkname(mtmp));
-        if (mdat == &mons[PM_SHOPKEEPER] && !do_invis)
+        if ((mdat == &mons[PM_SHOPKEEPER] || mdat == &mons[PM_ARCH_SHOPKEEPER]) && !do_invis)
             return buf;
         Strcat(buf, " the ");
         if (do_invis)

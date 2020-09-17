@@ -1473,7 +1473,7 @@ int how;
         /* don't bother counting to see whether it should be plural */
     }
 
-    Sprintf(pbuf, "%s %s the %s...", Goodbye(), plname,
+    Sprintf(pbuf, "%s %s the %s...", Goodbye(0), plname,
             (how != ASCENDED)
                 ? (const char *) ((flags.female && urole.name.f)
                     ? urole.name.f

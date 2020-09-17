@@ -14,7 +14,7 @@
 #		number of choices for its branch level _first_.
 #
 
-DUNGEON:	"The Dungeons of Doom" "D" (25, 5)
+DUNGEON:	"The Dungeons of Doom" "D" (30, 5)
 ALIGNMENT:	unaligned
 BRANCH:		"The Gnomish Mines" @ (2, 3)
 LEVEL:		"rogue" "R" @ (15, 4)
@@ -25,6 +25,7 @@ CHAINBRANCH:	"Sokoban" "oracle" + (1, 0) up
 RNDLEVEL:	"bigrm" "B" @ (10, 3) 40 10
 CHAINBRANCH:	"The Quest" "oracle" + (6, 2) portal
 BRANCH:		"Fort Ludios" @ (18, 4) portal
+BRANCH:		"Black Market" @ (20, 3) portal
 RNDLEVEL:	"medusa" "none" @ (-5, 4) 4
 LEVALIGN:	chaotic
 LEVEL:		"castle" "none" @ (-1, 0)
@@ -141,3 +142,11 @@ LEVEL:		"fire"   "none" @ (3, 0)
 LEVEL:		"air"    "none" @ (4, 0)
 LEVEL:		"earth"  "none" @ (5, 0)
 LEVEL:		"dummy"  "none" @ (6, 0)
+
+#
+#	The Black Market
+#
+DUNGEON:	"Black Market" "M" (1, 0)
+DESCRIPTION: mazelike
+ALIGNMENT:	chaotic
+LEVEL:		"market" "M" @ (-1, 0)
