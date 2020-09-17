@@ -1451,6 +1451,9 @@ register struct obj *obj;
         if (obj->otyp == BAG_OF_HOLDING)
             cwt = obj->cursed ? (cwt * 2) : obj->blessed ? ((cwt + 3) / 4)
                                                          : ((cwt + 1) / 2);
+        
+        if (obj->otyp == BAG_OF_FORTUNE)
+            cwt = 0;
 
         return wt + cwt;
     }

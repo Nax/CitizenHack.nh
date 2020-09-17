@@ -1232,6 +1232,9 @@ struct obj *container, *obj;
     struct obj **prev;
     int owt, nwt;
 
+    if (container->otyp == BAG_OF_FORTUNE)
+        return 0;
+
     if (container->otyp != BAG_OF_HOLDING)
         return obj->owt;
 
@@ -2194,6 +2197,13 @@ register struct obj *obj;
          */
         Strcpy(buf, the(xname(obj)));
         You("cannot fit %s into %s.", buf, the(xname(current_container)));
+        return 0;
+    }
+
+    /* Bag of fortune */
+    if (current_container->otyp == BAG_OF_FORTUNE && obj->oclass != COIN_CLASS && !(current_container->blessed && obj->oclass == GEM_CLASS)) {
+        Strcpy(buf, the(xname(current_container)));
+        pline("A magical force prevents you from inserting %s into %s!", doname(obj), buf);
         return 0;
     }
 

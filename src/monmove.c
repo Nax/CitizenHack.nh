@@ -1674,7 +1674,7 @@ struct monst *mtmp;
             && typ != STETHOSCOPE && typ != BLINDFOLD && typ != TOWEL
             && typ != TIN_WHISTLE && typ != MAGIC_WHISTLE
             && typ != MAGIC_MARKER && typ != TIN_OPENER && typ != SKELETON_KEY
-            && typ != LOCK_PICK)
+            && typ != LOCK_PICK && typ != BAG_OF_FORTUNE)
             return TRUE;
         if (Is_container(obj) && obj->cobj)
             return TRUE;
