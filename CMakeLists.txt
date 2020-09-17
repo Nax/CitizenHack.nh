@@ -182,6 +182,7 @@ copy_nhdat("${CMAKE_SOURCE_DIR}/dat/history")
 copy_nhdat("${CMAKE_SOURCE_DIR}/dat/keyhelp")
 copy_nhdat("${CMAKE_SOURCE_DIR}/dat/license")
 copy_nhdat("${CMAKE_SOURCE_DIR}/dat/opthelp")
+copy_nhdat("${CMAKE_SOURCE_DIR}/dat/tribute")
 copy_nhdat("${CMAKE_SOURCE_DIR}/dat/wizhelp")
 
 list(TRANSFORM HACKDIR_DATA_FILES PREPEND "${HACKDIR_DATA}/" OUTPUT_VARIABLE HACKDIR_DATA_DEPS)
