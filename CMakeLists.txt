@@ -10,11 +10,14 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
+set(GAME "nethack")
+set(GAME_ARCHIVE "nhdat")
+
 # Config
 set(HACK_DIRECTORY      "${CMAKE_INSTALL_PREFIX}/lib/nethack"   CACHE PATH      "The HACKDIR")
 set(HACK_DUMPLOG        ON                                      CACHE BOOL      "Enable the dumplog feature")
 set(HACK_DUMPLOG_FILE   "/tmp/nethack.%n.%d.log"                CACHE STRING    "The dumplog file template")
-set(HACK_DATABASE       ON                                      CACHE BOOL      "Enable the database file (nhdat)")
+set(HACK_DATABASE       ON                                      CACHE BOOL      "Enable the database file")
 set(HACK_WIN_CURSES     ON                                      CACHE BOOL      "Enable ncurses graphics")
 
 if (HACK_WIN_CURSES)
@@ -25,12 +28,28 @@ endif()
 
 set(HACK_WIN_DEFAULT     ${SUGGESTED_HACK_WIN_DEFAULT}          CACHE STRING    "The default window system to use")
 
+macro(inject_config tgt)
+    target_compile_definitions(${tgt} PRIVATE
+        HACKDIR="${HACK_DIRECTORY}"
+        DUMPLOG_FILE="${HACK_DUMPLOG_FILE}"
+        DEFAULT_WINDOW_SYS="${HACK_WIN_DEFAULT}"
+        $<$<BOOL:${HACK_DATABASE}>:DLB>
+        $<$<BOOL:${HACK_DUMPLOG}>:DUMPLOG>
+        $<$<BOOL:${HACK_WIN_CURSES}>:CURSES_GRAPHICS>
+        SCORE_ON_BOTL
+        SECURE
+        ZLIB_COMP
+    )
+endmacro()
+
+# Makedefs
 add_executable(
     makedefs
     "${CMAKE_SOURCE_DIR}/src/monst.c"
     "${CMAKE_SOURCE_DIR}/src/objects.c"
     "${CMAKE_SOURCE_DIR}/util/makedefs.c"
 )
+inject_config(makedefs)
 target_compile_definitions(makedefs PRIVATE FILE_PREFIX=1)
 target_include_directories(makedefs PRIVATE "${CMAKE_SOURCE_DIR}/include")
 
@@ -79,6 +98,7 @@ add_executable(dgn
     "${GENERATED_DIR}/src/dgn_lexer.c"
     "${GENERATED_DIR}/include/date.h"
 )
+inject_config(dgn)
 target_include_directories(dgn PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include")
 
 # Level Compiler
@@ -100,6 +120,7 @@ add_executable(lev
     "${GENERATED_DIR}/include/pm.h"
     "${GENERATED_DIR}/include/onames.h"
 )
+inject_config(lev)
 target_include_directories(lev PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include")
 
 # Hackdir Data
@@ -178,7 +199,7 @@ if (HACK_DATABASE)
         "${CMAKE_SOURCE_DIR}/util/panic.c"
     )
     target_include_directories(dlb PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include")
-    target_compile_definitions(dlb PRIVATE DLB)
+    inject_config(dlb)
     set(GENERATED_ARCHIVE "${HACKDIR}/nhdat")
     add_custom_command(
         OUTPUT "${GENERATED_ARCHIVE}"
@@ -241,25 +262,32 @@ if (HACK_WIN_CURSES)
     list(APPEND SOURCES ${SOURCES_WIN_CURSES})
 endif()
 
-add_executable(nethack ${SOURCES})
-target_compile_definitions(nethack PRIVATE
-    HACKDIR="${HACK_DIRECTORY}"
-    DUMPLOG_FILE="${HACK_DUMPLOG_FILE}"
-    DEFAULT_WINDOW_SYS="${HACK_WIN_DEFAULT}"
-    $<$<BOOL:${HACK_DATABASE}>:DLB>
-    $<$<BOOL:${HACK_DUMPLOG}>:DUMPLOG>
-    $<$<BOOL:${HACK_WIN_CURSES}>:CURSES_GRAPHICS>
-    SCORE_ON_BOTL
-    SECURE
-    ZLIB_COMP
-)
-target_include_directories(nethack PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include" ${CURSES_INCLUDE_DIRS})
-target_link_libraries(nethack ${CURSES_LIBRARIES} ZLIB::ZLIB)
-add_dependencies(nethack data)
+add_executable(${GAME} ${SOURCES})
+inject_config(${GAME})
+target_include_directories(${GAME} PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include" ${CURSES_INCLUDE_DIRS})
+target_link_libraries(${GAME} ${CURSES_LIBRARIES} ZLIB::ZLIB)
+add_dependencies(${GAME} data)
 
 # Install
-#file(TOUCH "${CMAKE_BINARY_DIR}/gen/perm")
+install(
+    TARGETS ${GAME}
+    RUNTIME DESTINATION bin
+    PERMISSIONS
+        OWNER_READ OWNER_WRITE OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
+        SETGID
+)
 
-#install(TARGETS nethack RUNTIME DESTINATION bin PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE SETGID)
-#install(FILES "${CMAKE_SOURCE_DIR}/sys/unix/sysconf" "${GENERATED_ARCHIVE}" DESTINATION "${HACK_DIRECTORY}")
-#install(FILES "${CMAKE_BINARY_DIR}/gen/perm" DESTINATION "${HACK_DIRECTORY}" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ)
+install(
+    DIRECTORY "${HACKDIR}/"
+    DESTINATION "${HACK_DIRECTORY}"
+    FILE_PERMISSIONS
+        OWNER_READ OWNER_WRITE
+        GROUP_READ GROUP_WRITE
+        WORLD_READ
+    DIRECTORY_PERMISSIONS
+        OWNER_READ OWNER_WRITE OWNER_EXECUTE
+        GROUP_READ GROUP_WRITE GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
+)
