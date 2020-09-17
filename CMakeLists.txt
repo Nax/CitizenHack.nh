@@ -15,6 +15,15 @@ set(HACK_DIRECTORY      "${CMAKE_INSTALL_PREFIX}/lib/nethack"   CACHE PATH      
 set(HACK_DUMPLOG        ON                                      CACHE BOOL      "Enable the dumplog feature")
 set(HACK_DUMPLOG_FILE   "/tmp/nethack.%n.%d.log"                CACHE STRING    "The dumplog file template")
 set(HACK_DATABASE       ON                                      CACHE BOOL      "Enable the database file (nhdat)")
+set(HACK_WIN_CURSES     ON                                      CACHE BOOL      "Enable ncurses graphics")
+
+if (HACK_WIN_CURSES)
+    set(SUGGESTED_HACK_WIN_DEFAULT "curses")
+else()
+    set(SUGGESTED_HACK_WIN_DEFAULT "tty")
+endif()
+
+set(HACK_WIN_DEFAULT     ${SUGGESTED_HACK_WIN_DEFAULT}          CACHE STRING    "The default window system to use")
 
 add_executable(
     makedefs
@@ -34,7 +43,7 @@ else()
     set(HACKDIR_DATA "${HACKDIR}")
 endif()
 
-file(MAKE_DIRECTORY ${HACKDIR} ${HACKDIR_DATA})
+file(MAKE_DIRECTORY ${HACKDIR} ${HACKDIR_DATA} ${GENERATED_DIR_DUMMY} "${GENERATED_DIR}/include" "${GENERATED_DIR}/src" "${GENERATED_DIR}/dat" "${CMAKE_BINARY_DIR}/stamps/lev")
 
 function(add_makedef flag)
     set(outputs "")
@@ -43,10 +52,6 @@ function(add_makedef flag)
     endforeach()
     add_custom_command(
         OUTPUT ${outputs}
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${GENERATED_DIR_DUMMY}"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${GENERATED_DIR}/include"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${GENERATED_DIR}/src"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${GENERATED_DIR}/dat"
         COMMAND makedefs "${GENERATED_DIR_DUMMY}/" "-${flag}"
         VERBATIM
     )
@@ -63,7 +68,7 @@ add_makedef(r "dat/rumors")
 add_makedef(h "dat/oracles")
 
 # Dungeon Compiler
-bison_target(dgn_parser "${CMAKE_SOURCE_DIR}/util/dgn_comp.y" "${GENERATED_DIR}/src/dgn_parser.c")
+bison_target(dgn_parser "${CMAKE_SOURCE_DIR}/util/dgn_comp.y" "${GENERATED_DIR}/src/dgn_parser.c" DEFINES_FILE "${GENERATED_DIR}/include/dgn_comp.h")
 flex_target(dgn_lexer "${CMAKE_SOURCE_DIR}/util/dgn_comp.l" "${GENERATED_DIR}/src/dgn_lexer.c")
 add_flex_bison_dependency(dgn_lexer dgn_parser)
 add_executable(dgn
@@ -129,7 +134,6 @@ foreach(l ${LEVELS})
     add_custom_command(
         OUTPUT "${CMAKE_BINARY_DIR}/stamps/lev/${fname}.stamp"
         COMMAND lev "${l}"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/stamps/lev"
         COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_BINARY_DIR}/stamps/lev/${fname}.stamp"
         DEPENDS "${l}"
         WORKING_DIRECTORY "${HACKDIR_DATA}"
@@ -190,6 +194,7 @@ endif()
 add_custom_command(
     OUTPUT
     "${CMAKE_BINARY_DIR}/hackdir.stamp"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/dat/symbols" "${HACKDIR}/symbols"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/dat/sysconf" "${HACKDIR}/sysconf"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${HACKDIR}/save"
     COMMAND "${CMAKE_COMMAND}" -E touch "${HACKDIR}/perm"
@@ -197,6 +202,7 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E touch "${HACKDIR}/xlogfile"
     COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_BINARY_DIR}/hackdir.stamp"
     DEPENDS
+        "${CMAKE_SOURCE_DIR}/dat/symbols"
         "${CMAKE_SOURCE_DIR}/dat/sysconf"
 )
 add_custom_target(
@@ -230,15 +236,20 @@ list(APPEND SOURCES
 file(GLOB_RECURSE SOURCES_WIN_TTY "win/tty/*.c")
 list(APPEND SOURCES ${SOURCES_WIN_TTY})
 
-file(GLOB_RECURSE SOURCES_WIN_CURSES "win/curses/*.c")
-list(APPEND SOURCES ${SOURCES_WIN_CURSES})
+if (HACK_WIN_CURSES)
+    file(GLOB_RECURSE SOURCES_WIN_CURSES "win/curses/*.c")
+    list(APPEND SOURCES ${SOURCES_WIN_CURSES})
+endif()
 
 add_executable(nethack ${SOURCES})
 target_compile_definitions(nethack PRIVATE
     HACKDIR="${HACK_DIRECTORY}"
     DUMPLOG_FILE="${HACK_DUMPLOG_FILE}"
+    DEFAULT_WINDOW_SYS="${HACK_WIN_DEFAULT}"
     $<$<BOOL:${HACK_DATABASE}>:DLB>
     $<$<BOOL:${HACK_DUMPLOG}>:DUMPLOG>
+    $<$<BOOL:${HACK_WIN_CURSES}>:CURSES_GRAPHICS>
+    SCORE_ON_BOTL
     SECURE
     ZLIB_COMP
 )
