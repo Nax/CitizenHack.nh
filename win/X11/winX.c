@@ -1574,7 +1574,7 @@ char **argv;
     release_default_resources();
 
     /* Display the startup banner in the message window. */
-    for (i = 1; i <= 4 + 2; ++i) /* (values beyond 4 yield blank lines) */
+    for (i = 1; i <= 8 + 2; ++i) /* (values beyond 4 yield blank lines) */
         X11_putstr(WIN_MESSAGE, 0, copyright_banner_line(i));
 }
 

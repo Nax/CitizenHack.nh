@@ -41,22 +41,22 @@ nhrgb orig_hiwhite;
 /* Banners used for an optional ASCII splash screen */
 
 #define NETHACK_SPLASH_A \
-" _   _        _    _    _               _    "
+"   _____  _  _    _                   _    _               _    "
 
 #define NETHACK_SPLASH_B \
-"| \\ | |      | |  | |  | |             | |   "
+"  / ____|(_)| |  (_)                 | |  | |             | |   "
 
 #define NETHACK_SPLASH_C \
-"|  \\| |  ___ | |_ | |__| |  __ _   ___ | | __"
+" | |      _ | |_  _  ____ ___  _ __  | |__| |  __ _   ___ | | __"
 
 #define NETHACK_SPLASH_D \
-"| . ` | / _ \\| __||  __  | / _` | / __|| |/ /"
+" | |     | || __|| ||_  // _ \\| '_ \\ |  __  | / _` | / __|| |/ /"
 
 #define NETHACK_SPLASH_E \
-"| |\\  ||  __/| |_ | |  | || (_| || (__ |   < "
+" | |____ | || |_ | | / /|  __/| | | || |  | || (_| || (__ |   < "
 
 #define NETHACK_SPLASH_F \
-"|_| \\_| \\___| \\__||_|  |_| \\__,_| \\___||_|\\_\\"
+"  \\_____||_| \\__||_|/___|\\___||_| |_||_|  |_| \\__,_| \\___||_|\\_\\"
 
 
 /* win* is size and placement of window to change, x/y/w/h is baseline
@@ -871,7 +871,7 @@ curses_display_splash_window()
     if (iflags.wc2_guicolor)
          curses_toggle_color_attr(stdscr, CLR_WHITE, A_NORMAL, OFF);
 
-    for (i = 1; i <= 4; ++i) {
+    for (i = 1; i <= 8; ++i) {
          mvaddstr(y_start, x_start, copyright_banner_line(i));
          y_start++;
     }

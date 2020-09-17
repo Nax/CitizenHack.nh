@@ -389,9 +389,17 @@ int indx;
     if (indx == 3)
         return COPYRIGHT_BANNER_C;
 #endif
-#ifdef COPYRIGHT_BANNER_D
-    if (indx == 4)
-        return COPYRIGHT_BANNER_D;
+#ifdef COPYRIGHT2_BANNER_A
+    if (indx == 5)
+        return COPYRIGHT2_BANNER_A;
+#endif
+#ifdef COPYRIGHT2_BANNER_B
+    if (indx == 6)
+        return COPYRIGHT2_BANNER_B;
+#endif
+#ifdef COPYRIGHT3_BANNER_A
+    if (indx == 8)
+        return COPYRIGHT3_BANNER_A;
 #endif
     return "";
 }
