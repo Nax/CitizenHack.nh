@@ -72,24 +72,53 @@ function(add_makedef flag)
     endforeach()
     add_custom_command(
         OUTPUT ${outputs}
-        DEPENDS ${ADD_MAKEDEF_DEPENDS}
+        DEPENDS makedefs ${ADD_MAKEDEF_DEPENDS}
         COMMAND makedefs "${GENERATED_DIR_DUMMY}/" "-${flag}"
         VERBATIM
     )
 endfunction()
 
+add_makedef(p OUTPUT "include/pm.h")
+add_makedef(o OUTPUT "include/onames.h")
+add_makedef(v OUTPUT "include/date.h" "dat/options")
+
 add_makedef(d
     OUTPUT "dat/data"
     DEPENDS "${CMAKE_SOURCE_DIR}/dat/data.base"
 )
-add_makedef(p OUTPUT "include/pm.h")
-add_makedef(o OUTPUT "include/onames.h")
-add_makedef(v OUTPUT "include/date.h" "dat/options")
-add_makedef(e OUTPUT "dat/dungeon.pdf")
-add_makedef(q OUTPUT "dat/quest.dat")
-add_makedef(s OUTPUT "dat/bogusmon" "dat/engrave" "dat/epitaph")
-add_makedef(r OUTPUT "dat/rumors")
-add_makedef(h OUTPUT "dat/oracles")
+
+add_makedef(e
+    OUTPUT "dat/dungeon.pdf"
+    DEPENDS "${CMAKE_SOURCE_DIR}/dat/dungeon.def"
+)
+
+add_makedef(q
+    OUTPUT "dat/quest.dat"
+    DEPENDS "${CMAKE_SOURCE_DIR}/dat/quest.txt"
+)
+
+add_makedef(h
+    OUTPUT "dat/oracles"
+    DEPENDS "${CMAKE_SOURCE_DIR}/dat/oracles.txt"
+)
+
+add_makedef(s
+    OUTPUT
+        "dat/bogusmon"
+        "dat/engrave"
+        "dat/epitaph"
+    DEPENDS
+        "${CMAKE_SOURCE_DIR}/dat/bogusmon.txt"
+        "${CMAKE_SOURCE_DIR}/dat/engrave.txt"
+        "${CMAKE_SOURCE_DIR}/dat/epitaph.txt"
+)
+
+add_makedef(r
+    OUTPUT "dat/rumors"
+    DEPENDS
+        "${CMAKE_SOURCE_DIR}/dat/rumors.fal"
+        "${CMAKE_SOURCE_DIR}/dat/rumors.tru"
+)
 
 # Dungeon Compiler
 bison_target(dgn_parser "${CMAKE_SOURCE_DIR}/util/dgn_comp.y" "${GENERATED_DIR}/src/dgn_parser.c" DEFINES_FILE "${GENERATED_DIR}/include/dgn_comp.h")
@@ -138,7 +167,7 @@ macro(copy_nhdat src)
     add_custom_command(
         OUTPUT "${HACKDIR_DATA}/${_fname}"
         DEPENDS "${src}"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${src}" "${HACKDIR_DATA}/${_fname}"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${src}" "${HACKDIR_DATA}/${_fname}"
         VERBATIM
     )
     list(APPEND HACKDIR_DATA_FILES ${_fname})
@@ -146,7 +175,7 @@ endmacro()
 add_custom_command(
     OUTPUT "${HACKDIR_DATA}/dungeon"
     COMMAND dgn "${GENERATED_DIR}/dat/dungeon.pdf"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${GENERATED_DIR}/dat/dungeon" "${HACKDIR_DATA}/dungeon"
+    COMMAND "${CMAKE_COMMAND}" -E copy "${GENERATED_DIR}/dat/dungeon" "${HACKDIR_DATA}/dungeon"
     DEPENDS "${GENERATED_DIR}/dat/dungeon.pdf"
     VERBATIM
 )
@@ -210,7 +239,7 @@ if (HACK_DATABASE)
     add_custom_command(
         OUTPUT "${GENERATED_ARCHIVE}"
         COMMAND dlb c ${HACKDIR_DATA_FILES} *.lev
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${HACKDIR_DATA}/nhdat" "${HACKDIR}/nhdat"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${HACKDIR_DATA}/nhdat" "${HACKDIR}/nhdat"
         DEPENDS ${HACKDIR_DATA_DEPS} ${STAMPS_LEVELS}
         WORKING_DIRECTORY "${HACKDIR_DATA}"
     )
