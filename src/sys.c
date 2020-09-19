@@ -1,4 +1,4 @@
-/* NetHack 3.6	sys.c	$NHDT-Date: 1575665952 2019/12/06 20:59:12 $  $NHDT-Branch: NetHack-3.6 $:$NHDT-Revision: 1.46 $ */
+/* NetHack 3.7	sys.c	$NHDT-Date: 1596498215 2020/08/03 23:43:35 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.57 $ */
 /* Copyright (c) Kenneth Lorber, Kensington, Maryland, 2008. */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -80,6 +80,8 @@ sys_early_init()
     sysopt.check_plname = 0;
     sysopt.seduce = 1; /* if it's compiled in, default to on */
     sysopt_seduce_set(sysopt.seduce);
+    /* default to little-endian in 3.7 */
+    sysopt.saveformat[0] = sysopt.bonesformat[0] = lendian;
     sysopt.accessibility = 0;
 #ifdef WIN32
     sysopt.portable_device_paths = 0;
@@ -123,8 +125,8 @@ sysopt_release()
     return;
 }
 
-extern const struct attack sa_yes[NATTK];
-extern const struct attack sa_no[NATTK];
+extern const struct attack c_sa_yes[NATTK];
+extern const struct attack c_sa_no[NATTK];
 
 void
 sysopt_seduce_set(val)
@@ -134,7 +136,7 @@ int val;
 /*
  * Attack substitution is now done on the fly in getmattk(mhitu.c).
  */
-    struct attack *setval = val ? sa_yes : sa_no;
+    struct attack *setval = val ? c_sa_yes : c_sa_no;
     int x;
 
     for (x = 0; x < NATTK; x++) {

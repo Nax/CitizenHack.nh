@@ -1,4 +1,4 @@
-/* NetHack 3.6	wc_chainin.c	$NHDT-Date: 1433806610 2015/06/08 23:36:50 $  $NHDT-Branch: master $:$NHDT-Revision: 1.7 $ */
+/* NetHack 3.7	wc_chainin.c	$NHDT-Date: 1596498323 2020/08/03 23:45:23 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.12 $ */
 /* Copyright (c) Kenneth Lorber, 2012				  */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -175,14 +175,15 @@ boolean complain;
 }
 
 void
-chainin_start_menu(window)
+chainin_start_menu(window, mbehavior)
 winid window;
+unsigned long mbehavior;
 {
-    (*cibase->nprocs->win_start_menu)(cibase->ndata, window);
+    (*cibase->nprocs->win_start_menu)(cibase->ndata, window, mbehavior);
 }
 
 void
-chainin_add_menu(window, glyph, identifier, ch, gch, attr, str, preselected)
+chainin_add_menu(window, glyph, identifier, ch, gch, attr, str, itemflags)
 winid window;               /* window to use, must be of type NHW_MENU */
 int glyph;                  /* glyph to display with item (unused) */
 const anything *identifier; /* what to return if selected */
@@ -190,10 +191,11 @@ char ch;                    /* keyboard accelerator (0 = pick our own) */
 char gch;                   /* group accelerator (0 = no group) */
 int attr;                   /* attribute for string (like tty_putstr()) */
 const char *str;            /* menu string */
-boolean preselected;        /* item is marked as selected */
+unsigned int itemflags;     /* flags such as item is marked as selected
+                               MENU_ITEMFLAGS_SELECTED */
 {
     (*cibase->nprocs->win_add_menu)(cibase->ndata, window, glyph, identifier,
-                                    ch, gch, attr, str, preselected);
+                                    ch, gch, attr, str, itemflags);
 }
 
 void

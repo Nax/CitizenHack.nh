@@ -1,4 +1,4 @@
-/* NetHack 3.6	pcconf.h	$NHDT-Date: 1457207019 2016/03/05 19:43:39 $  $NHDT-Branch: chasonr $:$NHDT-Revision: 1.19 $ */
+/* NetHack 3.7	pcconf.h	$NHDT-Date: 1596498554 2020/08/03 23:49:14 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.28 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2006. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -35,15 +35,7 @@
 
 /*#define OVERLAY */ /* Manual overlay definition (MSC 6.0ax only) */
 
-#ifndef __GO32__
-#define MFLOPPY /* Support for floppy drives and ramdisks by dgk */
-#endif
-
 #define SHELL /* via exec of COMMAND.COM */
-
-#ifdef __BORLANDC__
-#define PCMUSIC /* Music option, enable very basic pc speaker music notes */
-#endif
 
 /*
  * Screen control options
@@ -156,9 +148,6 @@
 
 #define TIMED_DELAY /* enable the `timed_delay' run-time option */
 
-#ifdef PCMUSIC
-#define TIMED_DELAY /* need it anyway */
-#endif
 #define NOCWD_ASSUMPTIONS /* Allow paths to be specified for HACKDIR,      \
                              LEVELDIR, SAVEDIR, BONESDIR, DATADIR,         \
                              SCOREDIR, LOCKDIR, CONFIGDIR, and TROUBLEDIR. \
@@ -190,7 +179,6 @@
 #undef lock
 #include <pc.h> /* kbhit() */
 #define PC_LOCKING
-#define HOLD_LOCKFILE_OPEN
 #define SELF_RECOVER /* NetHack itself can recover games */
 #endif
 

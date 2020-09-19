@@ -1,20 +1,40 @@
-/* NetHack 3.6	patchlevel.h	$NHDT-Date: 1583508697 2020/03/06 15:31:37 $  $NHDT-Branch: NetHack-3.6-Mar2020 $:$NHDT-Revision: 1.139 $ */
+/* NetHack 3.7	patchlevel.h	$NHDT-Date: 1593768081 2020/07/03 09:21:21 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.165 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
 
-/* NetHack 3.6.x */
+#ifndef PATCHLEVEL_H
+#define PATCHLEVEL_H
+
+/* NetHack 3.7.x */
 #define VERSION_MAJOR 3
-#define VERSION_MINOR 6
+#define VERSION_MINOR 7
 /*
  * PATCHLEVEL is updated for each release.
  */
-#define PATCHLEVEL 6
+#define PATCHLEVEL 0
 /*
  * Incrementing EDITLEVEL can be used to force invalidation of old bones
  * and save files.
  */
-#define EDITLEVEL 0
+#define EDITLEVEL 22
+
+/*
+ * Development status possibilities.
+ */
+#define NH_STATUS_RELEASED    0         /* Released */
+#define NH_STATUS_WIP         1         /* Work in progress */
+#define NH_STATUS_BETA        2         /* BETA testing */
+#define NH_STATUS_POSTRELEASE 3         /* patch commit point only */
+
+/*
+ * Development status of this NetHack version.
+ */
+#define NH_DEVEL_STATUS NH_STATUS_WIP
+
+#ifndef DEBUG  /* allow tool chains to define without causing warnings */
+#define DEBUG
+#endif
 
 #define COPYRIGHT_BANNER_A "NetHack, Copyright 1985-2020"
 #define COPYRIGHT_BANNER_B \
@@ -31,7 +51,15 @@
  * PP = patch level, ee = edit level, L = literal suffix "L",
  * with all four numbers specified as two hexadecimal digits.
  */
-#define VERSION_COMPATIBILITY 0x03060002L
+#define VERSION_COMPATIBILITY 0x03070000L
+
+/****************************************************************************/
+/* Version 3.7.x */
+
+/*
+ *  NetHack 3.7.0, <insert date here>
+ *
+ */
 
 /****************************************************************************/
 /* Version 3.6.x */
@@ -524,4 +552,5 @@
 
 /****************************************************************************/
 
+#endif /* PATHLEVEL_H */
 /*patchlevel.h*/

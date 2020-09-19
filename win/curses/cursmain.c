@@ -1,15 +1,10 @@
 /* vim:set cin ft=c sw=4 sts=4 ts=8 et ai cino=Ls\:0t0(0 : -*- mode:c;fill-column:80;tab-width:8;c-basic-offset:4;indent-tabs-mode:nil;c-file-style:"k&r" -*-*/
-/* NetHack 3.6 cursmain.c */
+/* NetHack 3.7 cursmain.c */
 /* Copyright (c) Karl Garrison, 2010. */
 /* NetHack may be freely redistributed.  See license for details. */
 
 #include "curses.h"
 #include "hack.h"
-#ifdef SHORT_FILENAMES
-#include "patchlev.h"
-#else
-#include "patchlevel.h"
-#endif
 #include "color.h"
 #include "wincurs.h"
 
@@ -162,15 +157,15 @@ curses_init_nhwindows(int *argcp UNUSED,
         curses_init_nhcolors();
     } else {
         iflags.use_color = FALSE;
-        set_option_mod_status("color", SET_IN_FILE);
+        set_option_mod_status("color", set_in_config);
         iflags.wc2_guicolor = FALSE;
-        set_wc2_option_mod_status(WC2_GUICOLOR, SET_IN_FILE);
+        set_wc2_option_mod_status(WC2_GUICOLOR, set_in_config);
     }
 #else
     iflags.use_color = FALSE;
-    set_option_mod_status("color", SET_IN_FILE);
+    set_option_mod_status("color", set_in_config);
     iflags.wc2_guicolor = FALSE;
-    set_wc2_option_mod_status(WC2_GUICOLOR, SET_IN_FILE);
+    set_wc2_option_mod_status(WC2_GUICOLOR, set_in_config);
 #endif
     noecho();
     raw();
@@ -242,8 +237,8 @@ curses_player_selection()
 void
 curses_askname()
 {
-    plname[0] = '\0';
-    curses_line_input_dialog("Who are you?", plname, PL_NSIZ);
+    g.plname[0] = '\0';
+    curses_line_input_dialog("Who are you?", g.plname, PL_NSIZ);
 }
 
 
@@ -328,7 +323,7 @@ curses_create_nhwindow(int type)
     winid wid = curses_get_wid(type);
 
     if (curses_is_menu(wid) || curses_is_text(wid)) {
-        curses_start_menu(wid);
+        curses_start_menu(wid, MENU_BEHAVE_STANDARD);
         curses_add_wid(wid);
     }
 
@@ -480,18 +475,18 @@ curses_display_file(const char *filename, BOOLEAN_P must_exist)
    be used for menus.
 */
 void
-curses_start_menu(winid wid)
+curses_start_menu(winid wid, unsigned long mbehavior)
 {
     if (inv_update)
         return;
 
-    curses_create_nhmenu(wid);
+    curses_create_nhmenu(wid, mbehavior);
 }
 
 /*
 add_menu(winid wid, int glyph, const anything identifier,
                                 char accelerator, char groupacc,
-                                int attr, char *str, boolean preselected)
+                                int attr, char *str, unsigned int itemflags)
                 -- Add a text line str to the given menu window.  If identifier
                    is 0, then the line cannot be selected (e.g. a title).
                    Otherwise, identifier is the value returned if the line is
@@ -517,12 +512,12 @@ add_menu(winid wid, int glyph, const anything identifier,
                    The menu commands and aliases take care not to interfere
                    with the default object class symbols.
                 -- If you want this choice to be preselected when the
-                   menu is displayed, set preselected to TRUE.
+                   menu is displayed, set bit MENU_ITEMFLAGS_SELECTED.
 */
 void
 curses_add_menu(winid wid, int glyph, const ANY_P * identifier,
                 CHAR_P accelerator, CHAR_P group_accel, int attr,
-                const char *str, BOOLEAN_P presel)
+                const char *str, unsigned itemflags)
 {
     int curses_attr;
 
@@ -536,7 +531,7 @@ curses_add_menu(winid wid, int glyph, const ANY_P * identifier,
     }
 
     curses_add_nhmenu_item(wid, glyph, identifier, accelerator, group_accel,
-                           curses_attr, str, presel);
+                           curses_attr, str, itemflags);
 }
 
 /*
@@ -688,12 +683,12 @@ curses_print_glyph(winid wid, XCHAR_P x, XCHAR_P y, int glyph,
         if ((special & MG_OBJPILE) && iflags.hilite_pile) {
             if (iflags.wc_color)
                 color = 16 + (color * 2) + 1;
-            else
+            else /* if (iflags.use_inverse) */
                 attr = A_REVERSE;
         }
         /* water and lava look the same except for color; when color is off,
            render lava in inverse video so that they look different */
-        if ((special & MG_BW_LAVA) && iflags.use_inverse) {
+        if ((special & (MG_BW_LAVA | MG_BW_ICE)) != 0 && iflags.use_inverse) {
             attr = A_REVERSE; /* mapglyph() only sets this if color is off */
         }
     }
@@ -903,12 +898,13 @@ curses_end_screen()
 
 /*
 outrip(winid, int)
-            -- The tombstone code.  If you want the traditional code use
-               genl_outrip for the value and check the #if in rip.c.
+                -- The tombstone code.  We use genl_outrip() from rip.c
+                   instead of rolling our own.
 */
 void
 curses_outrip(winid wid UNUSED,
-              int how UNUSED)
+              int how UNUSED,
+              time_t when UNUSED)
 {
      return;
 }

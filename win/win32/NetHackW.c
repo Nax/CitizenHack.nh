@@ -1,4 +1,4 @@
-/* NetHack 3.6    winhack.c    $NHDT-Date: 1449488876 2015/12/07 11:47:56 $  $NHDT-Branch: NetHack-3.6.0 $:$NHDT-Revision: 1.44 $ */
+/* NetHack 3.7    winhack.c    $NHDT-Date: 1596498365 2020/08/03 23:46:05 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.72 $ */
 /* Copyright (C) 2001 by Alex Kompel      */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -53,7 +53,7 @@ Version     _WIN_32IE   Platform/IE
 /*#define COMCTL_URL
  * "http://www.microsoft.com/msdownload/ieplatform/ie/comctrlx86.asp"*/
 
-extern void FDECL(nethack_exit, (int));
+extern void FDECL(nethack_exit, (int)) NORETURN;
 static TCHAR *_get_cmd_arg(TCHAR *pCmdLine);
 static HRESULT GetComCtlVersion(LPDWORD pdwMajor, LPDWORD pdwMinor);
 BOOL WINAPI
@@ -123,7 +123,7 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine,
     windowprocs.win_wait_synch = mswin_wait_synch;
 
     win10_init();
-    sys_early_init();
+    early_init();
 
     /* init application structure */
     _nethack_app.hApp = hInstance;
@@ -216,19 +216,19 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine,
 
     if (argc == 2) {
         TCHAR *savefile = strdup(argv[1]);
-        TCHAR *plname;
+        TCHAR *name;
         for (p = savefile; *p && *p != '-'; p++)
             ;
         if (*p) {
             /* we found a '-' */
-            plname = p + 1;
-            for (p = plname; *p && *p != '.'; p++)
+            name = p + 1;
+            for (p = name; *p && *p != '.'; p++)
                 ;
             if (*p) {
                 if (strcmp(p + 1, "NetHack-saved-game") == 0) {
                     *p = '\0';
                     argv[1] = "-u";
-                    argv[2] = _strdup(plname);
+                    argv[2] = _strdup(name);
                     argc = 3;
                 }
             }

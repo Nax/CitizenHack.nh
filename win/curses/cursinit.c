@@ -1,5 +1,5 @@
 /* vim:set cin ft=c sw=4 sts=4 ts=8 et ai cino=Ls\:0t0(0 : -*- mode:c;fill-column:80;tab-width:8;c-basic-offset:4;indent-tabs-mode:nil;c-file-style:"k&r" -*-*/
-/* NetHack 3.6 cursinit.c */
+/* NetHack 3.7 cursinit.c */
 /* Copyright (c) Karl Garrison, 2010. */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -7,7 +7,6 @@
 #include "hack.h"
 #include "wincurs.h"
 #include "cursinit.h"
-/*#include "patchlevel.h"*/
 
 #include <ctype.h>
 
@@ -732,7 +731,7 @@ curses_character_dialog(const char **choices, const char *prompt)
     winid wid = curses_get_wid(NHW_MENU);
 
     identifier.a_void = 0;
-    curses_start_menu(wid);
+    curses_start_menu(wid, MENU_BEHAVE_STANDARD);
 
     for (count = 0; choices[count]; count++) {
         curletter = tolower(choices[count][0]);
@@ -744,19 +743,19 @@ curses_character_dialog(const char **choices, const char *prompt)
 
         identifier.a_int = (count + 1); /* Must be non-zero */
         curses_add_menu(wid, NO_GLYPH, &identifier, curletter, 0,
-                        A_NORMAL, choices[count], FALSE);
+                        A_NORMAL, choices[count], MENU_ITEMFLAGS_NONE);
         used_letters[count] = curletter;
     }
 
     /* Random Selection */
     identifier.a_int = ROLE_RANDOM;
     curses_add_menu(wid, NO_GLYPH, &identifier, '*', 0, A_NORMAL, "Random",
-                    FALSE);
+                    MENU_ITEMFLAGS_NONE);
 
     /* Quit prompt */
     identifier.a_int = ROLE_NONE;
     curses_add_menu(wid, NO_GLYPH, &identifier, 'q', 0, A_NORMAL, "Quit",
-                    FALSE);
+                    MENU_ITEMFLAGS_NONE);
     curses_end_menu(wid, prompt);
     ret = curses_select_menu(wid, PICK_ONE, &selected);
     if (ret == 1) {
@@ -778,16 +777,16 @@ curses_character_dialog(const char **choices, const char *prompt)
 void
 curses_init_options()
 {
-    /* change these from DISP_IN_GAME to SET_IN_GAME */
-    set_wc_option_mod_status(WC_ALIGN_MESSAGE | WC_ALIGN_STATUS, SET_IN_GAME);
+    /* change these from set_gameview to set_in_game */
+    set_wc_option_mod_status(WC_ALIGN_MESSAGE | WC_ALIGN_STATUS, set_in_game);
 
     /* Remove a few options that are irrelevant to this windowport */
-    set_option_mod_status("eight_bit_tty", SET_IN_FILE);
+    set_option_mod_status("eight_bit_tty", set_in_config);
 
     /* If we don't have a symset defined, load the curses symset by default */
-    if (!symset[PRIMARY].explicitly)
+    if (!g.symset[PRIMARY].explicitly)
         load_symset("curses", PRIMARY);
-    if (!symset[ROGUESET].explicitly)
+    if (!g.symset[ROGUESET].explicitly)
         load_symset("default", ROGUESET);
 
 #ifdef PDCURSES
@@ -879,7 +878,7 @@ curses_display_splash_window()
     refresh();
 }
 
-/* Resore colors and cursor state before exiting */
+/* Restore colors and cursor state before exiting */
 void
 curses_cleanup()
 {

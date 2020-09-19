@@ -1,4 +1,4 @@
-/* NetHack 3.6	msdos.c	$NHDT-Date: 1432512792 2015/05/25 00:13:12 $  $NHDT-Branch: master $:$NHDT-Revision: 1.11 $ */
+/* NetHack 3.7	msdos.c	$NHDT-Date: 1596498269 2020/08/03 23:44:29 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.15 $ */
 /* Copyright (c) NetHack PC Development Team 1990 */
 /* NetHack may be freely redistributed.  See license for details.         */
 
@@ -49,12 +49,12 @@ void FDECL(get_cursor, (int *, int *));
 
 /* direct bios calls are used only when iflags.BIOS is set */
 
-STATIC_DCL char NDECL(DOSgetch);
-STATIC_DCL char NDECL(BIOSgetch);
+static char NDECL(DOSgetch);
+static char NDECL(BIOSgetch);
 #ifndef __GO32__
-STATIC_DCL char *NDECL(getdta);
+static char *NDECL(getdta);
 #endif
-STATIC_DCL unsigned int FDECL(dos_ioctl, (int, int, unsigned));
+static unsigned int FDECL(dos_ioctl, (int, int, unsigned));
 #ifdef USE_TILES
 extern boolean FDECL(pckeys, (unsigned char, unsigned char)); /* pckeys.c */
 #endif
@@ -64,6 +64,11 @@ tgetch()
 {
     char ch;
 
+#ifdef SCREEN_VESA
+    if (iflags.usevesa) {
+        vesa_flush_text();
+    }
+#endif /*SCREEN_VESA*/
 /* BIOSgetch can use the numeric key pad on IBM compatibles. */
 #ifdef SIMULATE_CURSOR
     if (iflags.grmode && cursor_flag)
@@ -243,7 +248,7 @@ static const char numeric_scanmap[] = { /* ... */
 #define ALT 0x8
 #endif /* PC9800 */
 
-STATIC_OVL char
+static char
 BIOSgetch()
 {
     unsigned char scan, shift, ch = 0;
@@ -303,7 +308,7 @@ BIOSgetch()
     return ch;
 }
 
-STATIC_OVL char
+static char
 DOSgetch()
 {
     union REGS regs;
@@ -406,7 +411,7 @@ foundfile_buffer()
 }
 
 /* Get disk transfer area */
-STATIC_OVL char *
+static char *
 getdta()
 {
     union REGS regs;
@@ -503,7 +508,7 @@ enable_ctrlP()
     return;
 }
 
-STATIC_OVL unsigned int
+static unsigned int
 dos_ioctl(handle, mode, setvalue)
 int handle, mode;
 unsigned setvalue;

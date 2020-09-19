@@ -1,4 +1,4 @@
-/* NetHack 3.6	align.h	$NHDT-Date: 1432512779 2015/05/25 00:12:59 $  $NHDT-Branch: master $:$NHDT-Revision: 1.8 $ */
+/* NetHack 3.7	align.h	$NHDT-Date: 1596498525 2020/08/03 23:48:45 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.11 $ */
 /* Copyright (c) Mike Stephenson, Izchak Miller  1991.		  */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -13,7 +13,7 @@ typedef struct align { /* alignment & record */
 } align;
 
 /* bounds for "record" -- respect initial alignments of 10 */
-#define ALIGNLIM (10L + (moves / 200L))
+#define ALIGNLIM (10L + (g.moves / 200L))
 
 #define A_NONE (-128) /* the value range of type */
 
@@ -33,6 +33,7 @@ typedef struct align { /* alignment & record */
 
 #define AM_SPLEV_CO 3
 #define AM_SPLEV_NONCO 7
+#define AM_SPLEV_RANDOM 8
 
 #define Amask2align(x)                                          \
     ((aligntyp)((!(x)) ? A_NONE : ((x) == AM_LAWFUL) ? A_LAWFUL \

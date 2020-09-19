@@ -1,4 +1,4 @@
-/* NetHack 3.6	wc_chainout.c	$NHDT-Date: 1433806611 2015/06/08 23:36:51 $  $NHDT-Branch: master $:$NHDT-Revision: 1.7 $ */
+/* NetHack 3.7	wc_chainout.c	$NHDT-Date: 1596498324 2020/08/03 23:45:24 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.13 $ */
 /* Copyright (c) Kenneth Lorber, 2012				  */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -213,18 +213,19 @@ boolean complain;
 }
 
 void
-chainout_start_menu(vp, window)
+chainout_start_menu(vp, window, mbehavior)
 void *vp;
 winid window;
+unsigned long mbehavior;
 {
     struct chainout_data *tdp = vp;
 
-    (*tdp->nprocs->win_start_menu)(window);
+    (*tdp->nprocs->win_start_menu)(window, mbehavior);
 }
 
 void
 chainout_add_menu(vp, window, glyph, identifier, ch, gch, attr, str,
-                  preselected)
+                  itemflags)
 void *vp;
 winid window;               /* window to use, must be of type NHW_MENU */
 int glyph;                  /* glyph to display with item (unused) */
@@ -233,12 +234,12 @@ char ch;                    /* keyboard accelerator (0 = pick our own) */
 char gch;                   /* group accelerator (0 = no group) */
 int attr;                   /* attribute for string (like tty_putstr()) */
 const char *str;            /* menu string */
-boolean preselected;        /* item is marked as selected */
+unsigned int itemflags;     /* itemflags such as marked as selected */
 {
     struct chainout_data *tdp = vp;
 
     (*tdp->nprocs->win_add_menu)(window, glyph, identifier, ch, gch, attr,
-                                 str, preselected);
+                                 str, itemflags);
 }
 
 void

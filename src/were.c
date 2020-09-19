@@ -1,4 +1,4 @@
-/* NetHack 3.6	were.c	$NHDT-Date: 1550524568 2019/02/18 21:16:08 $  $NHDT-Branch: NetHack-3.6.2-beta01 $:$NHDT-Revision: 1.23 $ */
+/* NetHack 3.7	were.c	$NHDT-Date: 1596498227 2020/08/03 23:43:47 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.25 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -200,11 +200,11 @@ boolean purify;
         You_feel("purified.");
         set_ulycn(NON_PM); /* cure lycanthropy */
     }
-    if (!Unchanging && is_were(youmonst.data)
+    if (!Unchanging && is_were(g.youmonst.data)
         && (!controllable_poly
             || !paranoid_query(ParanoidWerechange, "Remain in beast form?")))
         rehumanize();
-    else if (is_were(youmonst.data) && !u.mtimedone)
+    else if (is_were(g.youmonst.data) && !u.mtimedone)
         u.mtimedone = rn1(200, 200); /* 40% of initial were change */
 }
 

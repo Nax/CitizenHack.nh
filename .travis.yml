@@ -1,26 +1,9 @@
 language: c
 matrix:
   include:
-    - os: linux
-      env: DESCR=linux-xenial-gcc HINTS=linux
-      compiler: gcc
-      script: "cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../ && make install"
-    - os: linux
-      env: DESCR=linux-xenial-clang HINTS=linux
-      compiler: clang
-      script: "cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../ && make install"
-    - os: linux
-      env: DESCR=linux-xenial-gcc-x11 HINTS=linux-x11
-      compiler: gcc
-      addons:
-        apt:
-          packages:
-            - libx11-dev
-            - libxaw7-dev
-            - xfonts-utils
-      script: "cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../ && make install"
-    - os: linux
-      env: DESCR=linux-xenial-gcc-qt5 HINTS=linux-qt5
+    - name: linux-xenial-gcc-win-all
+      os: linux
+      env: HINTS=linux.2020 LUA_VERSION=5.4.0
       compiler: gcc
       addons:
         apt:
@@ -31,9 +14,14 @@ matrix:
             - qtbase5-dev
             - qtmultimedia5-dev
             - qtbase5-dev-tools
-      script: "cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../ && QT_SELECT=5 make MOC=moc install"
-    - os: linux
-      env: DESCR=linux-bionic-gcc-x11 HINTS=linux-x11
+      script:
+        - cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../
+        - make fetch-lua LUA_VERSION=$LUA_VERSION
+        - test -d "lib/lua-$LUA_VERSION/src" || exit 0
+        - make LUA_VERSION=$LUA_VERSION WANT_WIN_ALL=1 QT_SELECT=5 MOC=moc install
+    - name: linux-bionic-gcc-win-all
+      os: linux
+      env: HINTS=linux.2020 LUA_VERSION=5.4.0
       dist: bionic
       compiler: gcc
       addons:
@@ -42,9 +30,68 @@ matrix:
             - libx11-dev
             - libxaw7-dev
             - xfonts-utils
-      script: "cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../ && make install"
-    - os: linux
-      env: DESCR=linux-xenial-gcc-minimal HINTS=linux-minimal
+            - qtbase5-dev
+            - qtmultimedia5-dev
+            - qtbase5-dev-tools
+      script:
+        - cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../
+        - make fetch-lua LUA_VERSION=$LUA_VERSION
+        - test -d "lib/lua-$LUA_VERSION/src" || exit 0
+        - make LUA_VERSION=$LUA_VERSION WANT_WIN_ALL=1 QT_SELECT=5 MOC=moc install
+    - name: linux-focal-clang-win-all
+      os: linux
+      env: HINTS=linux.2020 LUA_VERSION=5.4.0
+      dist: focal
+      compiler: clang
+      addons:
+        apt:
+          packages:
+            - xfonts-utils
+            - libx11-dev
+            - libxaw7-dev
+            - qtbase5-dev
+            - qtmultimedia5-dev
+            - qtbase5-dev-tools
+      script:
+        - cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../
+        - make fetch-lua LUA_VERSION=$LUA_VERSION
+        - test -d "lib/lua-$LUA_VERSION/src" || exit 0
+        - make LUA_VERSION=$LUA_VERSION WANT_WIN_ALL=1 QT_SELECT=5 MOC=moc install
+    - name: linux-xenial-gcc-nocommon
+      os: linux
+      env: HINTS=linux.2020 LUA_VERSION=5.4.0
+      dist: xenial
+      compiler: gcc
+      script:
+        - echo "CFLAGS+=-fno-common" >>sys/unix/hints/$HINTS
+        - cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../
+        - make fetch-lua LUA_VERSION=$LUA_VERSION
+        - test -d "lib/lua-$LUA_VERSION/src" || exit 0
+        - make install
+    - name: linux-focal-gcc9-win-all
+      os: linux
+      env: HINTS=linux.2020 LUA_VERSION=5.4.0
+      dist: focal
+      compiler: gcc
+      addons:
+        apt:
+          packages:
+            - gcc-9
+            - g++-9
+            - libx11-dev
+            - libxaw7-dev
+            - xfonts-utils
+            - qtbase5-dev
+            - qtmultimedia5-dev
+            - qtbase5-dev-tools
+      script:
+        - cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../
+        - make fetch-lua LUA_VERSION=$LUA_VERSION
+        - test -d "lib/lua-$LUA_VERSION/src" || exit 0
+        - make LUA_VERSION=$LUA_VERSION WANT_WIN_ALL=1 QT_SELECT=5 MOC=moc install
+    - name: linux-xenial-gcc-minimal
+      os: linux
+      env: HINTS=linux-minimal LUA_VERSION=5.4.0
       compiler: gcc
       script: |
               cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../
@@ -67,23 +114,42 @@ matrix:
               sed -i '/^#define SHELL/d'          include/unixconf.h
               sed -i '/^#define SUSPEND/d'        include/unixconf.h
               sed -i 's/^#define TEXTCOLOR//'     include/unixconf.h
-              make install
+              make fetch-lua LUA_VERSION=$LUA_VERSION
+              test -d "lib/lua-$LUA_VERSION/src" || exit 0
+              make LUA_VERSION=$LUA_VERSION WANT_WIN_ALL=1 install
               cat dat/options
-    - os: windows
-      env: DESCR=windows-visualstudio
+    - name: windows-visualstudio
+      os: windows
       language: shell
       script:
         - ./win/win32/vs2017/travisci.sh
-    - os: windows
+    - name: windows-mingw
+      os: windows
 #     install: choco install mingw
-      env: DESCR=windows-mingw
       script:
-        - git clone --depth 1 https://github.com/wmcbrine/PDCurses.git ../pdcurses
         - export ADD_CURSES=Y
-        - export PDCURSES_TOP=../../pdcurses
+        - export PDCURSES_TOP=../lib/pdcurses
+        - export LUA_VERSION=5.4.0
+        - sh sys/winnt/travis-gcc.sh
+        - test -d "lib/lua-$LUA_VERSION/src" || exit 0
+        - test -d "lib/pdcurses" || exit 0
         - cd src
         - cp ../sys/winnt/Makefile.gcc ./Makefile
-        - mingw32-make install
+        - mingw32-make LUA_VERSION=$LUA_VERSION install
+    - name: msdos-linux-focal-djgpp-crosscompile
+      os: linux
+      env: HINTS=linux LUA_VERSION=5.4.0
+      dist: focal
+      compiler: gcc
+      script:
+#        - export
+#        - export GCCVER=gcc550
+        - export GCCVER=gcc1010
+        - cd sys/unix/ && sh setup.sh hints/$HINTS && cd ../../
+        - make fetch-lua
+        - test -d "lib/lua-$LUA_VERSION/src" || exit 0
+        - cd lib/lua-$LUA_VERSION/src && make CC='gcc' a  && cd ../../.. 
+        - sh sys/msdos/msdos-cross-compile.sh
   exclude:
 #    - os: osx
 #      osx_image: xcode10.3
@@ -112,6 +178,6 @@ deploy:
   skip_cleanup: true
   on:
     tags: true
-  prerelease: false
-  name: "Release build of NetHack 3.6.6"
-  body: "This is an auto generated Release build of NetHack 3.6.6"
+  prerelease: true
+  name: "Pre-Release build of NetHack 3.7.0"
+  body: "This is an auto generated Pre-Release build of NetHack 3.7.0"

@@ -1,4 +1,4 @@
-/* NetHack 3.6	mactty.h	$NHDT-Date: 1447755970 2015/11/17 10:26:10 $  $NHDT-Branch: master $:$NHDT-Revision: 1.12 $ */
+/* NetHack 3.7	mactty.h	$NHDT-Date: 1596498543 2020/08/03 23:49:03 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.14 $ */
 /* Copyright (c) Jon W{tte 1993.                                        */
 /* NetHack may be freely redistributed.  See license for details.       */
 
@@ -304,10 +304,6 @@ extern short clear_tty_window(WindowPtr window, short from_row,
 extern short get_invalid_region(WindowPtr window, Rect *inval_rect);
 extern short set_invalid_region(WindowPtr window, Rect *inval_rect);
 
-/*
- * Now in macsnd.c, which seemed like a good place
- */
-extern void tty_nhbell();
 
 #if EXTENDED_SUPPORT
 

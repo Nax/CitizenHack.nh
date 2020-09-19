@@ -1,4 +1,4 @@
-/* NetHack 3.6	obj.h	$NHDT-Date: 1508827590 2017/10/24 06:46:30 $  $NHDT-Branch: NetHack-3.6.0 $:$NHDT-Revision: 1.60 $ */
+/* NetHack 3.7	obj.h	$NHDT-Date: 1596498552 2020/08/03 23:49:12 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.76 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2006. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -16,15 +16,14 @@ union vptrs {
 };
 
 /****
- ***	oextra -- collection of all object extensions
- **	(see the note at the bottom of this file before adding oextra fields)
+ ***    oextra -- collection of all object extensions
+ **     (see the note at the bottom of this file before adding oextra fields)
  */
 struct oextra {
     char *oname;          /* ptr to name of object */
     struct monst *omonst; /* ptr to attached monst struct */
-    unsigned *omid;       /* ptr to m_id */
-    long *olong;          /* ptr to misc long (temporary gold object) */
-    char *omailcmd;       /* response_cmd for mail deliver */
+    char *omailcmd;       /* response_cmd for mail delivery */
+    unsigned omid;        /* for corpse; m_id of corpse's ghost */
 };
 
 struct obj {
@@ -45,6 +44,7 @@ struct obj {
                   number of charges for wand or charged tool ( >= -1 );
                   number of candles attached to candelabrum;
                   marks your eggs, tin variety and spinach tins;
+                  candy bar wrapper index;
                   Schroedinger's Box (1) or royal coffers for a court (2);
                   tells which fruit a fruit is;
                   special for uball and amulet;
@@ -66,7 +66,8 @@ struct obj {
 #define OBJ_MIGRATING 5 /* object sent off to another level */
 #define OBJ_BURIED 6    /* object buried */
 #define OBJ_ONBILL 7    /* object on shk bill */
-#define NOBJ_STATES 8
+#define OBJ_LUAFREE 8   /* object has been dealloc'd, but is ref'd by lua */
+#define NOBJ_STATES 9
     xchar timed; /* # of fuses (timers) attached to this obj */
 
     Bitfield(cursed, 1);
@@ -86,7 +87,7 @@ struct obj {
 #define MAX_ERODE 3
 #define orotten oeroded  /* rotten food */
 #define odiluted oeroded /* diluted potions */
-#define norevive oeroded2
+#define norevive oeroded2 /* frozen corpse */
     Bitfield(oerodeproof, 1); /* erodeproof weapon/armor */
     Bitfield(olocked, 1);     /* object is locked */
     Bitfield(obroken, 1);     /* lock has been broken */
@@ -105,7 +106,8 @@ struct obj {
 
     Bitfield(in_use, 1); /* for magic items before useup items */
     Bitfield(bypass, 1); /* mark this as an object to be skipped by bhito() */
-    Bitfield(cknown, 1); /* contents of container assumed to be known */
+    Bitfield(cknown, 1); /* for containers (including statues): the contents
+                          * are known; also applicable to tins */
     Bitfield(lknown, 1); /* locked/unlocked status is known */
     /* 4 free bits */
 
@@ -113,44 +115,42 @@ struct obj {
 #define leashmon corpsenm /* gets m_id of attached pet */
 #define fromsink corpsenm /* a potion from a sink */
 #define novelidx corpsenm /* 3.6 tribute - the index of the novel title */
-#define record_achieve_special corpsenm
     int usecount;           /* overloaded for various things that tally */
 #define spestudied usecount /* # of times a spellbook has been studied */
     unsigned oeaten;        /* nutrition left in food, if partly eaten */
     long age;               /* creation date */
     long owornmask;
+    unsigned lua_ref_cnt;  /* # of lua script references for this object */
     struct oextra *oextra; /* pointer to oextra struct */
 };
 
 #define newobj() (struct obj *) alloc(sizeof(struct obj))
 
 /***
- **	oextra referencing and testing macros
+ **     oextra referencing and testing macros
  */
 
 #define ONAME(o) ((o)->oextra->oname)
-#define OMID(o) ((o)->oextra->omid)
 #define OMONST(o) ((o)->oextra->omonst)
-#define OLONG(o) ((o)->oextra->olong)
 #define OMAILCMD(o) ((o)->oextra->omailcmd)
+#define OMID(o) ((o)->oextra->omid) /* non-zero => set, zero => not set */
 
 #define has_oname(o) ((o)->oextra && ONAME(o))
-#define has_omid(o) ((o)->oextra && OMID(o))
 #define has_omonst(o) ((o)->oextra && OMONST(o))
-#define has_olong(o) ((o)->oextra && OLONG(o))
 #define has_omailcmd(o) ((o)->oextra && OMAILCMD(o))
+#define has_omid(o) ((o)->oextra && OMID(o))
 
 /* Weapons and weapon-tools */
 /* KMH -- now based on skill categories.  Formerly:
- *	#define is_sword(otmp)	(otmp->oclass == WEAPON_CLASS && \
- *			 objects[otmp->otyp].oc_wepcat == WEP_SWORD)
- *	#define is_blade(otmp)	(otmp->oclass == WEAPON_CLASS && \
- *			 (objects[otmp->otyp].oc_wepcat == WEP_BLADE || \
- *			  objects[otmp->otyp].oc_wepcat == WEP_SWORD))
- *	#define is_weptool(o)	((o)->oclass == TOOL_CLASS && \
- *			 objects[(o)->otyp].oc_weptool)
- *	#define is_multigen(otyp) (otyp <= SHURIKEN)
- *	#define is_poisonable(otyp) (otyp <= BEC_DE_CORBIN)
+ *      #define is_sword(otmp)  (otmp->oclass == WEAPON_CLASS && \
+ *                       objects[otmp->otyp].oc_wepcat == WEP_SWORD)
+ *      #define is_blade(otmp)  (otmp->oclass == WEAPON_CLASS && \
+ *                       (objects[otmp->otyp].oc_wepcat == WEP_BLADE || \
+ *                        objects[otmp->otyp].oc_wepcat == WEP_SWORD))
+ *      #define is_weptool(o)   ((o)->oclass == TOOL_CLASS && \
+ *                       objects[(o)->otyp].oc_weptool)
+ *      #define is_multigen(otyp) (otyp <= SHURIKEN)
+ *      #define is_poisonable(otyp) (otyp <= BEC_DE_CORBIN)
  */
 #define is_blade(otmp)                           \
     (otmp->oclass == WEAPON_CLASS                \
@@ -244,9 +244,11 @@ struct obj {
 /* Eggs and other food */
 #define MAX_EGG_HATCH_TIME 200 /* longest an egg can remain unhatched */
 #define stale_egg(egg) \
-    ((monstermoves - (egg)->age) > (2 * MAX_EGG_HATCH_TIME))
+    ((g.monstermoves - (egg)->age) > (2 * MAX_EGG_HATCH_TIME))
 #define ofood(o) ((o)->otyp == CORPSE || (o)->otyp == EGG || (o)->otyp == TIN)
-#define polyfodder(obj) (ofood(obj) && pm_to_cham((obj)->corpsenm) != NON_PM)
+#define polyfodder(obj) \
+    (ofood(obj) && (pm_to_cham((obj)->corpsenm) != NON_PM       \
+                    || dmgtype(&mons[(obj)->corpsenm], AD_POLY)))
 #define mlevelgain(obj) (ofood(obj) && (obj)->corpsenm == PM_WRAITH)
 #define mhealup(obj) (ofood(obj) && (obj)->corpsenm == PM_NURSE)
 #define Is_pudding(o)                                                 \
@@ -344,19 +346,9 @@ struct obj {
          && !undiscovered_artifact(ART_EYES_OF_THE_OVERWORLD)))
 #define pair_of(o) ((o)->otyp == LENSES || is_gloves(o) || is_boots(o))
 
-/* 'PRIZE' values override obj->corpsenm so prizes mustn't be object types
-   which use that field for monster type (or other overloaded purpose) */
-#define MINES_PRIZE 1
-#define SOKO_PRIZE1 2
-#define SOKO_PRIZE2 3
-#define is_mines_prize(o) \
-    ((o)->otyp == iflags.mines_prize_type                \
-     && (o)->record_achieve_special == MINES_PRIZE)
-#define is_soko_prize(o) \
-    (((o)->otyp == iflags.soko_prize_type1               \
-      && (o)->record_achieve_special == SOKO_PRIZE1)     \
-     || ((o)->otyp == iflags.soko_prize_type2            \
-         && (o)->record_achieve_special == SOKO_PRIZE2))
+/* achievement tracking; 3.6.x did this differently */
+#define is_mines_prize(o) ((o)->o_id == g.context.achieveo.mines_prize_oid)
+#define is_soko_prize(o) ((o)->o_id == g.context.achieveo.soko_prize_oid)
 
 /* Flags for get_obj_location(). */
 #define CONTAINED_TOO 0x1
@@ -390,43 +382,46 @@ struct obj {
 /*
  *  Notes for adding new oextra structures:
  *
- *	 1. Add the structure definition and any required macros in an
+ *       1. Add the structure definition and any required macros in an
  *          appropriate header file that precedes this one.
- *	 2. Add a pointer to your new struct to oextra struct in this file.
- *	 3. Add a referencing macro to this file after the newobj macro above
- *	    (see ONAME, OMONST, OMIN, OLONG, or OMAILCMD for examples).
- *	 4. Add a testing macro after the set of referencing macros
- *	    (see has_oname(), has_omonst(), has_omin(), has_olong(),
- *	    has_omailcmd() for examples).
- *	 5. Create newXX(otmp) function and possibly free_XX(otmp) function
- *	    in an appropriate new or existing source file and add a prototype
- *	    for it to include/extern.h.  The majority of these are currently
- *	    located in mkobj.c for convenience.
+ *       2. Add a pointer to your new struct to oextra struct in this file.
+ *       3. Add a referencing macro to this file after the newobj macro above
+ *          (see ONAME, OMONST, OMAILCMD, or OMIN for examples).
+ *       4. Add a testing macro after the set of referencing macros
+ *          (see has_oname(), has_omonst(), has_omailcmd(), and has_omin(),
+ *          for examples).
+ *       5. If your new field isn't a pointer and requires a non-zero value
+ *          on initialization, add code to init_oextra() in src/mkobj.c.
+ *       6. Create newXX(otmp) function and possibly free_XX(otmp) function
+ *          in an appropriate new or existing source file and add a prototype
+ *          for it to include/extern.h.  The majority of these are currently
+ *          located in mkobj.c for convenience.
  *
- *		void FDECL(newXX, (struct obj *));
- *	        void FDECL(free_XX, (struct obj *));
+ *          void FDECL(newXX, (struct obj *));
+ *          void FDECL(free_XX, (struct obj *));
  *
- *	          void
- *	          newxx(otmp)
- *	          struct obj *otmp;
- *	          {
- *	              if (!otmp->oextra) otmp->oextra = newoextra();
- *	              if (!XX(otmp)) {
- *	                  XX(otmp) = (struct XX *)alloc(sizeof(struct xx));
- *	                  (void) memset((genericptr_t) XX(otmp),
- *	                             0, sizeof(struct xx));
- *	              }
- *	          }
+ *          void
+ *          newxx(otmp)
+ *          struct obj *otmp;
+ *          {
+ *              if (!otmp->oextra)
+ *                  otmp->oextra = newoextra();
+ *              if (!XX(otmp)) {
+ *                  XX(otmp) = (struct XX *) alloc(sizeof (struct xx));
+ *                  (void) memset((genericptr_t) XX(otmp),
+ *                                0, sizeof (struct xx));
+ *              }
+ *         }
  *
- *	 6. Adjust size_obj() in src/cmd.c appropriately.
- *	 7. Adjust dealloc_oextra() in src/mkobj.c to clean up
- *	    properly during obj deallocation.
- *	 8. Adjust copy_oextra() in src/mkobj.c to make duplicate
- *	    copies of your struct or data onto another obj struct.
- *	 9. Adjust restobj() in src/restore.c to deal with your
- *	    struct or data during a restore.
- *	10. Adjust saveobj() in src/save.c to deal with your
- *	    struct or data during a save.
+ *       7. Adjust size_obj() in src/cmd.c appropriately.
+ *       8. Adjust dealloc_oextra() in src/mkobj.c to clean up
+ *          properly during obj deallocation.
+ *       9. Adjust copy_oextra() in src/mkobj.c to make duplicate
+ *          copies of your struct or data onto another obj struct.
+ *      10. Adjust restobj() in src/restore.c to deal with your
+ *          struct or data during a restore.
+ *      11. Adjust saveobj() in src/save.c to deal with your
+ *          struct or data during a save.
  */
 
 #endif /* OBJ_H */

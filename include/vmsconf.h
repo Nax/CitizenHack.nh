@@ -1,4 +1,4 @@
-/* NetHack 3.6	vmsconf.h	$NHDT-Date: 1555361299 2019/04/15 20:48:19 $  $NHDT-Branch: NetHack-3.6.2-beta01 $:$NHDT-Revision: 1.30 $ */
+/* NetHack 3.7	vmsconf.h	$NHDT-Date: 1596498569 2020/08/03 23:49:29 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.33 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -177,7 +177,13 @@ PANICTRACE_GDB=2  #at conclusion of panic, show a call traceback and then
  * The remainder of the file should not need to be changed.
  */
 
-/* data librarian defs */
+/* This used to be force-defined for VMS in topten.c, but with
+ * the global variable consolidation into g in 3.7, it has to be 
+ * defined here so that decl.h includes the field in g.
+ */
+#define UPDATE_RECORD_IN_PLACE
+
+/* data librarian defs */                              
 #ifdef DLB
 #define DLBFILE "nh-data.dlb"
 /*
