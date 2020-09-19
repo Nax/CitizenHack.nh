@@ -1706,8 +1706,8 @@ void
 mkinvokearea()
 {
     int dist;
-    xchar xmin = inv_pos.x, xmax = inv_pos.x,
-          ymin = inv_pos.y, ymax = inv_pos.y;
+    xchar xmin = u.ux, xmax = u.ux,
+          ymin = u.uy, ymax = u.uy;
     register xchar i;
 
     /* slightly odd if levitating, but not wrong */

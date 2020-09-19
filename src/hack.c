@@ -702,8 +702,8 @@ boolean
 invocation_pos(x, y)
 xchar x, y;
 {
-    return (boolean) (Invocation_lev(&u.uz)
-                      && x == inv_pos.x && y == inv_pos.y);
+    struct trap *t = t_at(x, y);
+    return (t && t->ttyp == VIBRATING_SQUARE);
 }
 
 /* return TRUE if (dx,dy) is an OK place to move
