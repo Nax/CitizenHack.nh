@@ -46,7 +46,7 @@ STATIC_OVL NEARDATA struct artifact artilist[] = {
 
     A("Excalibur", LONG_SWORD, (SPFX_NOGEN | SPFX_RESTR | SPFX_SEEK
                                 | SPFX_DEFN | SPFX_INTEL | SPFX_SEARCH),
-      0, 0, PHYS(5, 10), DRLI(0, 0), NO_CARY, 0, A_LAWFUL, PM_KNIGHT, NON_PM,
+      0, 0, PHYS(5, 10), DRLI(0, 0), NO_CARY, 0, A_LAWFUL, NON_PM, NON_PM,
       4000L, NO_COLOR),
     /*
      *      Stormbringer only has a 2 because it can drain a level,
@@ -166,6 +166,10 @@ STATIC_OVL NEARDATA struct artifact artilist[] = {
     A("The Wand of Wonders", WAN_WISHING, SPFX_RESTR, 0, 0,
       NO_ATTK, NO_DFNS, NO_CARY, 0, A_NONE, NON_PM, NON_PM, 7500L,
       NO_COLOR),
+
+    A("Clarent", SHORT_SWORD, (SPFX_RESTR | SPFX_INTEL | SPFX_LUCK),
+      0, 0, PHYS(2, 8), NO_DFNS, NO_CARY, 0, A_LAWFUL, PM_KNIGHT, NON_PM,
+      3000L, NO_COLOR),
 
     /*
      *      The artifacts for the quest dungeon, all self-willed.

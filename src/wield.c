@@ -601,6 +601,8 @@ can_twoweapon_artifact()
     if ((uwep->oartifact == ART_FROST_BRAND && uswapwep->oartifact == ART_FIRE_BRAND)
         || (uwep->oartifact == ART_FIRE_BRAND && uswapwep->oartifact == ART_FROST_BRAND))
         return TRUE;
+    if (uwep->oartifact == ART_EXCALIBUR && uswapwep->oartifact == ART_CLARENT)
+        return TRUE;
     return FALSE;
 }
 
