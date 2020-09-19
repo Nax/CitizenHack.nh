@@ -49,12 +49,13 @@ BRANCH:		"The Elemental Planes" @ (1, 0) no_down up
 #		monsters can properly migrate here under certain
 #		circumstances.
 #
-DUNGEON:	"Gehennom" "G" (20, 5)
+DUNGEON:	"Gehennom" "G" (25, 5)
 DESCRIPTION:	mazelike
 DESCRIPTION:	hellish
 ALIGNMENT:	noalign
 BRANCH:		"Vlad's Tower" @ (9, 5) up
 LEVEL:		"valley" "V" @ (1, 0)
+LEVEL:		"lake" "none" @ (-3, 0)
 LEVEL:		"antichamber" "none" @ (-2, 0)
 LEVEL:		"sanctum" "none" @ (-1, 0)
 LEVEL:		"juiblex" "J" @ (4, 4)
@@ -148,6 +149,7 @@ LEVEL:		"dummy"  "none" @ (6, 0)
 #	The Black Market
 #
 DUNGEON:	"Black Market" "M" (1, 0)
+PROTOFILE:  "market"
 DESCRIPTION: mazelike
 ALIGNMENT:	chaotic
 LEVEL:		"market" "M" @ (-1, 0)
