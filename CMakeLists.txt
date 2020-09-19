@@ -190,7 +190,7 @@ foreach(l ${LEVELS})
         OUTPUT "${CMAKE_BINARY_DIR}/stamps/lev/${fname}.stamp"
         COMMAND lev "${l}"
         COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_BINARY_DIR}/stamps/lev/${fname}.stamp"
-        DEPENDS "${l}"
+        DEPENDS lev "${l}"
         WORKING_DIRECTORY "${HACKDIR_DATA}"
         COMMENT "Compiling level ${l}"
         VERBATIM

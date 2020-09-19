@@ -2650,6 +2650,13 @@ struct permonst _mons2[] = {
         SIZ(1800, 1000, MS_SILENT, MZ_HUGE), 0, 0,
         M1_SWIM | M1_AMPHIBIOUS | M1_ANIMAL | M1_NOHANDS | M1_CARNIVORE,
         M2_NOPOLY | M2_HOSTILE | M2_STRONG, M3_INFRAVISIBLE, 22, CLR_RED),
+    MON("Leviathan", S_EEL, LVL(25, 17, -6, 80, -10), (G_UNIQ | G_NOGEN),
+        A(ATTK(AT_BITE, AD_PHYS, 6, 6), ATTK(AT_BITE, AD_PHYS, 6, 6),
+          ATTK(AT_BITE, AD_PHYS, 6, 6), ATTK(AT_BITE, AD_WRAP, 3, 3), NO_ATTK,
+          NO_ATTK),
+        SIZ(5000, 3000, MS_SILENT, MZ_HUGE), 0, 0,
+        M1_SWIM | M1_AMPHIBIOUS | M1_ANIMAL | M1_NOHANDS | M1_CARNIVORE,
+        M2_NOPOLY | M2_HOSTILE | M2_STRONG, M3_INFRAVISIBLE, 30, HI_LORD),
     /*
      * lizards, &c
      */
