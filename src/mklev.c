@@ -671,8 +671,17 @@ makelevel()
         } else if (dungeons[u.uz.dnum].proto[0]) {
             makemaz("");
             return;
+        } else if (rn2(5) && u.uz.dnum == medusa_level.dnum && depth(&u.uz) > depth(&medusa_level)) {
+            makemaz("");
+            return;
         } else if (In_mines(&u.uz)) {
             makemaz("minefill");
+            return;
+        } else if (In_hell(&u.uz)) {
+            if (rn2(6) == 0)
+                makemaz("");
+            else
+                makemaz("hellfill");
             return;
         } else if (In_quest(&u.uz)) {
             char fillname[9];
@@ -685,11 +694,6 @@ makelevel()
             Strcat(fillname,
                    (u.uz.dlevel < loc_lev->dlevel.dlevel) ? "a" : "b");
             makemaz(fillname);
-            return;
-        } else if (In_hell(&u.uz)
-                   || (rn2(5) && u.uz.dnum == medusa_level.dnum
-                       && depth(&u.uz) > depth(&medusa_level))) {
-            makemaz("");
             return;
         }
     }

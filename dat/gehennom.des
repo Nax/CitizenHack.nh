@@ -4,6 +4,32 @@
 # NetHack may be freely redistributed.  See license for details.
 #
 
+MAZE: "hellfill" , 'L'
+INIT_MAP: mines, '.' , ' ' , false , false , random , true
+NOMAP
+
+ROOM:"ordinary",random,random,random,random {}
+
+STAIR: random, up
+STAIR: random, down
+
+OBJECT: '/', random
+OBJECT: '?', random
+OBJECT: '?', random
+OBJECT: '+', random
+OBJECT: random, random
+OBJECT: random, random
+OBJECT: random, random
+
+TRAP: random, random
+TRAP: random, random
+TRAP: random, random
+TRAP: random, random
+TRAP: random, random
+TRAP: random, random
+TRAP: random, random
+TRAP: random, random
+
 MAZE: "valley", ' '
 FLAGS: noteleport,hardfloor,nommap
 GEOMETRY:center,center
