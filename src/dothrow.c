@@ -179,28 +179,34 @@ int shotlimit;
         multishot += multishot_class_bonus(Role_switch, obj, uwep);
 
         /* ...or using their race's special bow; no bonus for spears */
-        if (!weakmultishot)
-            switch (Race_switch) {
-            case PM_ELF:
-                if (obj->otyp == ELVEN_ARROW && uwep
-                    && uwep->otyp == ELVEN_BOW)
-                    multishot++;
-                break;
-            case PM_ORC:
-                if (obj->otyp == ORCISH_ARROW && uwep
-                    && uwep->otyp == ORCISH_BOW)
-                    multishot++;
-                break;
-            case PM_GNOME:
-                /* arbitrary; there isn't any gnome-specific gear */
-                if (skill == -P_CROSSBOW)
-                    multishot++;
-                break;
-            case PM_HUMAN:
-            case PM_DWARF:
-            default:
-                break; /* No bonus */
+        if (!weakmultishot) {
+            /* Longbow of Diana always gives the bonus */
+            if (obj->oartifact == ART_LONGBOW_OF_DIANA) {
+                multishot++;
+            } else {
+                switch (Race_switch) {
+                case PM_ELF:
+                    if (obj->otyp == ELVEN_ARROW && uwep
+                        && uwep->otyp == ELVEN_BOW)
+                        multishot++;
+                    break;
+                case PM_ORC:
+                    if (obj->otyp == ORCISH_ARROW && uwep
+                        && uwep->otyp == ORCISH_BOW)
+                        multishot++;
+                    break;
+                case PM_GNOME:
+                    /* arbitrary; there isn't any gnome-specific gear */
+                    if (skill == -P_CROSSBOW)
+                        multishot++;
+                    break;
+                case PM_HUMAN:
+                case PM_DWARF:
+                default:
+                    break; /* No bonus */
+                }
             }
+        }
 
         /* crossbows are slow to load and probably shouldn't allow multiple
            shots at all, but that would result in players never using them;
