@@ -1,5 +1,5 @@
 @echo off
-REM    NetHack 3.6 setup.bat   $NHDT-Date: 1432512792 2015/05/25 00:13:12 $ $NHDT-Branch: master $:$NHDT-Revision: 1.9 $
+REM    NetHack 3.7 setup.bat   $NHDT-Date: 1596498274 2020/08/03 23:44:34 $ $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.18 $
 REM    Copyright (c) NetHack PC Development Team 1990 - 2019
 REM    NetHack may be freely redistributed.  See license for details.
 
@@ -16,7 +16,7 @@ goto err_set
 echo Checking to see if directories are set up properly ...
 if not exist ..\..\include\hack.h  goto err_dir
 if not exist ..\..\src\hack.c      goto err_dir
-if not exist ..\..\dat\wizard.des  goto err_dir
+if not exist ..\..\dat\wizard1.lua  goto err_dir
 if not exist ..\..\util\makedefs.c goto err_dir
 if not exist ..\..\win\tty\wintty.c goto err_dir
 echo Directories OK.

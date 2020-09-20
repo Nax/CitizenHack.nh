@@ -1,4 +1,4 @@
-/* NetHack 3.6	nttty.c	$NHDT-Date: 1554215932 2019/04/02 14:38:52 $  $NHDT-Branch: NetHack-3.6.2-beta01 $:$NHDT-Revision: 1.99 $ */
+/* NetHack 3.7	nttty.c	$NHDT-Date: 1596498316 2020/08/03 23:45:16 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.117 $ */
 /* Copyright (c) NetHack PC Development Team 1993    */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -339,7 +339,7 @@ int *wid, *hgt;
 {
     *wid = console.width;
     *hgt = console.height;
-    set_option_mod_status("mouse_support", SET_IN_GAME);
+    set_option_mod_status("mouse_support", set_in_game);
 }
 
 void
@@ -430,7 +430,7 @@ int portdebug;
     int ch;
 
 #ifdef QWERTZ_SUPPORT
-    if (Cmd.swap_yz)
+    if (g.Cmd.swap_yz)
         numberpad |= 0x10;
 #endif
     ch = keyboard_handler.pProcessKeystroke(
@@ -462,11 +462,11 @@ tgetch()
     if (iflags.debug_fuzzer)
         return randomkey();
 #ifdef QWERTZ_SUPPORT
-    if (Cmd.swap_yz)
+    if (g.Cmd.swap_yz)
         numpad |= 0x10;
 #endif
 
-    return (program_state.done_hup)
+    return (g.program_state.done_hup)
                ? '\033'
                : keyboard_handler.pCheckInput(
                    console.hConIn, &ir, &count, numpad, 0, &mod, &cc);
@@ -482,13 +482,20 @@ int *x, *y, *mod;
     boolean numpad = iflags.num_pad;
 
     really_move_cursor();
-    if (iflags.debug_fuzzer)
-        return randomkey();
+    if (iflags.debug_fuzzer) {
+        int poskey = randomkey();
+
+        if (poskey == 0) {
+            *x = rn2(console.width);
+            *y = rn2(console.height);
+        }
+        return poskey;
+    }
 #ifdef QWERTZ_SUPPORT
-    if (Cmd.swap_yz)
+    if (g.Cmd.swap_yz)
         numpad |= 0x10;
 #endif
-    ch = (program_state.done_hup)
+    ch = (g.program_state.done_hup)
              ? '\033'
              : keyboard_handler.pCheckInput(
                    console.hConIn, &ir, &count, numpad, 1, mod, &cc);
@@ -1647,8 +1654,8 @@ check_font_widths()
     boolean used[256];
     memset(used, 0, sizeof(used));
     for (int i = 0; i < SYM_MAX; i++) {
-        used[primary_syms[i]] = TRUE;
-        used[rogue_syms[i]] = TRUE;
+        used[g.primary_syms[i]] = TRUE;
+        used[g.rogue_syms[i]] = TRUE;
     }
 
     int wcUsedCount = 0;

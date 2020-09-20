@@ -1,4 +1,4 @@
-/* NetHack 3.6	trampoli.h	$NHDT-Date: 1433806581 2015/06/08 23:36:21 $  $NHDT-Branch: master $:$NHDT-Revision: 1.11 $ */
+/* NetHack 3.7	trampoli.h	$NHDT-Date: 1596498566 2020/08/03 23:49:26 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.13 $ */
 /* Copyright (c) 1989, by Norm Meluch and Stephen Spackman	  */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -263,7 +263,7 @@
 #define tty_curs(x, y, z) tty_curs_(x, y, z)
 #define tty_putstr(x, y, z) tty_putstr_(x, y, z)
 #define tty_display_file(x, y) tty_display_file_(x, y)
-#define tty_start_menu(x) tty_start_menu_(x)
+#define tty_start_menu(x, b) tty_start_menu_(x, b)
 #define tty_add_menu(a, b, c, d, e, f, g, h) \
     tty_add_menu_(a, b, c, d, e, f, g, h)
 #define tty_end_menu(a, b) tty_end_menu_(a, b)

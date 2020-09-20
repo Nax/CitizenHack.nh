@@ -1,4 +1,4 @@
-/* NetHack 3.6	mhmenu.c	$NHDT-Date: 1432512811 2015/05/25 00:13:31 $  $NHDT-Branch: master $:$NHDT-Revision: 1.48 $ */
+/* NetHack 3.7	mhmenu.c	$NHDT-Date: 1596498354 2020/08/03 23:45:54 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.74 $ */
 /* Copyright (c) Alex Kompel, 2002                                */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -34,6 +34,7 @@ typedef struct mswin_menu_item {
     int attr;
     char str[NHMENU_STR_SIZE];
     BOOLEAN_P presel;
+    unsigned int itemflags;
     int count;
     BOOL has_focus;
 } NHMenuItem, *PNHMenuItem;
@@ -348,10 +349,10 @@ MenuWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         return FALSE;
 
     case WM_CLOSE:
-        if (program_state.gameover) {
+        if (g.program_state.gameover) {
             data->result = -1;
             data->done = 1;
-            program_state.stopprint++;
+            g.program_state.stopprint++;
             return TRUE;
         } else
             return FALSE;
@@ -627,6 +628,7 @@ onMSNHCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	/* prevent & being interpreted as a mnemonic start */
         strNsubst(data->menu.items[new_item].str, "&", "&&", 0);
         data->menu.items[new_item].presel = msg_data->presel;
+        data->menu.items[new_item].itemflags = msg_data->itemflags;
 
         /* calculate tabstop size */
         hDC = GetDC(hWnd);
@@ -1304,7 +1306,9 @@ onListChar(HWND hWnd, HWND hwndList, WORD ch)
         if (data->how == PICK_ANY) {
             reset_menu_count(hwndList, data);
             for (i = 0; i < data->menu.size; i++) {
-                SelectMenuItem(hwndList, data, i,
+                if (menuitem_invert_test(0, data->menu.items[i].itemflags,
+                                         NHMENU_IS_SELECTED(data->menu.items[i])))
+                    SelectMenuItem(hwndList, data, i,
                                NHMENU_IS_SELECTED(data->menu.items[i]) ? 0
                                                                        : -1);
             }
@@ -1351,7 +1355,9 @@ onListChar(HWND hWnd, HWND hwndList, WORD ch)
             from = max(0, topIndex);
             to = min(data->menu.size, from + pageSize);
             for (i = from; i < to; i++) {
-                SelectMenuItem(hwndList, data, i,
+                if (menuitem_invert_test(0, data->menu.items[i].itemflags,
+                                         NHMENU_IS_SELECTED(data->menu.items[i])))                    
+                    SelectMenuItem(hwndList, data, i,
                                NHMENU_IS_SELECTED(data->menu.items[i]) ? 0
                                                                        : -1);
             }

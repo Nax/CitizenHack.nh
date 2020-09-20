@@ -1,4 +1,4 @@
-/* NetHack 3.6	video.c	$NHDT-Date: 1554215931 2019/04/02 14:38:51 $  $NHDT-Branch: NetHack-3.6.2-beta01 $:$NHDT-Revision: 1.12 $ */
+/* NetHack 3.7	video.c	$NHDT-Date: 1596498277 2020/08/03 23:44:37 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.16 $ */
 /*   Copyright (c) NetHack PC Development Team 1993, 1994, 2001	    */
 /*   NetHack may be freely redistributed.  See license for details. */
 /*								    */
@@ -122,7 +122,7 @@ void FDECL(get_cursor, (int *, int *));
 void FDECL(adjust_cursor_flags, (struct WinDesc *));
 void FDECL(cmov, (int, int));
 void FDECL(nocmov, (int, int));
-STATIC_DCL void NDECL(init_ttycolor);
+static void NDECL(init_ttycolor);
 
 int savevmode;               /* store the original video mode in here */
 int curcol, currow;          /* graphics mode current cursor locations */
@@ -724,7 +724,7 @@ char *schoice[3] = { "dark", "normal", "light" };
 char *shade[3];
 #endif /* VIDEOSHADES */
 
-STATIC_OVL void
+static void
 init_ttycolor()
 {
 #ifdef VIDEOSHADES

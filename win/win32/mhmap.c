@@ -1,4 +1,4 @@
-/* NetHack 3.6	mhmap.c	$NHDT-Date: 1435002695 2015/06/22 19:51:35 $  $NHDT-Branch: master $:$NHDT-Revision: 1.56 $ */
+/* NetHack 3.7	mhmap.c	$NHDT-Date: 1596498353 2020/08/03 23:45:53 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.85 $ */
 /* Copyright (C) 2001 by Alex Kompel      */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -13,7 +13,9 @@
 #include "resource.h"
 
 #include "color.h"
+#if !defined(PATCHLEVEL_H)
 #include "patchlevel.h"
+#endif
 
 #define NHMAP_FONT_NAME TEXT("Terminal")
 #define NHMAP_TTFONT_NAME TEXT("Consolas")
@@ -312,6 +314,10 @@ mswin_map_stretch(HWND hWnd, LPSIZE map_size, BOOL redraw)
     /* ensure tile is at least one pixel in size */
     if (data->xFrontTile < 1) data->xFrontTile = 1;
     if (data->yFrontTile < 1) data->yFrontTile = 1;
+
+    /* ensure front tile is non-zero in size */
+    data->xFrontTile = max(data->xFrontTile, 1);
+    data->yFrontTile = max(data->yFrontTile, 1);
 
     /* calcuate ASCII cursor height */
     data->yBlinkCursor = (int) ((double) CURSOR_HEIGHT * data->backScale);
@@ -930,12 +936,12 @@ paintGlyph(PNHMapWindow data, int i, int j, RECT * rect)
         if (data->bUnicodeFont) {
             wch = winos_ascii_to_wide(ch);
             if (wch == 0x2591 || wch == 0x2592) {
-                int level = 80;
-                HBRUSH brush = CreateSolidBrush(RGB(level, level, level));
+                int intensity = 80;
+                HBRUSH brush = CreateSolidBrush(RGB(intensity, intensity, intensity));
                 FillRect(data->backBufferDC, rect, brush);
                 DeleteObject(brush);
-                level = (wch == 0x2591 ? 100 : 200);
-                brush = CreateSolidBrush(RGB(level, level, level));
+                intensity = (wch == 0x2591 ? 100 : 200);
+                brush = CreateSolidBrush(RGB(intensity, intensity, intensity));
                 RECT smallRect = { rect->left + 1, rect->top + 1,
                                     rect->right - 1, rect->bottom - 1 };
                 FillRect(data->backBufferDC, &smallRect, brush);

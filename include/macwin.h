@@ -1,4 +1,4 @@
-/* NetHack 3.6	macwin.h	$NHDT-Date: 1447755970 2015/11/17 10:26:10 $  $NHDT-Branch: master $:$NHDT-Revision: 1.10 $ */
+/* NetHack 3.7	macwin.h	$NHDT-Date: 1596498543 2020/08/03 23:49:03 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.14 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Kevin Hugo, 2003. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -225,9 +225,9 @@ E void FDECL(mac_display_nhwindow, (winid, BOOLEAN_P));
 E void FDECL(mac_destroy_nhwindow, (winid));
 E void FDECL(mac_curs, (winid, int, int));
 E void FDECL(mac_putstr, (winid, int, const char *));
-E void FDECL(mac_start_menu, (winid));
+E void FDECL(mac_start_menu, (winid, unsigned long mbehavior));
 E void FDECL(mac_add_menu, (winid, int, const anything *, CHAR_P, CHAR_P, int,
-                            const char *, BOOLEAN_P));
+                            const char *, unsigned int));
 E void FDECL(mac_end_menu, (winid, const char *));
 E int FDECL(mac_select_menu, (winid, int, menu_item **));
 #ifdef CLIPPING

@@ -1,11 +1,17 @@
-/* NetHack 3.6	mhmain.c	$NHDT-Date: 1432512811 2015/05/25 00:13:31 $  $NHDT-Branch: master $:$NHDT-Revision: 1.62 $ */
+/* NetHack 3.7	mhmain.c	$NHDT-Date: 1596498352 2020/08/03 23:45:52 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.76 $ */
 /* Copyright (C) 2001 by Alex Kompel 	 */
 /* NetHack may be freely redistributed.  See license for details. */
 
 #include "winMS.h"
 #include <commdlg.h>
+#if !defined(CROSSCOMPILE)
 #include "date.h"
+#else
+#include "config.h"
+#endif
+#if !defined(PATCHLEVEL_H)
 #include "patchlevel.h"
+#endif
 #include "resource.h"
 #include "mhmsg.h"
 #include "mhinput.h"
@@ -452,16 +458,16 @@ MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_CLOSE: {
         /* exit gracefully */
-        if (program_state.gameover) {
+        if (g.program_state.gameover) {
             /* assume the user really meant this, as the game is already
              * over... */
             /* to make sure we still save bones, just set stop printing flag
              */
-            program_state.stopprint++;
+            g.program_state.stopprint++;
             NHEVENT_KBD(
                 '\033'); /* and send keyboard input as if user pressed ESC */
             /* additional code for this is done in menu and rip windows */
-        } else if (!program_state.something_worth_saving) {
+        } else if (!g.program_state.something_worth_saving) {
             /* User exited before the game started, e.g. during splash display
              */
             /* Just get out. */
@@ -837,7 +843,7 @@ onWMCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
     case IDM_SAVE:
         if (iflags.debug_fuzzer)
             break;
-        if (!program_state.gameover && !program_state.done_hup)
+        if (!g.program_state.gameover && !g.program_state.done_hup)
             dosave();
         else
             MessageBeep(0);
@@ -933,7 +939,7 @@ onWMCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
         ofn.nMaxFile = SIZE(filename);
         ofn.lpstrFileTitle = NULL;
         ofn.nMaxFileTitle = 0;
-        ofn.lpstrInitialDir = NH_A2W(hackdir, whackdir, MAX_PATH);
+        ofn.lpstrInitialDir = NH_A2W(g.hackdir, whackdir, MAX_PATH);
         ofn.lpstrTitle = NULL;
         ofn.Flags = OFN_LONGNAMES | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
         ofn.nFileOffset = 0;
@@ -1063,11 +1069,11 @@ About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         SetDlgItemText(hDlg, IDC_ABOUT_VERSION,
                        NH_A2W(buf, wbuf, sizeof(wbuf)));
 
+        Sprintf(buf, "%s\n%s\n%s\n%s",
+                COPYRIGHT_BANNER_A, COPYRIGHT_BANNER_B,
+                COPYRIGHT_BANNER_C, COPYRIGHT_BANNER_D);
         SetDlgItemText(hDlg, IDC_ABOUT_COPYRIGHT,
-                       NH_A2W(COPYRIGHT_BANNER_A "\n" COPYRIGHT_BANNER_B
-                                                 "\n" COPYRIGHT_BANNER_C
-                                                 "\n" COPYRIGHT_BANNER_D,
-                              wbuf, BUFSZ));
+                       NH_A2W(buf, wbuf, sizeof(wbuf)));
 
         /* center dialog in the main window */
         GetWindowRect(GetNHApp()->hMainWnd, &main_rt);

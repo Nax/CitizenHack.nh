@@ -2,9 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 project(CitizenHack)
 
 find_package(Curses REQUIRED)
-find_package(FLEX REQUIRED)
-find_package(BISON REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(Lua REQUIRED)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
@@ -51,7 +50,8 @@ add_executable(
 )
 inject_config(makedefs)
 target_compile_definitions(makedefs PRIVATE FILE_PREFIX=1)
-target_include_directories(makedefs PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_include_directories(makedefs PRIVATE "${CMAKE_SOURCE_DIR}/include" ${LUA_INCLUDE_DIR})
+target_link_libraries(makedefs ${LUA_LIBRARIES})
 
 set(GENERATED_DIR           "${CMAKE_BINARY_DIR}/gen")
 set(GENERATED_DIR_DUMMY     "${GENERATED_DIR}/dummy")
@@ -62,7 +62,7 @@ else()
     set(HACKDIR_DATA "${HACKDIR}")
 endif()
 
-file(MAKE_DIRECTORY ${HACKDIR} ${HACKDIR_DATA} ${GENERATED_DIR_DUMMY} "${GENERATED_DIR}/include" "${GENERATED_DIR}/src" "${GENERATED_DIR}/dat" "${CMAKE_BINARY_DIR}/stamps/lev")
+file(MAKE_DIRECTORY ${HACKDIR} ${HACKDIR_DATA} ${GENERATED_DIR_DUMMY} "${GENERATED_DIR}/include" "${GENERATED_DIR}/src" "${GENERATED_DIR}/dat")
 
 function(add_makedef flag)
     cmake_parse_arguments(ADD_MAKEDEF "" "" "OUTPUT;DEPENDS" ${ARGN})
@@ -92,11 +92,6 @@ add_makedef(e
     DEPENDS "${CMAKE_SOURCE_DIR}/dat/dungeon.def"
 )
 
-add_makedef(q
-    OUTPUT "dat/quest.dat"
-    DEPENDS "${CMAKE_SOURCE_DIR}/dat/quest.txt"
-)
-
 add_makedef(h
     OUTPUT "dat/oracles"
     DEPENDS "${CMAKE_SOURCE_DIR}/dat/oracles.txt"
@@ -120,46 +115,7 @@ add_makedef(r
         "${CMAKE_SOURCE_DIR}/dat/rumors.tru"
 )
 
-# Dungeon Compiler
-bison_target(dgn_parser "${CMAKE_SOURCE_DIR}/util/dgn_comp.y" "${GENERATED_DIR}/src/dgn_parser.c" DEFINES_FILE "${GENERATED_DIR}/include/dgn_comp.h")
-flex_target(dgn_lexer "${CMAKE_SOURCE_DIR}/util/dgn_comp.l" "${GENERATED_DIR}/src/dgn_lexer.c")
-add_flex_bison_dependency(dgn_lexer dgn_parser)
-add_executable(dgn
-    "${CMAKE_SOURCE_DIR}/src/alloc.c"
-    "${CMAKE_SOURCE_DIR}/util/panic.c"
-    "${CMAKE_SOURCE_DIR}/util/dgn_main.c"
-    "${GENERATED_DIR}/src/dgn_parser.c"
-    "${GENERATED_DIR}/src/dgn_lexer.c"
-    "${GENERATED_DIR}/include/date.h"
-)
-inject_config(dgn)
-target_include_directories(dgn PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include")
-
-# Level Compiler
-bison_target(lev_parser "${CMAKE_SOURCE_DIR}/util/lev_comp.y" "${GENERATED_DIR}/src/lev_parser.c" DEFINES_FILE "${GENERATED_DIR}/include/lev_comp.h")
-flex_target(lev_lexer "${CMAKE_SOURCE_DIR}/util/lev_comp.l" "${GENERATED_DIR}/src/lev_lexer.c")
-add_flex_bison_dependency(lev_lexer lev_parser)
-add_executable(lev
-    "${CMAKE_SOURCE_DIR}/src/alloc.c"
-    "${CMAKE_SOURCE_DIR}/util/panic.c"
-    "${CMAKE_SOURCE_DIR}/src/monst.c"
-    "${CMAKE_SOURCE_DIR}/src/objects.c"
-    "${CMAKE_SOURCE_DIR}/src/decl.c"
-    "${CMAKE_SOURCE_DIR}/src/drawing.c"
-    "${CMAKE_SOURCE_DIR}/util/lev_main.c"
-    "${GENERATED_DIR}/src/lev_parser.c"
-    "${GENERATED_DIR}/src/lev_lexer.c"
-    "${GENERATED_DIR}/include/lev_comp.h"
-    "${GENERATED_DIR}/include/date.h"
-    "${GENERATED_DIR}/include/pm.h"
-    "${GENERATED_DIR}/include/onames.h"
-)
-inject_config(lev)
-target_include_directories(lev PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include")
-
-# Hackdir Data
-
-# dungeon
+# Hackdir data
 set(HACKDIR_DATA_FILES "")
 macro(copy_nhdat src)
     get_filename_component(_fname ${src} NAME)
@@ -172,30 +128,11 @@ macro(copy_nhdat src)
     )
     list(APPEND HACKDIR_DATA_FILES ${_fname})
 endmacro()
-add_custom_command(
-    OUTPUT "${HACKDIR_DATA}/dungeon"
-    COMMAND dgn "${GENERATED_DIR}/dat/dungeon.pdf"
-    COMMAND "${CMAKE_COMMAND}" -E copy "${GENERATED_DIR}/dat/dungeon" "${HACKDIR_DATA}/dungeon"
-    DEPENDS "${GENERATED_DIR}/dat/dungeon.pdf"
-    VERBATIM
-)
-list(APPEND HACKDIR_DATA_FILES dungeon)
 
-# levels
-file(GLOB_RECURSE LEVELS "${CMAKE_SOURCE_DIR}/dat/*.des")
-set(STAMPS_LEVELS "")
-foreach(l ${LEVELS})
-    get_filename_component(fname ${l} NAME)
-    add_custom_command(
-        OUTPUT "${CMAKE_BINARY_DIR}/stamps/lev/${fname}.stamp"
-        COMMAND lev "${l}"
-        COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_BINARY_DIR}/stamps/lev/${fname}.stamp"
-        DEPENDS lev "${l}"
-        WORKING_DIRECTORY "${HACKDIR_DATA}"
-        COMMENT "Compiling level ${l}"
-        VERBATIM
-    )
-    list(APPEND STAMPS_LEVELS "${CMAKE_BINARY_DIR}/stamps/lev/${fname}.stamp")
+# Lua Scripts
+file(GLOB_RECURSE LUA_SCRIPTS "${CMAKE_SOURCE_DIR}/dat/*.lua")
+foreach(s ${LUA_SCRIPTS})
+    copy_nhdat("${s}")
 endforeach()
 
 # makedef
@@ -205,7 +142,6 @@ copy_nhdat("${GENERATED_DIR}/dat/engrave")
 copy_nhdat("${GENERATED_DIR}/dat/epitaph")
 copy_nhdat("${GENERATED_DIR}/dat/options")
 copy_nhdat("${GENERATED_DIR}/dat/oracles")
-copy_nhdat("${GENERATED_DIR}/dat/quest.dat")
 copy_nhdat("${GENERATED_DIR}/dat/rumors")
 
 # raw
@@ -222,7 +158,7 @@ copy_nhdat("${CMAKE_SOURCE_DIR}/dat/wizhelp")
 list(TRANSFORM HACKDIR_DATA_FILES PREPEND "${HACKDIR_DATA}/" OUTPUT_VARIABLE HACKDIR_DATA_DEPS)
 add_custom_target(
     hackdir_data
-    DEPENDS ${HACKDIR_DATA_DEPS} ${STAMPS_LEVELS}
+    DEPENDS ${HACKDIR_DATA_DEPS}
 )
 
 if (HACK_DATABASE)
@@ -233,14 +169,15 @@ if (HACK_DATABASE)
         "${CMAKE_SOURCE_DIR}/src/dlb.c"
         "${CMAKE_SOURCE_DIR}/util/panic.c"
     )
-    target_include_directories(dlb PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include")
+    target_include_directories(dlb PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include" ${LUA_INCLUDE_DIR})
+    target_link_libraries(dlb ${LUA_LIBRARY})
     inject_config(dlb)
     set(GENERATED_ARCHIVE "${HACKDIR}/nhdat")
     add_custom_command(
         OUTPUT "${GENERATED_ARCHIVE}"
-        COMMAND dlb c ${HACKDIR_DATA_FILES} *.lev
+        COMMAND dlb c ${HACKDIR_DATA_FILES}
         COMMAND "${CMAKE_COMMAND}" -E copy "${HACKDIR_DATA}/nhdat" "${HACKDIR}/nhdat"
-        DEPENDS ${HACKDIR_DATA_DEPS} ${STAMPS_LEVELS}
+        DEPENDS ${HACKDIR_DATA_DEPS}
         WORKING_DIRECTORY "${HACKDIR_DATA}"
     )
     add_custom_target(hackdir_db DEPENDS "${HACKDIR}/nhdat")
@@ -299,8 +236,8 @@ endif()
 
 add_executable(${GAME} ${SOURCES})
 inject_config(${GAME})
-target_include_directories(${GAME} PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include" ${CURSES_INCLUDE_DIRS})
-target_link_libraries(${GAME} ${CURSES_LIBRARIES} ZLIB::ZLIB)
+target_include_directories(${GAME} PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include" ${CURSES_INCLUDE_DIRS} ${LUA_INCLUDE_DIR})
+target_link_libraries(${GAME} ${CURSES_LIBRARIES} ZLIB::ZLIB ${LUA_LIBRARY})
 add_dependencies(${GAME} data)
 
 # Install

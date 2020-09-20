@@ -1,4 +1,4 @@
-/* NetHack 3.6	nhlan.c	$NHDT-Date: 1432512786 2015/05/25 00:13:06 $  $NHDT-Branch: master $:$NHDT-Revision: 1.9 $ */
+/* NetHack 3.7	nhlan.c	$NHDT-Date: 1596498282 2020/08/03 23:44:42 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.11 $ */
 /* Copyright (c) Michael Allison, 1997                  */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -27,17 +27,15 @@ init_lan_features()
  * the other LAN features depend on a unique username being available.
  *
  */
-char lusername[MAX_LAN_USERNAME];
-int lusername_size = MAX_LAN_USERNAME;
 
 char *
 lan_username()
 {
     char *lu;
-    lu = get_username(&lusername_size);
+    lu = get_username(&g.lusername_size);
     if (lu) {
-        Strcpy(lusername, lu);
-        return lusername;
+        Strcpy(g.lusername, lu);
+        return g.lusername;
     } else
         return (char *) 0;
 }

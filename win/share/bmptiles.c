@@ -1,4 +1,4 @@
-/* NetHack 3.6    bmptiles.c    $NHDT-Date: 1457207054 2016/03/05 19:44:14 $ $NHDT-Branch: chasonr $:$NHDT-Revision: 1.0 $ */
+/* NetHack 3.7    bmptiles.c    $NHDT-Date: 1596498334 2020/08/03 23:45:34 $ $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.1 $ */
 /* Copyright (c) Ray Chason, 2016. */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -106,15 +106,6 @@ struct TileSetImage *image;
 
     if (!read_info_header(fp, &header2)) goto error;
     if (!check_info_header(&header2)) goto error;
-
-#if 0 /* TODO */
-    if (header2.Compression == BI_PNG) {
-        /* Image data is an embedded PNG bit stream */
-        boolean ok = do_read_png_tiles(fp, image));
-        fclose(fp);
-        return ok;
-    }
-#endif
 
     /* header2.Height < 0 means the Y coordinate is reversed; the origin is
      * top left rather than bottom left */
@@ -300,7 +291,7 @@ struct TileSetImage *image;
                 break;
             case 32:
                 for (x = 0; x < image->width; ++x) {
-                    uint32 color = read_u32(row_bytes + x * 2);
+                    uint32 color = read_u32(row_bytes + x * 4);
                     row[x] = build_pixel(&header2, color);
                 }
                 break;
@@ -609,7 +600,7 @@ uint32 color;
     if (mask == 0) return 0;
     bits = 0xFFFF; /* 0xFF, 0xF, 0x3, 0x1 */
     shift = 16;    /*    8,   4,   2,   1 */
-    while (bits != 0) {
+    while (shift != 0) {
         if ((mask & bits) == 0) {
             mask >>= shift;
             color >>= shift;

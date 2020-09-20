@@ -1,4 +1,4 @@
-/* NetHack 3.6	winMS.h	$NHDT-Date: 1434804346 2015/06/20 12:45:46 $  $NHDT-Branch: win32-x64-working $:$NHDT-Revision: 1.41 $ */
+/* NetHack 3.7	winMS.h	$NHDT-Date: 1596498367 2020/08/03 23:46:07 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.53 $ */
 /* Copyright (C) 2001 by Alex Kompel */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -152,10 +152,10 @@ void mswin_curs(winid wid, int x, int y);
 void mswin_putstr(winid wid, int attr, const char *text);
 void mswin_putstr_ex(winid wid, int attr, const char *text, int);
 void mswin_display_file(const char *filename, BOOLEAN_P must_exist);
-void mswin_start_menu(winid wid);
+void mswin_start_menu(winid wid, unsigned long mbehavior);
 void mswin_add_menu(winid wid, int glyph, const ANY_P *identifier,
                     CHAR_P accelerator, CHAR_P group_accel, int attr,
-                    const char *str, BOOLEAN_P presel);
+                    const char *str, unsigned int itemflags);
 void mswin_end_menu(winid wid, const char *prompt);
 int mswin_select_menu(winid wid, int how, MENU_ITEM_P **selected);
 void mswin_update_inventory(void);

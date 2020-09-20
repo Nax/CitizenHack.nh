@@ -1,5 +1,5 @@
 /* vim:set cin ft=c sw=4 sts=4 ts=8 et ai cino=Ls\:0t0(0 : -*- mode:c;fill-column:80;tab-width:8;c-basic-offset:4;indent-tabs-mode:nil;c-file-style:"k&r" -*-*/
-/* NetHack 3.6 cursmisc.c */
+/* NetHack 3.7 cursmisc.c */
 /* Copyright (c) Karl Garrison, 2010. */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -671,8 +671,8 @@ curses_view_file(const char *filename, boolean must_exist)
     }
 
     wid = curses_get_wid(NHW_MENU);
-    curses_create_nhmenu(wid);
-    Id = zeroany;
+    curses_create_nhmenu(wid, 0UL);
+    Id = cg.zeroany;
 
     while (dlb_fgets(buf, BUFSZ, fp) != NULL) {
         curses_add_menu(wid, NO_GLYPH, &Id, 0, 0, A_NORMAL, buf, FALSE);
@@ -920,7 +920,7 @@ curses_convert_keys(int key)
         if (iflags.num_pad) {
             ret = '7';
         } else {
-            ret = !Cmd.swap_yz ? 'y' : 'z';
+            ret = !g.Cmd.swap_yz ? 'y' : 'z';
         }
         break;
 #ifdef KEY_A3

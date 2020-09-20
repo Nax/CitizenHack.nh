@@ -1,14 +1,14 @@
-/* NetHack 3.6	worn.c	$NHDT-Date: 1550524569 2019/02/18 21:16:09 $  $NHDT-Branch: NetHack-3.6.2-beta01 $:$NHDT-Revision: 1.56 $ */
+/* NetHack 3.7	worn.c	$NHDT-Date: 1596498231 2020/08/03 23:43:51 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.67 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2013. */
 /* NetHack may be freely redistributed.  See license for details. */
 
 #include "hack.h"
 
-STATIC_DCL void FDECL(m_lose_armor, (struct monst *, struct obj *));
-STATIC_DCL void FDECL(m_dowear_type,
+static void FDECL(m_lose_armor, (struct monst *, struct obj *));
+static void FDECL(m_dowear_type,
                       (struct monst *, long, BOOLEAN_P, BOOLEAN_P));
-STATIC_DCL int FDECL(extra_pref, (struct monst *, struct obj *));
+static int FDECL(extra_pref, (struct monst *, struct obj *));
 
 const struct worn {
     long w_mask;
@@ -57,16 +57,14 @@ long mask;
         uskin = obj;
         /* assert( !uarm ); */
     } else {
-        if ((mask & W_ARMOR))
-            u.uroleplay.nudist = FALSE;
-        for (wp = worn; wp->w_mask; wp++)
+        for (wp = worn; wp->w_mask; wp++) {
             if (wp->w_mask & mask) {
                 oobj = *(wp->w_obj);
                 if (oobj && !(oobj->owornmask & wp->w_mask))
                     impossible("Setworn: mask = %ld.", wp->w_mask);
                 if (oobj) {
                     if (u.twoweap && (oobj->owornmask & (W_WEP | W_SWAPWEP)))
-                        u.twoweap = 0;
+                        set_twoweap(FALSE); /* u.twoweap = FALSE */
                     oobj->owornmask &= ~wp->w_mask;
                     if (wp->w_mask & ~(W_SWAPWEP | W_QUIVER)) {
                         /* leave as "x = x <op> y", here and below, for broken
@@ -105,6 +103,11 @@ long mask;
                     }
                 }
             }
+        }
+        if (obj && (obj->owornmask & W_ARMOR) != 0L)
+            u.uroleplay.nudist = FALSE;
+        /* tux -> tuxedo -> "monkey suit" -> monk's suit */
+        iflags.tux_penalty = (uarm && Role_if(PM_MONK) && g.urole.spelarmr);
     }
     update_inventory();
 }
@@ -120,8 +123,8 @@ register struct obj *obj;
 
     if (!obj)
         return;
-    if (obj == uwep || obj == uswapwep)
-        u.twoweap = 0;
+    if (u.twoweap && (obj == uwep || obj == uswapwep))
+        set_twoweap(FALSE); /* u.twoweap = FALSE */
     for (wp = worn; wp->w_mask; wp++)
         if (obj == *(wp->w_obj)) {
             /* in case wearing or removal is in progress or removal
@@ -137,6 +140,8 @@ register struct obj *obj;
             if ((p = w_blocks(obj, wp->w_mask)) != 0)
                 u.uprops[p].blocked &= ~wp->w_mask;
         }
+    if (!uarm)
+        iflags.tux_penalty = FALSE;
     update_inventory();
 }
 
@@ -247,7 +252,7 @@ int adjust;      /* positive => increase speed, negative => decrease */
 struct obj *obj; /* item to make known if effect can be seen */
 {
     struct obj *otmp;
-    boolean give_msg = !in_mklev, petrify = FALSE;
+    boolean give_msg = !g.in_mklev, petrify = FALSE;
     unsigned int oldspeed = mon->mspeed;
 
     switch (adjust) {
@@ -340,11 +345,11 @@ boolean on, silently;
             mon->minvis = !mon->invis_blkd;
             break;
         case FAST: {
-            boolean save_in_mklev = in_mklev;
+            boolean save_in_mklev = g.in_mklev;
             if (silently)
-                in_mklev = TRUE;
+                g.in_mklev = TRUE;
             mon_adjust_speed(mon, 0, obj);
-            in_mklev = save_in_mklev;
+            g.in_mklev = save_in_mklev;
             break;
         }
         /* properties handled elsewhere */
@@ -380,11 +385,11 @@ boolean on, silently;
             mon->minvis = mon->perminvis;
             break;
         case FAST: {
-            boolean save_in_mklev = in_mklev;
+            boolean save_in_mklev = g.in_mklev;
             if (silently)
-                in_mklev = TRUE;
+                g.in_mklev = TRUE;
             mon_adjust_speed(mon, 0, obj);
-            in_mklev = save_in_mklev;
+            g.in_mklev = save_in_mklev;
             break;
         }
         case FIRE_RES:
@@ -441,9 +446,13 @@ register struct monst *mon;
     long mwflags = mon->misc_worn_check;
 
     for (obj = mon->minvent; obj; obj = obj->nobj) {
-        if (obj->owornmask & mwflags)
-            base -= ARM_BONUS(obj);
-        /* since ARM_BONUS is positive, subtracting it increases AC */
+        if (obj->owornmask & mwflags) {
+            if (obj->otyp == AMULET_OF_GUARDING)
+                base -= 2; /* fixed amount, not impacted by erosion */
+            else
+                base -= ARM_BONUS(obj);
+            /* since ARM_BONUS is positive, subtracting it increases AC */
+        }
     }
     return base;
 }
@@ -505,7 +514,7 @@ boolean creation;
         m_dowear_type(mon, W_ARM, creation, RACE_EXCEPTION);
 }
 
-STATIC_OVL void
+static void
 m_dowear_type(mon, flag, creation, racialexception)
 struct monst *mon;
 long flag;
@@ -527,8 +536,8 @@ boolean racialexception;
     old = which_armor(mon, flag);
     if (old && old->cursed)
         return;
-    if (old && flag == W_AMUL)
-        return; /* no such thing as better amulets */
+    if (old && flag == W_AMUL && old->otyp != AMULET_OF_GUARDING)
+        return; /* no amulet better than life-saving or reflection */
     best = old;
 
     for (obj = mon->minvent; obj; obj = obj->nobj) {
@@ -536,10 +545,18 @@ boolean racialexception;
         case W_AMUL:
             if (obj->oclass != AMULET_CLASS
                 || (obj->otyp != AMULET_OF_LIFE_SAVING
-                    && obj->otyp != AMULET_OF_REFLECTION))
+                    && obj->otyp != AMULET_OF_REFLECTION
+                    && obj->otyp != AMULET_OF_GUARDING))
                 continue;
-            best = obj;
-            goto outer_break; /* no such thing as better amulets */
+            /* for 'best' to be non-Null, it must be an amulet of guarding;
+               life-saving and reflection don't get here due to early return
+               and other amulets of guarding can't be any better */
+            if (!best || obj->otyp != AMULET_OF_GUARDING) {
+                best = obj;
+                if (best->otyp != AMULET_OF_GUARDING)
+                    goto outer_break; /* life-saving or reflection; use it */
+            }
+            continue; /* skip post-switch armor handling */
         case W_ARMU:
             if (!is_shirt(obj))
                 continue;
@@ -593,7 +610,7 @@ boolean racialexception;
             continue;
         best = obj;
     }
-outer_break:
+ outer_break:
     if (!best || best == old)
         return;
 
@@ -654,7 +671,7 @@ which_armor(mon, flag)
 struct monst *mon;
 long flag;
 {
-    if (mon == &youmonst) {
+    if (mon == &g.youmonst) {
         switch (flag) {
         case W_ARM:
             return uarm;
@@ -685,7 +702,7 @@ long flag;
 }
 
 /* remove an item of armor and then drop it */
-STATIC_OVL void
+static void
 m_lose_armor(mon, obj)
 struct monst *mon;
 struct obj *obj;
@@ -711,7 +728,7 @@ clear_bypasses()
     /*
      * 'Object' bypass is also used for one monster function:
      * polymorph control of long worms.  Activated via setting
-     * context.bypasses even if no specific object has been
+     * g.context.bypasses even if no specific object has been
      * bypassed.
      */
 
@@ -737,9 +754,9 @@ clear_bypasses()
 #endif /*0*/
         }
     }
-    for (otmp = invent; otmp; otmp = otmp->nobj)
+    for (otmp = g.invent; otmp; otmp = otmp->nobj)
         otmp->bypass = 0;
-    for (otmp = migrating_objs; otmp; otmp = otmp->nobj)
+    for (otmp = g.migrating_objs; otmp; otmp = otmp->nobj)
         otmp->bypass = 0;
     for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
         if (DEADMONSTER(mtmp))
@@ -754,14 +771,14 @@ clear_bypasses()
         if (mtmp->data == &mons[PM_LONG_WORM] && has_mcorpsenm(mtmp))
             MCORPSENM(mtmp) = NON_PM;
     }
-    for (mtmp = migrating_mons; mtmp; mtmp = mtmp->nmon) {
+    for (mtmp = g.migrating_mons; mtmp; mtmp = mtmp->nmon) {
         for (otmp = mtmp->minvent; otmp; otmp = otmp->nobj)
             otmp->bypass = 0;
         /* no MCORPSENM(mtmp)==PM_LONG_WORM check here; long worms can't
            be just created by polymorph and migrating at the same time */
     }
-    /* billobjs and mydogs chains don't matter here */
-    context.bypasses = FALSE;
+    /* g.billobjs and g.mydogs chains don't matter here */
+    g.context.bypasses = FALSE;
 }
 
 void
@@ -769,7 +786,7 @@ bypass_obj(obj)
 struct obj *obj;
 {
     obj->bypass = 1;
-    context.bypasses = TRUE;
+    g.context.bypasses = TRUE;
 }
 
 /* set or clear the bypass bit in a list of objects */
@@ -779,7 +796,7 @@ struct obj *objchain;
 boolean on; /* TRUE => set, FALSE => clear */
 {
     if (on && objchain)
-        context.bypasses = TRUE;
+        g.context.bypasses = TRUE;
     while (objchain) {
         objchain->bypass = on ? 1 : 0;
         objchain = objchain->nobj;
@@ -972,7 +989,7 @@ boolean polyspot;
         if (mon == u.usteed)
             goto noride;
     } else if (mon == u.usteed && !can_ride(mon)) {
-    noride:
+ noride:
         You("can no longer ride %s.", mon_nam(mon));
         if (touch_petrifies(u.usteed->data) && !Stone_resistance && rnl(3)) {
             char buf[BUFSZ];
@@ -987,7 +1004,7 @@ boolean polyspot;
 }
 
 /* bias a monster's preferences towards armor that has special benefits. */
-STATIC_OVL int
+static int
 extra_pref(mon, obj)
 struct monst *mon;
 struct obj *obj;
