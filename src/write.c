@@ -48,6 +48,8 @@ register struct obj *otmp;
     case SCR_TAMING:
     case SCR_TELEPORTATION:
         return 20;
+    case SCR_UPGRADE:
+        return 25;
     case SCR_GENOCIDE:
         return 30;
     case SCR_BLANK_PAPER:

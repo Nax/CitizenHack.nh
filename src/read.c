@@ -31,6 +31,7 @@ static void FDECL(set_lit, (int, int, genericptr));
 static void NDECL(do_class_genocide);
 static boolean FDECL(create_particular_parse, (char *, struct _create_particular_data *));
 static boolean FDECL(create_particular_creation, (struct _create_particular_data *));
+static boolean upgrade_object(struct obj* obj, int buc);
 
 static boolean
 learnscrolltyp(scrolltyp)
@@ -1611,6 +1612,10 @@ struct obj *sobj; /* scroll, or fake spellbook object for scroll-like spell */
         }
         punish(sobj);
         break;
+    case SCR_UPGRADE:
+        if (upgrade_object(uwep, scursed ? -1 : sblessed ? 1 : 0))
+            g.known = TRUE;
+        break;
     case SCR_STINKING_CLOUD: {
         coord cc;
 
@@ -2579,6 +2584,90 @@ create_particular()
         return create_particular_creation(&d);
 
     return FALSE;
+}
+
+struct upgrade {
+    int otyp_source;
+    int otyp_result;
+};
+
+static const struct upgrade upgrade_list[] = {
+    { RIN_LEVITATION, AMULET_OF_FLYING },
+    { RIN_PROTECTION, AMULET_OF_GUARDING },
+    { SHORT_SWORD, LONG_SWORD },
+    { ORCISH_DAGGER, DAGGER },
+    { DAGGER, ELVEN_DAGGER },
+    { DAGGER, SILVER_DAGGER },
+    { DAGGER, ATHAME },
+    { PICK_AXE, DWARVISH_MATTOCK },
+    { CLUB, AKLYS },
+    { SMALL_SHIELD, LARGE_SHIELD },
+    { LARGE_SHIELD, SHIELD_OF_REFLECTION },
+    { ELVEN_MITHRIL_COAT, DWARVISH_MITHRIL_COAT },
+    { TIN_WHISTLE, MAGIC_WHISTLE },
+    { WOODEN_FLUTE, MAGIC_FLUTE },
+    { WOODEN_HARP, MAGIC_HARP },
+    { LOADSTONE, FLINT },
+    { FLINT, LUCKSTONE },
+    { FLINT, TOUCHSTONE },
+    { SACK, BAG_OF_FORTUNE },
+    { SACK, BAG_OF_HOLDING },
+    { SACK, BAG_OF_TRICKS },
+    { SACK, OILSKIN_SACK },
+    {0, 0}
+};
+
+static boolean
+upgrade_object(struct obj* obj, int buc)
+{
+    int candidates[16];
+    int candidate_count = 0;
+    int src;
+    int dst;
+    int tmp;
+
+    if (!obj) {
+        if (buc >= 0)
+            You_feel("brand new!");
+        else
+            You_feel("obsolete.");
+        return FALSE;
+    }
+
+    /* Build a list of viable candidates */
+    for (int i = 0; upgrade_list[i].otyp_source; ++i) {
+        src = upgrade_list[i].otyp_source;
+        dst = upgrade_list[i].otyp_result;
+
+        /* Cursed scrolls downgrade items */
+        if (buc < 0) {
+            tmp = src;
+            src = dst;
+            dst = tmp;
+        }
+
+        if (obj->otyp == src) {
+            if (buc < 0 || buc > 0 || !(!objects[src].oc_magic && objects[dst].oc_magic))
+                candidates[candidate_count++] = dst;
+        }
+    }
+
+    if (obj->oartifact || Is_container(obj) && obj->cobj) {
+        Your("%s vibrates for a moment.", xname(obj));
+        return FALSE;
+    }
+
+    if (!candidate_count) {
+        Your("%s warps %s for a moment.", xname(obj), buc < 0 ? "maliciously" : "strangely");
+        return FALSE;
+    }
+
+    Your("%s warps %s and turn into something else!", xname(obj), buc < 0 ? "maliciously" : "strangely");
+    obj->otyp = candidates[rn2(candidate_count)];
+    obj->oclass = objects[obj->otyp].oc_class;
+    obj->owt = objects[obj->otyp].oc_weight;
+    prinv((const char*)0, obj, 0L);
+    return TRUE;
 }
 
 /*read.c*/
