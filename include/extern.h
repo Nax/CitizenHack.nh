@@ -1,4 +1,4 @@
-/* NetHack 3.7	extern.h	$NHDT-Date: 1600468452 2020/09/18 22:34:12 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.857 $ */
+/* NetHack 3.7	extern.h	$NHDT-Date: 1603507384 2020/10/24 02:43:04 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.873 $ */
 /* Copyright (c) Steve Creps, 1988.				  */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -47,6 +47,7 @@ E void FDECL(check_leash, (XCHAR_P, XCHAR_P));
 E boolean FDECL(um_dist, (XCHAR_P, XCHAR_P, XCHAR_P));
 E boolean FDECL(snuff_candle, (struct obj *));
 E boolean FDECL(snuff_lit, (struct obj *));
+E boolean FDECL(splash_lit, (struct obj *));
 E boolean FDECL(catch_lit, (struct obj *));
 E void FDECL(use_unicorn_horn, (struct obj **));
 E boolean FDECL(tinnable, (struct obj *));
@@ -424,6 +425,8 @@ E void FDECL(schedule_goto, (d_level *, BOOLEAN_P, BOOLEAN_P, int,
 E void NDECL(deferred_goto);
 E boolean FDECL(revive_corpse, (struct obj *));
 E void FDECL(revive_mon, (ANY_P *, long));
+E void FDECL(zombify_mon, (ANY_P *, long));
+E boolean FDECL(cmd_safety_prevention, (const char *, const char *, int *));
 E int NDECL(donull);
 E int NDECL(dowipe);
 E void FDECL(legs_in_no_shape, (const char *, BOOLEAN_P));
@@ -871,6 +874,7 @@ E anything *FDECL(long_to_any, (long));
 E anything *FDECL(monst_to_any, (struct monst *));
 E anything *FDECL(obj_to_any, (struct obj *));
 E boolean FDECL(revive_nasty, (int, int, const char *));
+E int FDECL(still_chewing, (XCHAR_P, XCHAR_P));
 E void FDECL(movobj, (struct obj *, XCHAR_P, XCHAR_P));
 E boolean FDECL(may_dig, (XCHAR_P, XCHAR_P));
 E boolean FDECL(may_passwall, (XCHAR_P, XCHAR_P));
@@ -1452,6 +1456,8 @@ E int FDECL(cmap_to_type, (int));
 /* ### mon.c ### */
 
 E void NDECL(mon_sanity_check);
+E boolean FDECL(zombie_maker, (struct permonst *));
+E int FDECL(zombie_form, (struct permonst *));
 E int FDECL(m_poisongas_ok, (struct monst *));
 E int FDECL(undead_to_corpse, (int));
 E int FDECL(genus, (int, int));
@@ -1581,6 +1587,7 @@ E void FDECL(mon_yells, (struct monst *, const char *));
 E int FDECL(dochug, (struct monst *));
 E boolean FDECL(m_digweapon_check, (struct monst *, XCHAR_P, XCHAR_P));
 E int FDECL(m_move, (struct monst *, int));
+E int FDECL(m_move_aggress, (struct monst *, XCHAR_P, XCHAR_P));
 E void FDECL(dissolve_bars, (int, int));
 E boolean FDECL(closed_door, (int, int));
 E boolean FDECL(accessible, (int, int));
@@ -1774,6 +1781,7 @@ E void NDECL(nttty_exit);
 E void NDECL(init_objects);
 E void FDECL(obj_shuffle_range, (int, int *, int *));
 E int NDECL(find_skates);
+E boolean FDECL(objdescr_is, (struct obj *, const char *));
 E void NDECL(oinit);
 E void FDECL(savenames, (NHFILE *));
 E void FDECL(restnames, (NHFILE *));
@@ -2018,6 +2026,7 @@ E void VDECL(verbalize, (const char *, ...)) PRINTF_F(1, 2);
 E void VDECL(raw_printf, (const char *, ...)) PRINTF_F(1, 2);
 E void VDECL(impossible, (const char *, ...)) PRINTF_F(1, 2);
 E void VDECL(config_error_add, (const char *, ...)) PRINTF_F(1, 2);
+E void FDECL(nhassert_failed, (const char *, const char *, int));
 
 /* ### polyself.c ### */
 
@@ -2149,10 +2158,12 @@ E void NDECL(deliver_splev_message);
 /* ### random.c ### */
 
 #if defined(RANDOM) && !defined(__GO32__) /* djgpp has its own random */
+#ifndef CROSS_TO_AMIGA
 E void FDECL(srandom, (unsigned));
 E char *FDECL(initstate, (unsigned, char *, int));
 E char *FDECL(setstate, (char *));
 E long NDECL(random);
+#endif
 #endif /* RANDOM */
 
 /* ### read.c ### */
@@ -2442,6 +2453,7 @@ E void FDECL(growl, (struct monst *));
 E void FDECL(yelp, (struct monst *));
 E void FDECL(whimper, (struct monst *));
 E void FDECL(beg, (struct monst *));
+E const char *FDECL(maybe_gasp, (struct monst *));
 E int NDECL(dotalk);
 E int NDECL(tiphat);
 #ifdef USER_SOUNDS
@@ -2466,7 +2478,7 @@ E boolean FDECL(create_room, (XCHAR_P, XCHAR_P, XCHAR_P, XCHAR_P, XCHAR_P,
                               XCHAR_P, XCHAR_P, XCHAR_P));
 E void FDECL(create_secret_door, (struct mkroom *, XCHAR_P));
 E boolean FDECL(dig_corridor, (coord *, coord *, BOOLEAN_P, SCHAR_P, SCHAR_P));
-E void FDECL(fill_room, (struct mkroom *, BOOLEAN_P));
+E void FDECL(fill_special_room, (struct mkroom *));
 E boolean FDECL(load_special, (const char *));
 E xchar FDECL(selection_getpoint, (int, int, struct selectionvar *));
 E struct selectionvar *NDECL(selection_new);
@@ -2712,6 +2724,7 @@ E boolean NDECL(lava_effects);
 E void NDECL(sink_into_lava);
 E void NDECL(sokoban_guilt);
 E const char * FDECL(trapname, (int, BOOLEAN_P));
+E void FDECL(ignite_items, (struct obj *));
 
 /* ### u_init.c ### */
 

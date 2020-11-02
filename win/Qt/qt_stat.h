@@ -27,6 +27,7 @@ public:
 	void fadeHighlighting();
 
 protected:
+	virtual void mousePressEvent(QMouseEvent *event);
 	//RLC void resizeEvent(QResizeEvent*);
 
 private slots:
@@ -78,10 +79,11 @@ private:
 	NetHackQtLabelledIcon hp;
 	NetHackQtLabelledIcon power;
 	NetHackQtLabelledIcon ac;
-	NetHackQtLabelledIcon level;
-	NetHackQtLabelledIcon exp;
-	NetHackQtLabelledIcon align;
-
+        NetHackQtLabelledIcon level; // Xp level
+        NetHackQtLabelledIcon exp;   // appended to Xp rather than separate
+                                     // but still used to pad their line
+        NetHackQtLabelledIcon align; // alignment is on Conditions line
+                                     // because it has an icon above it
 	NetHackQtLabelledIcon time;
 	NetHackQtLabelledIcon score;
 
@@ -102,6 +104,9 @@ private:
 	NetHackQtLabelledIcon fly;
 	NetHackQtLabelledIcon ride;
 
+        QLabel hpbar_health; // hit point bar, left half
+        QLabel hpbar_injury; // hit point bar, right half
+
 	QFrame hline1;
 	QFrame hline2;
 	QFrame hline3;
@@ -109,7 +114,10 @@ private:
 	int cursy;
 
 	bool first_set;
+        bool alreadyfullhp;
 
+        QHBoxLayout *InitHitpointBar();
+        void HitpointBar();
 	void nullOut();
 	void updateStats();
 	void checkTurnEvents();

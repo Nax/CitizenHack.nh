@@ -1,4 +1,4 @@
-NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.304 $ $NHDT-Date: 1600469617 2020/09/18 22:53:37 $
+NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.344 $ $NHDT-Date: 1603836614 2020/10/27 22:10:14 $
 
 General Fixes and Modified Features
 -----------------------------------
@@ -126,14 +126,16 @@ it's possible to wish for tins of the Riders in wizard mode; eating one is
 	fatal but if you're life-saved or decline to die, the game crashed
 revival via undead turning of corpse carried by hero said "your <mon> corpse
 	comes alive" even when revived monster was undead
-prevent searching or waiting next to a hostile monster - override with 'm'
+prevent searching or waiting next to a hostile monster if boolean option
+	safe_wait is on - override with 'm'
 allow random mimics to show up mimicing more furniture than just stairs
 scatter exploding bag of holding contents instead of outright deleting them
 male hero poly'd into nymph chooses charm vs seduce message based on being
 	male rather than on all nymphs being female but charm message was
 	using hardcoded pronouns She,her for target monster--wrong for male
 	target and noticable if "<mon> finishes taking off his suit" is given
-hostile monsters with launcher and ammo try to stay away from melee range
+hostile monsters with a spit attack or launcher and ammo try to stay away
+	from melee range
 allow displacing peaceful creatures
 unicorn horns don't restore attribute loss anymore
 when a shop is changed from food to health food, change room type to match
@@ -227,6 +229,9 @@ hero poly'd into a mind flayer who used #monster to emit a psychic blast was
 	able to harm mindless monsters with it
 some hero attacks that should have gotten a skill bonus or penalty didn't
 change internal name of "<foo> venom" to "splash of <foo> venom"
+some operations that made sense to handle venom ('D', scroll of identify, no
+	doubt others) ignored it because venom is suppressed from packorder;
+	matters for wizard mode or for normal play that loads wizard bones
 singularize "splashes" to "splash" instead of "splashe"
 treat slinging gems and tossing or slinging stones at unicorns as attacks
 give rot-away timer instead of revive timer to corpses of cancelled trolls
@@ -251,6 +256,38 @@ turning into slime rendered hero as slime one turn too soon
 avoid potential infinite loop if hangup occurs at ring "right or left?" prompt
 randomize the turns where accessories and extrinsics affect nutrition
 handle being interrupted by approaching monsters more consistently
+if hero attacked a peaceful monster, some other peaceful monsters with humanoid
+	shape (minotaur, zruty, perhaps others) that witnessed it but which
+	shouldn't be capable of normal speech expressed their surprise audibly
+make gasp/exclamation message from peaceful monsters be more verbose to
+	indicate which monster is doing the gasping or exclaiming
+when make was invoked with -j makedefs instances could end up running in
+	parallel and could trample on each other's temp files; default to
+	using mkstemp(); allow a port runtime library implementation that lacks
+	mkstemp() to define HAS_NO_MKSTEMP to revert to the old behaviour;
+	provide a work-alike mkstemp() implementation for windows visual studio
+	in mdlib.c so there is no requirement to define HAS_NO_MKSTEMP there
+make piranhas faster and give them extra bite attack
+fire sources can ignite candles, lamps, and potions of oil
+for multiple drop ('D') with menustyle traditional or combination, if the only
+	object class player picked was '$' then it operated on all classes
+small monsters could seep through their shirt
+don't snuff brass lantern when it's hit by water unless it is submerged
+when reporting that hero can't repair a chest's broken lock with key/pick/card
+	just describe the base item without BUC, user assigned name, &c since
+	"You can't repair a chest's lock with an uncursed key." implicitly
+	suggests that you might be able to do so with a blessed or cursed one
+pre-populate teleport destination prompt with travel destination
+ghosts cannot be renamed
+tossed upwards objects got two times half physical damage reduction
+monster xorns could pass through iron bars but not eat them; monster rock
+	moles could no neither; now they can eat bars when adjacent and will
+	do so if the bars are blocking their path
+hero poly'd into rust monster could implicitly eat bars when adjacent by
+	trying to move there, now when in rock mole form too; in xorn form
+	can explicitly eat them via 'e' after moving onto their spot
+monster hiding under an egg that hatched was kept hidden
+restful sleep regenerates hit points
 
 
 Fixes to 3.7.0-x Problems that Were Exposed Via git Repository
@@ -333,6 +370,9 @@ replace worm tail placement code that reportedly led to a sanity_check warning
 	[no actual code problem found; might be compiler bug for 'xchar']
 learn scroll of teleportation after reading even when random destination is
 	right by starting spot
+fix off-by-one bug in dimensions of theme rooms
+fire/frost horn feedback when zapped by monster was inaccurate (falsely
+	claimed that it was "directed at self" when attacking hero)
 
 curses: 'msg_window' option wasn't functional for curses unless the binary
 	also included tty support
@@ -370,7 +410,6 @@ Qt: when selecting an extended command by typing its name, support <delete>
 Qt: switch to fixed-width font for menus
 Qt: don't disable [cancel] button when viewing inventory or other pick-none
 	menus; ESC works to dismiss those and [cancel] should be the same
-Qt: bring status conditions up to 3.6 levels but new ones lack pictures
 Qt: clicking on the window's Close button brought up a dialog offering
 	choices of "Save" and "Cancel"; picking Cancel sent nethack into an
 	infinite loop with complaints about Qt's event loop already being
@@ -408,7 +447,27 @@ Qt: update message window's last message with player's response if it's a
 Qt: for line input, display the prompt+response in the message window
 Qt: enable the popup_dialog WC option (result is a bit flakey but usable)
 Qt: 3.6 catchup - show unexplored locations as unexplored rather than as stone
-Qt+QSX: fix control key
+Qt: tried to honor 'showexp' but the value was unintentionally suppressed by
+	[lack of definition for] obsolete conditional EXP_ON_BOTL
+Qt: implement --More-- prompt to support MSGTYPE=stop
+Qt: for menu search, don't require clicking on the search target popup before
+	typing target string (was using typed letters to make menu selections
+	if player didn't click on the popup first)
+Qt: rest ("Zz") button on the toolbar only worked when 'rest_on_space' was On
+	(core issue, not Qt's fault)
+Qt: rename toolbar button "Get" and action menu choice "Get" to "Pick up"
+Qt: status icons for alignment|hunger|encumbrance which started out centered
+	relative to the label text below them would shift to being left
+	justified when status got updated
+Qt: handle '&' properly if it occurs as part of yn_function popup dialog
+Qt: fix the display side of saved game selection; character names for
+	available save files are shown in a column of push buttons instead
+	of each button overwriting all the ones before it
+Qt: don't clobber an existing save file after choosing "new game" in the
+	saved game selection widget
+Qt: don't get stuck in a loop after choosing "play" while the character name
+	field is empty in the character selection widget
+Qt+OSX: fix control key
 Qt+OSX: rename menu entry "nethack->Preferences..." for invoking nethack's
 	'O' command to "Game->Run-time options" and entry "Game->Qt settings"
 	for making persistent Qt customizations to "nethack->Preferences..."
@@ -528,6 +587,8 @@ add section marker [] support to run-time config file; CHOOSE section1,section2
 render the color names in the corresponding color when using the pick-a-color
 	menu for adding status highlights or menu colors via 'O'
 reading blessed scroll of teleportation confers one-shot teleport control
+mild zombie apocalypse
+list lamps and lanterns in charging prompt
 
 
 Platform- and/or Interface-Specific New Features
@@ -539,8 +600,16 @@ user_sounds: provide an experimental mechanism for terminal-side sounds similar
 	act on it)
 Qt: the "paper doll" inventory subset can be controlled via the "Qt Settings"
 	dialog box ("Preferences..." on OSX)
-Qt: draw a border around each tile in the paper door inventory; when BUC is
+Qt: draw a border around each tile in the paper doll inventory; when BUC is
 	known for a doll item, change the border's color and thicken it
+Qt: letting the mouse hover over the paper doll shows a tool tip describing
+	the object--or lack of same--in the slot under the pointer
+Qt: clicking on the paper doll runs the #seeall command (inventory of wielded
+	and worn items plus tools [lamps, leashes] actively in use; in other
+	words, same set of things whose tiles are used to populate the doll)
+Qt: clicking on the status window runs the #attributes command (^X)
+Qt: add a Search button to the toolbar
+Qt: support the 'hitpointbar' option
 
 
 NetHack Community Patches (or Variation) Included
@@ -571,6 +640,12 @@ correct the Guidebook descriptions for msdos video_width and video_height to
 	described there forces the 640x480x16 mode where video_width and
 	video_height don't operate (github #294)
 redo rndmonst() to operate in a single pass (github pull request #286)
+fix the "stuck pets" issue (github #329)
+allow themed room subrooms to be filled (github #347)
+allow rereading spellbooks to refresh memory at any time (github #261)
+allow themed rooms constrained by level difficulty (github #344)
+add a varied form of LIBNH nethack library contribution (github #385, #403)
+add cross-compile to WASM (github #385, #403)
 
 
 Code Cleanup and Reorganization

@@ -2,7 +2,7 @@
 // Qt4 conversion copyright (c) Ray Chason, 2012-2014.
 // NetHack may be freely redistributed.  See license for details.
 
-// qt_stat.cpp -- bindings between the Qt 4 interface and the main code
+// qt_stat.cpp -- status window, upper right portion of the overall window
 
 extern "C" {
 #include "hack.h"
@@ -26,24 +26,20 @@ extern const char *hu_stat[]; /* from eat.c */
 namespace nethack_qt_ {
 
 NetHackQtStatusWindow::NetHackQtStatusWindow() :
-    // Notes:
-    //  Alignment needs -2 init value, because -1 is an alignment.
-    //  Armor Class is an schar, so 256 is out of range.
-    //  Blank value is 0 and should never change.
     name(this,"(name)"),
     dlevel(this,"(dlevel)"),
-    str(this,"STR"),
-    dex(this,"DEX"),
-    con(this,"CON"),
-    intel(this,"INT"),
-    wis(this,"WIS"),
-    cha(this,"CHA"),
+    str(this, "Str"),
+    dex(this, "Dex"),
+    con(this, "Con"),
+    intel(this, "Int"),
+    wis(this, "Wis"),
+    cha(this, "Cha"),
     gold(this,"Gold"),
     hp(this,"Hit Points"),
     power(this,"Power"),
     ac(this,"Armour Class"),
     level(this,"Level"),
-    exp(this,"Experience"),
+    exp(this, "_"), // exp displayed as Xp/Exp but exp widget used for padding
     align(this,"Alignment"),
     time(this,"Time"),
     score(this,"Score"),
@@ -62,10 +58,14 @@ NetHackQtStatusWindow::NetHackQtStatusWindow() :
     lev(this,"Lev"),
     fly(this,"Fly"),
     ride(this,"Ride"),
+    hpbar_health(this),
+    hpbar_injury(this),
     hline1(this),
     hline2(this),
     hline3(this),
-    first_set(true)
+    cursy(0),
+    first_set(true),
+    alreadyfullhp(false)
 {
     p_str = QPixmap(str_xpm);
     p_str = QPixmap(str_xpm);
@@ -88,19 +88,19 @@ NetHackQtStatusWindow::NetHackQtStatusWindow() :
     p_encumber[3] = QPixmap(ext_enc_xpm);
     p_encumber[4] = QPixmap(ovr_enc_xpm);
 
-    p_stoned = QPixmap(blank_xpm);              // placeholder icon
-    p_slimed = QPixmap(blank_xpm);              // placeholder icon
-    p_strngld = QPixmap(blank_xpm);             // placeholder icon
+    p_stoned = QPixmap(stone_xpm);
+    p_slimed = QPixmap(slime_xpm);
+    p_strngld = QPixmap(strngl_xpm);
     p_sick_fp = QPixmap(sick_fp_xpm);
     p_sick_il = QPixmap(sick_il_xpm);
     p_stunned = QPixmap(stunned_xpm);
     p_confused = QPixmap(confused_xpm);
     p_hallu = QPixmap(hallu_xpm);
     p_blind = QPixmap(blind_xpm);
-    p_deaf = QPixmap(blank_xpm);                // placeholder icon
-    p_lev = QPixmap(blank_xpm);                 // placeholder icon
-    p_fly = QPixmap(blank_xpm);                 // placeholder icon
-    p_ride = QPixmap(blank_xpm);                // placeholder icon
+    p_deaf = QPixmap(deaf_xpm);
+    p_lev = QPixmap(lev_xpm);
+    p_fly = QPixmap(fly_xpm);
+    p_ride = QPixmap(ride_xpm);
 
     str.setIcon(p_str);
     dex.setIcon(p_dex);
@@ -127,6 +127,7 @@ NetHackQtStatusWindow::NetHackQtStatusWindow() :
     fly.setIcon(p_fly);
     ride.setIcon(p_ride);
 
+    // separator lines
     hline1.setFrameStyle(QFrame::HLine|QFrame::Sunken);
     hline2.setFrameStyle(QFrame::HLine|QFrame::Sunken);
     hline3.setFrameStyle(QFrame::HLine|QFrame::Sunken);
@@ -134,11 +135,14 @@ NetHackQtStatusWindow::NetHackQtStatusWindow() :
     hline2.setLineWidth(1);
     hline3.setLineWidth(1);
 
+    QHBoxLayout *hpbar = InitHitpointBar();
+
 #if 1 //RLC
     name.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
     dlevel.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
     QVBoxLayout *vbox = new QVBoxLayout();
     vbox->setSpacing(0);
+    vbox->addLayout(hpbar);
     vbox->addWidget(&name);
     vbox->addWidget(&dlevel);
     vbox->addWidget(&hline1);
@@ -208,7 +212,7 @@ void NetHackQtStatusWindow::doUpdate()
     power.setFont(normal);
     ac.setFont(normal);
     level.setFont(normal);
-    exp.setFont(normal);
+    //exp.setFont(normal);
     align.setFont(normal);
     time.setFont(normal);
     score.setFont(normal);
@@ -297,7 +301,7 @@ void NetHackQtStatusWindow::resizeEvent(QResizeEvent*)
     power.setGeometry(x,y,iw,lh); x+=iw;
     ac.setGeometry(x,y,iw,lh); x+=iw;
     level.setGeometry(x,y,iw,lh); x+=iw;
-    exp.setGeometry(x,y,iw,lh); x+=iw;
+    //exp.setGeometry(x,y,iw,lh); x+=iw;
     x=0; y+=lh;
 
     lh=int(h*SP_hln3);
@@ -344,7 +348,7 @@ void NetHackQtStatusWindow::resizeEvent(QResizeEvent*)
 /*
  * Set all widget values to a null string.  This is used after all spacings
  * have been calculated so that when the window is popped up we don't get all
- * kinds of funny values being displayed.
+ * kinds of funny values being displayed.  [Actually it isn't used at all.]
  */
 void NetHackQtStatusWindow::nullOut()
 {
@@ -367,7 +371,7 @@ void NetHackQtStatusWindow::fadeHighlighting()
     power.dissipateHighlight();
     ac.dissipateHighlight();
     level.dissipateHighlight();
-    exp.dissipateHighlight();
+    //exp.dissipateHighlight();
     align.dissipateHighlight();
 
     time.dissipateHighlight();
@@ -390,19 +394,144 @@ void NetHackQtStatusWindow::fadeHighlighting()
     ride.dissipateHighlight();
 }
 
+// hitpointbar: two panels: left==current health, right==missing max health
+QHBoxLayout *NetHackQtStatusWindow::InitHitpointBar()
+{
+    hpbar_health.setFrameStyle(QFrame::NoFrame);
+    hpbar_health.setMaximumHeight(9);
+    hpbar_health.setAutoFillBackground(true);
+    if (!iflags.wc2_hitpointbar)
+        hpbar_health.hide();
+
+    hpbar_injury.setFrameStyle(QFrame::NoFrame);
+    /* health portion has thickness 9, injury portion just 3 */
+    hpbar_injury.setMaximumHeight(3);
+    hpbar_injury.setContentsMargins(0, 3, 0, 3); // left,top,right,bottom
+    hpbar_injury.setAutoFillBackground(true);
+    hpbar_injury.hide(); // only shown when hitpointbar is On and uhp < uhpmax
+
+    QHBoxLayout *hpbar = new QHBoxLayout;
+    hpbar->setSpacing(0);
+    hpbar->setMargin(0);
+    hpbar->addWidget(&hpbar_health);
+    hpbar->setAlignment(&hpbar_health, Qt::AlignLeft);
+    hpbar->addWidget(&hpbar_injury);
+    hpbar->setAlignment(&hpbar_injury, Qt::AlignRight);
+    return hpbar; // caller will add our result to vbox layout
+}
+
+// when hitpoint bar is enabled, calculate and draw it, otherwise remove it
+void NetHackQtStatusWindow::HitpointBar()
+{
+    // a style sheet is used to specify color for otherwise blank labels;
+    // barcolors[][*]: column [0=left] is current health, [1=right] is injury
+    static const char
+    *styleformat = "QLabel { background-color : %s ; color : transparent ;"
+                           " min-width : %d ; max-width %d }",
+    *barcolors[6][2] = {
+        { "black",   "black"     },  // 100%   /* second black never shown */
+        { "blue",    "darkBlue"  },  //75..99
+        /* gray is darker than darkGray for some reason (at least on OSX);
+           default green is too dark compared to blue, yellow, orange,
+           and red so is changed here to green.lighter(150) */
+        { "#00c000", "gray"      },  //50..74  /* "green"=="#008000" */
+        { "yellow",  "darkGray"  },  //25..49
+        { "orange",  "lightGray" },  //10..24
+        { "red",     "white"     },  // 0..9
+    };
+
+    /*
+     * tty and curses use inverse video characters in the left portion
+     * of the name+rank string to reflect hero's health.  We draw a
+     * separate line above the name+rank field instead.  The left side
+     * of the line indicates current health.  The right side is only
+     * shown when injured and indicates missing amount of maximum health.
+     */
+    if (iflags.wc2_hitpointbar) {
+        int colorindx, w,
+            ihp = Upolyd ? u.mh : u.uhp,
+            ihpmax = Upolyd ? u.mhmax : u.uhpmax;
+        ihp = std::max(std::min(ihp, ihpmax), 0);
+        int pct = 100 * ihp / ihpmax,
+            lox = hline1.x(),
+            hix = lox + hline1.width() - 1;
+        QRect geoH = hpbar_health.geometry(),
+              geoI = hpbar_injury.geometry();
+        QString styleH, styleI;
+
+        if (ihp < ihpmax) {
+            // health is less than full;
+            // use red for extreme low health even if the percentage is
+            // above the usual threshold (which will happen when maximum
+            // health is very low); do a similar threshold override for
+            // orange even though it can be distracting for low level hero
+            colorindx = (pct < 10 || ihp < 5) ? 5       // red    | white
+                        : (pct < 25 || ihp < 10 ) ? 4   // orange | lightGray
+                          : (pct < 50) ? 3              // yellow | darkGray*
+                            : (pct < 75) ? 2            // green  | gray*
+                              : 1;                      // blue   | darkBlue
+
+            int pxl_health = (hix - lox + 1) * ihp / ihpmax;
+            geoH.setRight(std::min(lox + pxl_health - 1, hix));
+            hpbar_health.setGeometry(geoH);
+            w = geoH.right() - geoH.left() + 1; // might yield 0 (ie, if dead)
+            styleH.sprintf(styleformat, barcolors[colorindx][0], w, w);
+            hpbar_health.setStyleSheet(styleH);
+            // style sheet should be doing this but width was sticking at full
+            hpbar_health.setMaximumWidth(w);
+            hpbar_health.show(); // don't need to hide() if/when width is 0
+
+            int oldleft = geoI.left();
+            geoI.setLeft(geoH.right() + 1);
+            geoI.setRight(hix);
+            hpbar_injury.setGeometry(geoI);
+            w = geoI.right() - geoI.left() + 1;
+            styleI.sprintf(styleformat, barcolors[colorindx][1], w, w);
+            hpbar_injury.setStyleSheet(styleI);
+            if (geoI.left() != oldleft)
+                hpbar_injury.move(geoI.left(), geoI.top());
+            hpbar_injury.show();
+
+            alreadyfullhp = false;
+        } else if (!alreadyfullhp) { // skip if unchanged
+            // health is full
+            colorindx = 0; // black | (not used)
+
+            hpbar_injury.hide();
+            geoI.setLeft(hix); // hix + 1
+            hpbar_injury.setGeometry(geoI);
+
+            geoH.setRight(hix);
+            hpbar_health.setGeometry(geoH);
+            w = geoH.right() - geoH.left() + 1;
+            styleH.sprintf(styleformat, barcolors[colorindx][0], w, w);
+            hpbar_health.setStyleSheet(styleH);
+            hpbar_health.setMaximumWidth(w); // (see above)
+            hpbar_health.show();
+
+            alreadyfullhp = true;
+        }
+    } else {
+        // hitpoint bar is disabled
+        hpbar_health.hide();
+        hpbar_injury.hide();
+        alreadyfullhp = false;
+    }
+}
+
 /*
  * Update the displayed status.  The current code in botl.c updates
  * two lines of information.  Both lines are always updated one after
  * the other.  So only do our update when we update the second line.
  *
  * Information on the first line:
- *    name, attributes, alignment, score
+ *    name, Str/Dex/&c characteristics, alignment, score
  *
  * Information on the second line:
  *    dlvl, gold, hp, power, ac, {level & exp or HD **}
  *    status (hunger, encumbrance, sick, stun, conf, halu, blind), time
  *
- * [**] HD is shown instead of level and exp if mtimedone is non-zero.
+ * [**] HD is shown instead of level and exp when hero is polymorphed.
  */
 void NetHackQtStatusWindow::updateStats()
 {
@@ -413,28 +542,32 @@ void NetHackQtStatusWindow::updateStats()
 
     if (cursy != 0) return;    /* do a complete update when line 0 is done */
 
-    if (ACURR(A_STR) > 118) {
-	buf.sprintf("STR:%d",ACURR(A_STR)-100);
-    } else if (ACURR(A_STR)==118) {
-	buf.sprintf("STR:18/**");
-    } else if(ACURR(A_STR) > 18) {
-	buf.sprintf("STR:18/%02d",ACURR(A_STR)-18);
-    } else {
-	buf.sprintf("STR:%d",ACURR(A_STR));
-    }
-    str.setLabel(buf,NetHackQtLabelledIcon::NoNum,ACURR(A_STR));
+    HitpointBar();
 
-    dex.setLabel("DEX:",(long)ACURR(A_DEX));
-    con.setLabel("CON:",(long)ACURR(A_CON));
-    intel.setLabel("INT:",(long)ACURR(A_INT));
-    wis.setLabel("WIS:",(long)ACURR(A_WIS));
-    cha.setLabel("CHA:",(long)ACURR(A_CHA));
+    int st = ACURR(A_STR);
+    if (st > STR18(100)) {
+        buf.sprintf("Str:%d", st - 100);        // 19..25
+    } else if (st == STR18(100)) {
+        buf.sprintf("Str:18/**");               // 18/100
+    } else if (st > 18) {
+        buf.sprintf("Str:18/%02d", st - 18);    // 18/01..18/99
+    } else {
+        buf.sprintf("Str:%d", st);              //  3..18
+    }
+    str.setLabel(buf, NetHackQtLabelledIcon::NoNum, (long) st);
+    dex.setLabel("Dex:", (long) ACURR(A_DEX));
+    con.setLabel("Con:", (long) ACURR(A_CON));
+    intel.setLabel("Int:", (long) ACURR(A_INT));
+    wis.setLabel("Wis:", (long) ACURR(A_WIS));
+    cha.setLabel("Cha:", (long) ACURR(A_CHA));
+
     const char* hung=hu_stat[u.uhs];
     if (hung[0]==' ') {
 	hunger.hide();
     } else {
 	hunger.setIcon(u.uhs ? p_hungry : p_satiated);
 	hunger.setLabel(hung);
+        hunger.ForceResize();
 	hunger.show();
     }
     const char *enc = enc_stat[near_capacity()];
@@ -443,6 +576,7 @@ void NetHackQtStatusWindow::updateStats()
     } else {
 	encumber.setIcon(p_encumber[near_capacity() - 1]);
 	encumber.setLabel(enc);
+        encumber.ForceResize();
 	encumber.show();
     }
     if (Stoned) stoned.show(); else stoned.hide();
@@ -467,6 +601,7 @@ void NetHackQtStatusWindow::updateStats()
     if (Stunned) stunned.show(); else stunned.hide();
     if (Confusion) confused.show(); else confused.hide();
     if (Hallucination) hallu.show(); else hallu.hide();
+    // [pr - Why is blind handled differently from other on/off conditions?]
     if (Blind) {
 	blind.setLabel("Blind");
 	blind.show();
@@ -479,7 +614,7 @@ void NetHackQtStatusWindow::updateStats()
     if (Flying) fly.show(); else fly.hide();
     if (u.usteed) ride.show(); else ride.hide();
 
-    if (u.mtimedone) {
+    if (Upolyd) {
 	buf = nh_capitalize_words(mons[u.umonnum].mname);
     } else {
 	buf = rank_of(u.ulevel, g.pl_character[0], ::flags.female);
@@ -489,39 +624,46 @@ void NetHackQtStatusWindow::updateStats()
     name.setLabel(buf2, NetHackQtLabelledIcon::NoNum, u.ulevel);
 
     char buf3[BUFSZ];
-    if (describe_level(buf3)) {
-	dlevel.setLabel(buf3,true);
-    } else {
-	buf.sprintf("%s, level ", g.dungeons[u.uz.dnum].dname);
-	dlevel.setLabel(buf,(long)::depth(&u.uz));
+    if (!describe_level(buf3)) {
+	Sprintf(buf3, "%s, level %d",
+                g.dungeons[u.uz.dnum].dname, ::depth(&u.uz));
     }
+    // false: always highlight as 'change for the better' regardless of
+    // new depth compared to old
+    dlevel.setLabel(buf3, false);
 
     gold.setLabel("Au:", money_cnt(g.invent));
 
-    if (u.mtimedone) {
-	// You're a monster!
-
-	buf.sprintf("/%d", u.mhmax);
-	hp.setLabel("HP:", u.mh  > 0 ? u.mh  : 0, buf);
-	level.setLabel("HD:",(long)mons[u.umonnum].mlevel);
+    if (Upolyd) {
+        // You're a monster!
+        buf.sprintf("/%d", u.mhmax);
+        hp.setLabel("HP:", std::max((long) u.mh, 0L), buf);
+        level.setLabel("HD:", (long) mons[u.umonnum].mlevel); // hit dice
+        // Exp points are not shown when HD is displayed instead of Xp level
     } else {
-	// You're normal.
-
-	buf.sprintf("/%d", u.uhpmax);
-	hp.setLabel("HP:", u.uhp > 0 ? u.uhp : 0, buf);
-	level.setLabel("Level:",(long)u.ulevel);
+        // You're normal.
+        buf.sprintf("/%d", u.uhpmax);
+        hp.setLabel("HP:", std::max((long) u.uhp, 0L), buf);
+        // if Exp points are to be displayed, append them to Xp level;
+        // up/down highlighting becomes tricky--don't try very hard
+        if (::flags.showexp) {
+            buf.sprintf("%ld/%ld", (long) u.ulevel, (long) u.uexp);
+            level.setLabel("Level:" + buf,
+                           NetHackQtLabelledIcon::NoNum, (long) u.uexp);
+        } else {
+            level.setLabel("Level:", (long) u.ulevel);
+        }
     }
     buf.sprintf("/%d", u.uenmax);
     power.setLabel("Pow:", u.uen, buf);
-    ac.setLabel("AC:",(long)u.uac);
-#ifdef EXP_ON_BOTL
-    if (::flags.showexp) {
-	exp.setLabel("Exp:",(long)u.uexp);
-    } else
-#endif
-    {
-	exp.setLabel("");
-    }
+    ac.setLabel("AC:", (long) u.uac);
+    //if (::flags.showexp) {
+    //    exp.setLabel("Exp:", (long) u.uexp);
+    //} else {
+        // 'exp' is now only used to pad the line that Xp/Exp is displayed on
+        exp.setLabel("");
+    //}
+    text = NULL;
     if (u.ualign.type==A_CHAOTIC) {
 	align.setIcon(p_chaotic);
 	text = "Chaotic";
@@ -532,21 +674,29 @@ void NetHackQtStatusWindow::updateStats()
 	align.setIcon(p_lawful);
 	text = "Lawful";
     }
-    align.setLabel(text);
+    if (text) {
+        // false: don't highlight as 'became lower' even if the internal
+        // numeric value is becoming lower (N -> C, L -> N || C)
+        align.setLabel(text, false);
+        // without this, the ankh pixmap shifts from centered to left
+        // justified relative to the label text for some unknown reason...
+        align.ForceResize();
+    }
 
-    if (::flags.time) time.setLabel("Time:",(long)g.moves);
-    else time.setLabel("");
+    if (::flags.time)
+        time.setLabel("Time:", (long) g.moves);
+    else
+        time.setLabel("");
 #ifdef SCORE_ON_BOTL
     if (::flags.showscore) {
-	score.setLabel("Score:",(long)botl_score());
+        score.setLabel("Score:", (long) botl_score());
     } else
 #endif
     {
 	score.setLabel("");
     }
 
-    if (first_set)
-    {
+    if (first_set) {
 	first_set=false;
 
 	name.highlightWhenChanging();
@@ -564,10 +714,11 @@ void NetHackQtStatusWindow::updateStats()
 	power.highlightWhenChanging();
 	ac.highlightWhenChanging(); ac.lowIsGood();
 	level.highlightWhenChanging();
-	exp.highlightWhenChanging();
+        //exp.highlightWhenChanging(); -- 'exp' is just padding
 	align.highlightWhenChanging();
 
-	//time.highlightWhenChanging();
+        // don't highlight 'time' because it changes almost continuously
+        //time.highlightWhenChanging();
 	score.highlightWhenChanging();
 
 	hunger.highlightWhenChanging();
@@ -593,6 +744,13 @@ void NetHackQtStatusWindow::updateStats()
  */
 void NetHackQtStatusWindow::checkTurnEvents()
 {
+}
+
+// clicking on status window runs #attributes (^X)
+void NetHackQtStatusWindow::mousePressEvent(QMouseEvent *event UNUSED)
+{
+    QWidget *main = NetHackQtBind::mainWidget();
+    (static_cast <NetHackQtMainWindow *> (main))->FuncAsCommand(doattributes);
 }
 
 } // namespace nethack_qt_

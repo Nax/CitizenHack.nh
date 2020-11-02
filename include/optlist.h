@@ -122,7 +122,7 @@ pfx_##a,
     NHOPTC(catname, PL_PSIZ, opt_in, set_gameview, No, Yes, No, No, NoAlias,
                 "the name of your (first) cat (e.g., catname:Tabby)")
 #ifdef INSURANCE
-    NHOPTB(checkpoint, 0, opt_out, set_in_game, Off, Yes, No, No, NoAlias,
+    NHOPTB(checkpoint, 0, opt_out, set_in_game, On, Yes, No, No, NoAlias,
                 &flags.ins_chkpt)
 #else
     NHOPTB(checkpoint, 0, opt_out, set_in_game, Off, No, No, No, NoAlias,
@@ -379,6 +379,8 @@ pfx_##a,
                 NoAlias, "display frequency when `running' or `travelling'")
     NHOPTB(safe_pet, 0, opt_out, set_in_game, On, Yes, No, No, NoAlias,
                 &flags.safe_dog)
+    NHOPTB(safe_wait, 0, opt_out, set_in_game, On, Yes, No, No, NoAlias,
+                &flags.safe_wait)
     NHOPTB(sanity_check, 0, opt_in, set_wizonly, Off, Yes, No, No, NoAlias,
                 &iflags.sanity_check)
     NHOPTC(scores, 32, opt_in, set_in_game, No, Yes, No, No, NoAlias,

@@ -368,6 +368,9 @@ register struct monst *magr, *mdef;
             if (distmin(magr->mx, magr->my, mdef->mx, mdef->my) > 1) {
                 /* D: Do a ranged attack here! */
                 strike = thrwmm(magr, mdef);
+                if (strike)
+                    /* We don't really know if we hit or not; pretend we did. */
+                    res[i] |= MM_HIT;
                 if (DEADMONSTER(mdef))
                     res[i] = MM_DEF_DIED;
                 if (DEADMONSTER(magr))
@@ -1039,6 +1042,7 @@ int dieroll;
         }
         /* only potions damage resistant players in destroy_item */
         tmp += destroy_mitem(mdef, POTION_CLASS, AD_FIRE);
+        ignite_items(mdef->minvent);
         break;
     case AD_COLD:
         if (cancelled) {
@@ -1481,7 +1485,13 @@ int dieroll;
             place_monster(mdef, mdef->mx, mdef->my);
             mdef->mhp = 0;
         }
+        g.zombify = !mwep && zombie_maker(magr->data)
+            && ((mattk->aatyp == AT_TUCH
+                 || mattk->aatyp == AT_CLAW
+                 || mattk->aatyp == AT_BITE)
+                && zombie_form(mdef->data) != NON_PM);
         monkilled(mdef, "", (int) mattk->adtyp);
+        g.zombify = FALSE; /* reset */
         if (!DEADMONSTER(mdef))
             return res; /* mdef lifesaved */
         else if (res == MM_AGR_DIED)
