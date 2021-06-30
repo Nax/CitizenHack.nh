@@ -4586,7 +4586,7 @@ readobjnam(char *bp, struct obj *no_wish)
     /* more wishing abuse: don't allow wishing for certain artifacts */
     /* and make them pay; charge them for the wish anyway! */
     if ((is_quest_artifact(d.otmp)
-         || (d.otmp->oartifact && rn2(nartifact_exist()) > 1)
+         || (d.otmp->oartifact && u.artwishcnt >= 3)
          || (d.otmp->oartifact == ART_WAND_OF_WONDERS)) && !wizard) {
         artifact_exists(d.otmp, safe_oname(d.otmp), FALSE);
         obfree(d.otmp, (struct obj *) 0);
@@ -4595,6 +4595,10 @@ readobjnam(char *bp, struct obj *no_wish)
               something, makeplural(body_part(HAND)));
         return d.otmp;
     }
+
+    /* Keep track of how many artifacts were obtained by wishing */
+    if (d.otmp->oartifact)
+        u.artwishcnt++;
 
     if (d.halfeaten && d.otmp->oclass == FOOD_CLASS) {
         unsigned nut = obj_nutrition(d.otmp);
