@@ -16,6 +16,7 @@ extern "C" {
 #include "qt_post.h"
 #include "qt_yndlg.h"
 #include "qt_yndlg.moc"
+#include "qt_key.h" // for keyValue()
 #include "qt_str.h"
 
 // temporary
@@ -35,7 +36,10 @@ NetHackQtYnDialog::NetHackQtYnDialog(QWidget *parent, const QString &q,
                                      const char *ch, char df) :
     QDialog(parent),
     question(q), choices(ch), def(df),
-    keypress('\033')
+    keypress('\033'),
+    allow_count(false),
+    le((QLineEdit *) NULL),
+    y_btn((QPushButton *) NULL)
 {
     setWindowTitle("NetHack: Question");
 
@@ -49,6 +53,7 @@ NetHackQtYnDialog::NetHackQtYnDialog(QWidget *parent, const QString &q,
     if (choices) {
         // special handling for wearing rings; prompt asks "right or left?"
         // but side-by-side buttons look better with [left][right] instead
+        // (assumes that we're using left to right layout)
         if (!strcmp(choices, "rl")) {
             choices = lrq;
             if (!def)
@@ -57,6 +62,7 @@ NetHackQtYnDialog::NetHackQtYnDialog(QWidget *parent, const QString &q,
         // if count is allowed, explicitly add the digits as valid
         } else if (!strncmp(choices, "yn#", (size_t) 3)) {
             ::yn_number = 0L;
+            allow_count = true;
 
             if (!strchr(choices, '9')) {
                 copynchars(altchoices, choices, BUFSZ - 1);
@@ -65,12 +71,13 @@ NetHackQtYnDialog::NetHackQtYnDialog(QWidget *parent, const QString &q,
             }
         }
     }
+    alt_answer[0] = alt_result[0] = '\0';
 }
 
 char NetHackQtYnDialog::Exec()
 {
     QString ch(QString::fromLatin1(choices));
-    int ch_per_line=6;
+//    int ch_per_line=6;
     QString qlabel;
     QString enable;
     if ( qt_compact_mode && !choices ) {
@@ -122,7 +129,7 @@ char NetHackQtYnDialog::Exec()
 	    ch.append(d[5]);
 	    ch.append(d[8]);
 	    ch.append(d[9]);
-	    ch_per_line = 3;
+//	    ch_per_line = 3;
 	    def = ' ';
 	} else {
 	    // Hmm... they'll have to use a virtual keyboard
@@ -148,7 +155,11 @@ char NetHackQtYnDialog::Exec()
 	QButtonGroup *bgroup = new QButtonGroup(group);
 
 	int nchoices=ch.length();
-        bool allow_count = (ch.left(3) == QString("yn#")),
+        // note: is_ynaq covers nyaq too because the choices string is
+        // "ynaq" for both; only the default differs; likewise for nyNaq
+        bool is_ynaq = (ch == QString("ynaq") // [Yes ][ No ][All ][Stop]
+                        || ch == QString("yn#aq")
+                        || ch == altchoices), // alternate "yn#aq"
              is_ynq = (ch == QString("ynq")), // [ Yes  ][  No  ][Cancel]
              is_yn  = (ch == QString("yn")),  // [Yes ][ No ]
              is_lr  = (ch == QString(lrq));   // [ Left ][Right ]
@@ -158,31 +169,62 @@ char NetHackQtYnDialog::Exec()
 	const int extra=fontMetrics().height(); // Extra for group
 	int x=margin, y=extra+margin;
         int butheight = fontMetrics().height() * 2 + 5,
-            butwidth = (butheight - 5)
-                       * ((is_ynq || is_lr) ? 3 : is_yn ? 2 : 1) + 5;
+            butwidth = (butheight - 5) * ((is_ynq || is_lr) ? 3
+                                          : (is_ynaq || is_yn) ? 2 : 1) + 5;
+        if (butwidth == butheight) { // square, enough room for C or ^C
+            // some characters will be labelled by name rather than by
+            // keystroke so will need wider buttons
+            for (int i = 0; i < nchoices; ++i) {
+                if (ch[i] == '\033')
+                    break; // ESC and anything after are hidden
+                if (ch[i] == ' ' || ch[i] == '\n' || ch[i] == '\r') {
+                    butwidth = (butheight - 5) * 2 + 5;
+                    break;
+                }
+            }
+        }
 
         QPushButton *button;
         for (int i = 0; i < nchoices; ++i) {
+            bool making_y = false;
             if (ch[i] == '\033')
                 break; // ESC and anything after are hidden
             if (ch[i] == '#' && allow_count)
                 continue; // don't show a button for '#'; has Count box instead
             QString button_name = QString(visctrl((char) ch[i].cell()));
-            if (is_yn || is_ynq || is_lr) {
+            if (is_yn || is_ynq || is_ynaq || is_lr) {
+                // FIXME: a better way to recognize which labels should
+                // use alterate text is needed
                 switch (ch[i].cell()) {
                 case 'y':
                     button_name = "Yes";
+                    making_y = true;
                     break;
                 case 'n':
                     button_name = "No";
                     break;
-                case 'q':
-                    // FIXME: sometimes the 'q' choice is ''cancel current
-                    // action'' but other times it is actually 'quit'.
-                    if (question.left(10) == QString("Dump core?"))
-                        button_name = "Quit";
+                case 'a':
+                    // the display of vanquished monsters uses "ynaq" for
+                    // convenience, where 'a' requests a sort-by menu;
+                    // show "sort" instead of "all" and allow player to
+                    // type either 'a' or 's' when not clicking on button
+                    if (question.contains(QString("vanquished?")))
+                        button_name = "Sort", AltChoice('s', 'a');
                     else
-                        button_name = "Cancel";
+                        button_name = "All";
+                    break;
+                case 'q':
+                    // most 'q' replies are actually for "cancel" but
+                    // for "ynaq" (where "all" is a choice) it's "stop"
+                    // and for end of game disclosure it really is "quit"
+                    if (question.left(10) == QString("Dump core?")
+                        || (::g.program_state.gameover
+                            && question.left(11) == QString("Do you want")))
+                        button_name = "Quit";
+                    else if (is_ynaq)
+                        button_name = "Stop", AltChoice('s', 'q');
+                    else
+                        button_name = "Cancel", AltChoice('c', 'q');
                     break;
                 case 'l':
                     button_name = "Left";
@@ -191,8 +233,41 @@ char NetHackQtYnDialog::Exec()
                     button_name = "Right";
                     break;
                 }
+            } else {
+                // special characters usually aren't listed among choices
+                // but if they are, label the buttons for them with sensible
+                // names; we want to avoid "^J" and "^M" for \n and \r;
+                // <Enter> and <Return> are equivalent to each other but
+                // labelling \n as newline or line-feed seems confusing;
+                switch (ch[i].cell()) {
+                case ' ':
+                    button_name = "Spc";
+                    break;
+                case '\n':
+                    button_name = "Ent";
+                    break;
+                case '\r':
+                    button_name = "Ret";
+                    break;
+                case '\033': // won't happen; ESC is hidden
+                    button_name = "Esc";
+                    break;
+                case '&':
+                    // ampersand is used as a hidden quote char to flag
+                    // next character as a keyboard shortcut associated
+                    // with the current action--that's inappropriate here;
+                    // two consecutive ampersands are needed to display
+                    // one in a button label; first check whether caller
+                    // has already done that, skip this one if so
+                    if (i > 0 && ch[i - 1].cell() == QChar('&'))
+                        continue; // next i
+                    button_name = "&&";
+                    break;
+                }
             }
             button=new QPushButton(button_name);
+            if (making_y && allow_count)
+                y_btn = button; // to change default in keyPressEvent()
             if (!enable.isNull()) {
                 if (!enable.contains(ch[i]))
                     button->setEnabled(false);
@@ -216,13 +291,13 @@ char NetHackQtYnDialog::Exec()
         connect(bgroup, SIGNAL(buttonClicked(int)), this, SLOT(doneItem(int)));
 
         QLabel *lb = 0;
-        QLineEdit *le = 0;
         if (allow_count) {
-            // put the Count widget in between [y] and [n][a][q]
+            // insert Count widget in front of [n], between [y] and [n][a][q]
             lb = new QLabel("Count:");
-            groupbox->insertWidget(1, lb); // [n] button is item #1
+            groupbox->insertWidget(1, lb); // [y] button is item #0, [n] is #1
             le = new QLineEdit();
-            groupbox->insertWidget(2, le); // [n] became #2, Count label #1
+            groupbox->insertWidget(2, le); // [n] became #2, Count label is #1
+            le->setPlaceholderText(QString("#")); // grayed out
 	}
         // add an invisible right-most field to left justify the buttons
         groupbox->addStretch(80);
@@ -245,54 +320,27 @@ char NetHackQtYnDialog::Exec()
         // typing in digits followed by <return> is 'normal' operation.
         // However, typing a digit without clicking first will set focus
         // to the count widget with that typed digit preloaded.
-        // FIXME:  Unfortunately, it will also be selected, so typing
-        // another digit replaces it instead of being the next digit in
-        // a multiple-digit number.
         //
-        // Theoretically typing '#' does this to, with a 0 preloaded
-        // and intentionally selected, but the KeyPress bug (below) of
-        // treating <shift> as a complete response prevents use of
-        // shift+3 from being used to generate '#'.
-        //
-        bool retry; // for digit + re-activate widget + rest of number
-        do {
-            retry = false; // might have a second pass (but not a third)
-            exec();
-            int res = result();
-            if (res == 0) {
-                choice = is_lr ? '\033' : ch_esc ? ch_esc : def ? def : ' ';
-            } else if (res == 1) {
+        exec();
+        int res = result();
+        if (res == 0) {
+            choice = is_lr ? '\033' : ch_esc ? ch_esc : def ? def : ' ';
+        } else if (res == 1) {
+            if (keypress)
+                choice = keypress;
+            else
                 choice = def ? def : ch_esc ? ch_esc : ' ';
-            } else if (res >= 1000) {
-                choice = (char) ch[res - 1000].cell();
+        } else if (res >= 1000) {
+            choice = (char) ch[res - 1000].cell();
+        }
 
-                if (allow_count && strchr("#0123456789", choice)) {
-                    if (choice == '#') {
-                        // 0 will be preselected; typing anything replaces it
-                        le->insert(QString("0"));
-                    } else {
-                        le->insert(QString(choice));
-                        //
-                        // FIXME:  despite the documentation claiming that
-                        // 'false' cancels any selection, the digit always
-                        // starts out selected (from running exec() again?)
-                        // so typing the next digit replaces it instead of
-                        // being appended to it unless the player uses
-                        // right-arrow to move the cursor.
-                        //
-                        le->end(false);
-                    }
-                    // (don't know whether this actually does anything useful)
-                    le->setAttribute(Qt::WA_KeyboardFocusChange, true);
-                    le->setFocus(Qt::ActiveWindowFocusReason);
-                    retry = true;
-                }
-            }
-        } while (retry);
-
-        // non-Null 'le' implies 'allow_count'
+        // non-Null 'le' implies 'allow_count'; having a grayed-out '#'
+        // present in the QLineEdit widget doesn't affect its isEmpty() test
         if (le && !le->text().isEmpty()) {
-            ::yn_number = le->text().toInt();
+            QString text(le->text());
+            if (text.at(0) == QChar('#'))
+                text = text.mid(1); // rest of string past [0]
+            ::yn_number = text.toLong();
             choice = '#';
         }
         keypress = choice;
@@ -314,26 +362,50 @@ char NetHackQtYnDialog::Exec()
     return keypress;
 }
 
-void NetHackQtYnDialog::keyPressEvent(QKeyEvent* event)
+void NetHackQtYnDialog::AltChoice(char ans, char res)
 {
-    //
-    // FIXME:  on OSX (possibly elsewhere), this accepts <shift>
-    // (and even <caps lock>) as the entire response before the user
-    // has a chance to type any character to be shifted.
-    //
+    if (ans && !strchr(alt_answer, ans)) {
+        (void) strkitten(alt_answer, ans);
+        (void) strkitten(alt_result, res);
+    }
+}
 
-    // Don't want QDialog's Return/Esc behaviour
-    //RLC ...or do we?
-    QString text(event->text());
-    if (choices == NULL || choices[0] == 0) {
-	if (text != "") {
-	    keypress = text.toUcs4()[0];
-	    done(1);
-	}
+void NetHackQtYnDialog::keyPressEvent(QKeyEvent *event)
+{
+    keypress = keyValue(event);
+    if (!keypress)
+        return;
+
+    char *p = NULL;
+    if (*alt_answer && (p = strchr(alt_answer, keypress)) != 0)
+        keypress = alt_result[p - alt_answer];
+
+    if (!choices || !*choices || !keypress) {
+        this->done(1);
+
     } else {
-	int where = QString::fromLatin1(choices).indexOf(text);
-	if (where != -1 && text != "#") {
-	    done(where+1000);
+	int where = QString::fromLatin1(choices).indexOf(QChar(keypress));
+
+        if (allow_count && strchr("#0123456789", keypress)) {
+            if (keypress == '#') {
+                // 0 will be preselected; typing anything replaces it
+                le->setText(QString("0"));
+                le->home(true);
+            } else {
+                // digit will not be preselected; typing another appends
+                le->setText(QChar(keypress));
+                le->end(false);
+            }
+            // (don't know whether this actually does anything useful)
+            le->setAttribute(Qt::WA_KeyboardFocusChange, true);
+            // this is definitely useful...
+            le->setFocus(Qt::ActiveWindowFocusReason);
+            // change default button from 'n' to 'y'
+            if (y_btn)
+                y_btn->setDefault(true);
+	} else if (where != -1) {
+            this->done(where + 1000);
+
 	} else {
 	    QDialog::keyPressEvent(event);
 	}
@@ -342,7 +414,7 @@ void NetHackQtYnDialog::keyPressEvent(QKeyEvent* event)
 
 void NetHackQtYnDialog::doneItem(int i)
 {
-    done(i+1000);
+    this->done(i + 1000);
 }
 
 } // namespace nethack_qt_

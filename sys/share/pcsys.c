@@ -12,10 +12,10 @@
 
 #include <ctype.h>
 #include <fcntl.h>
-#if !defined(MSDOS) && !defined(WIN_CE) /* already done */
+#if !defined(MSDOS) && !defined(WIN_CE) && !defined(CROSS_TO_AMIGA)
 #include <process.h>
 #endif
-#ifdef __GO32__
+#if defined(__GO32__) || defined(CROSS_TO_AMIGA)
 #define P_WAIT 0
 #define P_NOWAIT 1
 #endif
@@ -29,11 +29,11 @@
 #endif
 
 #if defined(MICRO) || defined(OS2)
-void FDECL(nethack_exit, (int)) NORETURN;
+void nethack_exit(int) NORETURN;
 #else
 #define nethack_exit exit
 #endif
-static void NDECL(msexit);
+static void msexit(void);
 
 #ifdef MOVERLAY
 extern void __far __cdecl _movepause(void);
@@ -43,11 +43,12 @@ extern unsigned short __far __cdecl _movefpaused;
 #define __MOVE_PAUSE_DISK 2  /* Represents the executable file */
 #define __MOVE_PAUSE_CACHE 4 /* Represents the cache memory */
 #endif                       /* MOVERLAY */
+FILE * fopenp(const char *name, const char *mode);
 
 #if defined(MICRO)
 
 void
-flushout()
+flushout(void)
 {
     (void) fflush(stdout);
     return;
@@ -64,9 +65,11 @@ static const char *COMSPEC =
 
 #ifdef SHELL
 int
-dosh()
+dosh(void)
 {
+#ifndef NOCWD_ASSUMPTIONS
     extern char orgdir[];
+#endif
     char *comspec;
 #ifndef __GO32__
     int spawnstat;
@@ -132,8 +135,7 @@ dosh()
  * be room for the \
  */
 void
-append_slash(name)
-char *name;
+append_slash(char *name)
 {
     char *ptr;
 
@@ -148,13 +150,16 @@ char *name;
 }
 
 void
-getreturn(str)
-const char *str;
+getreturn(const char *str)
 {
 #ifdef TOS
     msmsg("Hit <Return> %s.", str);
 #else
+#ifdef CROSS_TO_AMIGA
+    (void) printf("Hit <Enter> %s.", str);
+#else
     msmsg("Hit <Enter> %s.", str);
+#endif
 #endif
     while (pgetchar() != '\n')
         ;
@@ -190,8 +195,7 @@ VA_DECL(const char *, fmt)
 #endif
 
 FILE *
-fopenp(name, mode)
-const char *name, *mode;
+fopenp(const char *name, const char *mode)
 {
     char buf[BUFSIZ], *bp, *pp, lastch = 0;
     FILE *fp;
@@ -239,8 +243,7 @@ const char *name, *mode;
 
 #if defined(MICRO) || defined(OS2)
 void
-nethack_exit(code)
-int code;
+nethack_exit(int code)
 {
     msexit();
     exit(code);
@@ -253,9 +256,9 @@ extern boolean run_from_desktop; /* set in pcmain.c */
 #endif
 
 static void
-msexit()
+msexit(void)
 {
-#ifdef CHDIR
+#if defined(CHDIR) && !defined(NOCWD_ASSUMPTIONS)
     extern char orgdir[];
 #endif
 

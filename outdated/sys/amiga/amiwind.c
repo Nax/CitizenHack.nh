@@ -3,9 +3,15 @@
 /*    Copyright (c) Kenneth Lorber, Bethesda, Maryland 1993,1996  */
 /* NetHack may be freely redistributed.  See license for details. */
 
+#ifndef CROSS_TO_AMIGA
 #include "NH:sys/amiga/windefs.h"
 #include "NH:sys/amiga/winext.h"
 #include "NH:sys/amiga/winproto.h"
+#else
+#include "windefs.h"
+#include "winext.h"
+#include "winproto.h"
+#endif
 
 /* Have to undef CLOSE as display.h and intuition.h both use it */
 #undef CLOSE
@@ -13,17 +19,28 @@
 #ifdef AMII_GRAPHICS /* too early in the file? too late? */
 
 #ifdef AMIFLUSH
-static struct Message *FDECL(GetFMsg, (struct MsgPort *));
+static struct Message *GetFMsg(struct MsgPort *);
 #endif
 
 static int BufferGetchar(void);
 static void ProcessMessage(register struct IntuiMessage *message);
 
 #define BufferQueueChar(ch) (KbdBuffer[KbdBuffered++] = (ch))
-
+#ifndef CROSS_TO_AMIGA
 struct Library *ConsoleDevice;
+#else
+struct Device *
+# ifdef __CONSTLIBBASEDECL__
+     __CONSTLIBBASEDECL__
+# endif /* __CONSTLIBBASEDECL__ */
+       ConsoleDevice;
+#endif
 
+#ifndef CROSS_TO_AMIGA
 #include "NH:sys/amiga/amimenu.c"
+#else
+#include "amimenu.c"
+#endif
 
 /* Now our own variables */
 
@@ -109,7 +126,7 @@ struct NewWindow *nw;
  * Close a window that shared the HackPort IDCMP port.
  */
 
-void FDECL(CloseShWindow, (struct Window *));
+void CloseShWindow(struct Window *);
 void
 CloseShWindow(win)
 struct Window *win;

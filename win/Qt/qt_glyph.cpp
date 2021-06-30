@@ -81,30 +81,41 @@ NetHackQtGlyphs::NetHackQtGlyphs()
     setSize(tilefile_tile_W, tilefile_tile_H);
 }
 
-void NetHackQtGlyphs::drawGlyph(QPainter& painter, int glyph, int x, int y)
+void NetHackQtGlyphs::drawGlyph(QPainter& painter, int glyph, int x, int y,
+                                bool fem, bool reversed)
 {
-    int tile = glyph2tile[glyph];
-    int px = (tile % tiles_per_row) * width();
-    int py = tile / tiles_per_row * height();
+    if (!reversed) {
+        int tile = glyph2tile[glyph];
+        if (fem)
+            ++tile;
+        int px = (tile % tiles_per_row) * width();
+        int py = tile / tiles_per_row * height();
 
-    painter.drawPixmap(x, y, pm, px, py, width(), height());
+        painter.drawPixmap(x, y, pm, px, py, width(), height());
+    } else {
+        // for paper doll; mirrored image for left side of two-handed weapon
+        painter.drawPixmap(x, y, reversed_pixmap(glyph, fem),
+                           0, 0, width(), height());
+    }
 }
 
 void NetHackQtGlyphs::drawCell(QPainter& painter, int glyph,
-                               int cellx, int celly)
+                               int cellx, int celly, bool fem)
 {
-    drawGlyph(painter, glyph, cellx * width(), celly * height());
+    drawGlyph(painter, glyph, cellx * width(), celly * height(), fem, false);
 }
 
 void NetHackQtGlyphs::drawBorderedCell(QPainter& painter, int glyph,
-                                       int cellx, int celly, int border)
+                                       int cellx, int celly, int border,
+                                       bool reversed, bool fem)
 {
     int wd = width(),
         ht = height(),
+        yoffset = 1,  // tiny extra margin at top
         lox = cellx * (wd + 2),
-        loy = celly * (ht + 2);
+        loy = celly * (ht + 2) + yoffset;
 
-    drawGlyph(painter, glyph, lox + 1, loy + 1);
+    drawGlyph(painter, glyph, lox + 1, loy + 1, fem, reversed);
 
 #ifdef TEXTCOLOR
     if (border != NO_BORDER) {
@@ -154,14 +165,38 @@ void NetHackQtGlyphs::drawBorderedCell(QPainter& painter, int glyph,
 #endif
 }
 
-QPixmap NetHackQtGlyphs::glyph(int glyph)
+// mis-named routine to get the pixmap for a particular glyph
+QPixmap NetHackQtGlyphs::glyph(int glyphindx, bool fem)
 {
-    int tile = glyph2tile[glyph];
+    int tile = glyph2tile[glyphindx];
+    if (fem)
+        ++tile;
     int px = (tile % tiles_per_row) * tilefile_tile_W;
     int py = tile / tiles_per_row * tilefile_tile_H;
 
     return QPixmap::fromImage(img.copy(px, py,
                                        tilefile_tile_W, tilefile_tile_H));
+}
+
+// transpose a glyph's tile horizontally, scaled for use in paper doll
+QPixmap NetHackQtGlyphs::reversed_pixmap(int glyphindx, bool fem)
+{
+    QPixmap pxmp = glyph(glyphindx, fem);
+#ifdef ENHANCED_PAPERDOLL
+    qreal wid = (qreal) pxmp.width(),
+          //hgt = (qreal) pxmp.height(),
+          xscale = (qreal) qt_settings->dollWidth / (qreal) tilefile_tile_W,
+          yscale = (qreal) qt_settings->dollHeight / (qreal) tilefile_tile_H;
+    QTransform *mirrormatrix = new QTransform(
+            // negate x coordinates to flip the image across the y-axis
+            -1.0 * xscale, 0.0, 0.0, yscale,
+            // slide flipped image to the right to make things positive again
+            wid * xscale, 0.0
+    );
+    return pxmp.transformed(*mirrormatrix);
+#else
+    return pxmp;
+#endif
 }
 
 void NetHackQtGlyphs::setSize(int w, int h)

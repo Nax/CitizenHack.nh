@@ -18,24 +18,13 @@ static void set_window_position(int *, int *, int *, int *, int,
                                 int *, int *, int *, int *, int,
                                 int, int);
 
-/* array to save initial terminal colors for later restoration */
-
+#if 0   /* no longer used */
 typedef struct nhrgb_type {
     short r;
     short g;
     short b;
 } nhrgb;
-
-nhrgb orig_yellow;
-nhrgb orig_white;
-nhrgb orig_darkgray;
-nhrgb orig_hired;
-nhrgb orig_higreen;
-nhrgb orig_hiyellow;
-nhrgb orig_hiblue;
-nhrgb orig_himagenta;
-nhrgb orig_hicyan;
-nhrgb orig_hiwhite;
+#endif
 
 /* Banners used for an optional ASCII splash screen */
 
@@ -108,27 +97,34 @@ set_window_position(int *winx, int *winy, int *winw, int *winh,
 
 /* Create the "main" nonvolatile windows used by nethack */
 void
-curses_create_main_windows()
+curses_create_main_windows(void)
 {
     int min_message_height = 1;
     int message_orientation = 0;
     int status_orientation = 0;
     int border_space = 0;
     int hspace = term_cols - 80;
-    boolean borders = FALSE;
+    boolean borders = FALSE, noperminv_borders = FALSE;
 
     switch (iflags.wc2_windowborders) {
+    default:
     case 0:                     /* Off */
         borders = FALSE;
         break;
+
+    case 3:
+        noperminv_borders = TRUE;
+        /*FALLTHRU*/
     case 1:                     /* On */
         borders = TRUE;
         break;
+
+    case 4:
+        noperminv_borders = TRUE;
+        /*FALLTHRU*/
     case 2:                     /* Auto */
-        borders = (term_cols > 81 && term_rows > 25);
+        borders = (term_cols >= 80 + 2 && term_rows >= 24 + 2);
         break;
-    default:
-        borders = FALSE;
     }
 
     if (borders) {
@@ -228,6 +224,9 @@ curses_create_main_windows()
                                 ALIGN_RIGHT, &map_x, &map_y,
                                 &map_width, &map_height,
                                 border_space, -1, width);
+            /* suppress borders on perm_invent window, part I */
+            if (noperminv_borders)
+                inv_width += border_space, inv_height += border_space; /*+=2*/
         }
 
         if (msg_vertical)
@@ -276,7 +275,9 @@ curses_create_main_windows()
 
         if (iflags.perm_invent)
             curses_add_nhwin(INV_WIN, inv_height, inv_width, inv_y, inv_x,
-                             ALIGN_RIGHT, borders);
+                             ALIGN_RIGHT,
+                             /* suppress perm_invent borders, part II */
+                             borders && !noperminv_borders);
 
         curses_add_nhwin(MAP_WIN, map_height, map_width,
                          map_y, map_x, 0, borders);
@@ -298,7 +299,7 @@ curses_create_main_windows()
 
 /* Initialize curses colors to colors used by NetHack */
 void
-curses_init_nhcolors()
+curses_init_nhcolors(void)
 {
 #ifdef TEXTCOLOR
     if (has_colors()) {
@@ -346,6 +347,11 @@ curses_init_nhcolors()
 
 
         if (COLORS >= 16) {
+# ifdef USE_DARKGRAY
+            if (iflags.wc2_darkgray) {
+                init_pair(1, COLOR_BLACK + 8, -1);
+            }
+# endif
             init_pair(9, COLOR_WHITE, -1);
             init_pair(10, COLOR_RED + 8, -1);
             init_pair(11, COLOR_GREEN + 8, -1);
@@ -355,55 +361,6 @@ curses_init_nhcolors()
             init_pair(15, COLOR_CYAN + 8, -1);
             init_pair(16, COLOR_WHITE + 8, -1);
         }
-
-        if (can_change_color()) {
-            /* Preserve initial terminal colors */
-            color_content(COLOR_YELLOW, &orig_yellow.r, &orig_yellow.g,
-                          &orig_yellow.b);
-            color_content(COLOR_WHITE, &orig_white.r, &orig_white.g,
-                          &orig_white.b);
-
-            /* Set colors to appear as NetHack expects */
-            init_color(COLOR_YELLOW, 500, 300, 0);
-            init_color(COLOR_WHITE, 600, 600, 600);
-            if (COLORS >= 16) {
-                /* Preserve initial terminal colors */
-                color_content(COLOR_RED + 8, &orig_hired.r,
-                              &orig_hired.g, &orig_hired.b);
-                color_content(COLOR_GREEN + 8, &orig_higreen.r,
-                              &orig_higreen.g, &orig_higreen.b);
-                color_content(COLOR_YELLOW + 8, &orig_hiyellow.r,
-                              &orig_hiyellow.g, &orig_hiyellow.b);
-                color_content(COLOR_BLUE + 8, &orig_hiblue.r,
-                              &orig_hiblue.g, &orig_hiblue.b);
-                color_content(COLOR_MAGENTA + 8, &orig_himagenta.r,
-                              &orig_himagenta.g, &orig_himagenta.b);
-                color_content(COLOR_CYAN + 8, &orig_hicyan.r,
-                              &orig_hicyan.g, &orig_hicyan.b);
-                color_content(COLOR_WHITE + 8, &orig_hiwhite.r,
-                              &orig_hiwhite.g, &orig_hiwhite.b);
-
-                /* Set colors to appear as NetHack expects */
-                init_color(COLOR_RED + 8, 1000, 500, 0);
-                init_color(COLOR_GREEN + 8, 0, 1000, 0);
-                init_color(COLOR_YELLOW + 8, 1000, 1000, 0);
-                init_color(COLOR_BLUE + 8, 0, 0, 1000);
-                init_color(COLOR_MAGENTA + 8, 1000, 0, 1000);
-                init_color(COLOR_CYAN + 8, 0, 1000, 1000);
-                init_color(COLOR_WHITE + 8, 1000, 1000, 1000);
-# ifdef USE_DARKGRAY
-                if (COLORS > 16) {
-                    color_content(CURSES_DARK_GRAY, &orig_darkgray.r,
-                                  &orig_darkgray.g, &orig_darkgray.b);
-                    init_color(CURSES_DARK_GRAY, 300, 300, 300);
-                    /* just override black colorpair entry here */
-                    init_pair(1, CURSES_DARK_GRAY, -1);
-                }
-# endif
-            } else {
-                /* Set flag to use bold for bright colors */
-            }
-        }
     }
 #endif
 }
@@ -411,7 +368,7 @@ curses_init_nhcolors()
 /* Allow player to pick character's role, race, gender, and alignment.
    Borrowed from the Gnome window port. */
 void
-curses_choose_character()
+curses_choose_character(void)
 {
     int n, i, sel, count_off, pick4u;
     int count = 0;
@@ -451,7 +408,7 @@ curses_choose_character()
     }
 
     prompt[count_off] = '\0';
-    sprintf(choice, "%s%c", tmpchoice, '\033');
+    Snprintf(choice, sizeof(choice), "%s%c", tmpchoice, '\033');
     if (strchr(tmpchoice, 't')) {       /* Tutorial mode */
         mvaddstr(0, 1, "New? Press t to enter a tutorial.");
     }
@@ -742,20 +699,20 @@ curses_character_dialog(const char **choices, const char *prompt)
         }
 
         identifier.a_int = (count + 1); /* Must be non-zero */
-        curses_add_menu(wid, NO_GLYPH, &identifier, curletter, 0,
+        curses_add_menu(wid, &nul_glyphinfo, &identifier, curletter, 0,
                         A_NORMAL, choices[count], MENU_ITEMFLAGS_NONE);
         used_letters[count] = curletter;
     }
 
     /* Random Selection */
     identifier.a_int = ROLE_RANDOM;
-    curses_add_menu(wid, NO_GLYPH, &identifier, '*', 0, A_NORMAL, "Random",
-                    MENU_ITEMFLAGS_NONE);
+    curses_add_menu(wid, &nul_glyphinfo, &identifier, '*', 0,
+                    A_NORMAL, "Random", MENU_ITEMFLAGS_NONE);
 
     /* Quit prompt */
     identifier.a_int = ROLE_NONE;
-    curses_add_menu(wid, NO_GLYPH, &identifier, 'q', 0, A_NORMAL, "Quit",
-                    MENU_ITEMFLAGS_NONE);
+    curses_add_menu(wid, &nul_glyphinfo, &identifier, 'q', 0,
+                    A_NORMAL, "Quit", MENU_ITEMFLAGS_NONE);
     curses_end_menu(wid, prompt);
     ret = curses_select_menu(wid, PICK_ONE, &selected);
     if (ret == 1) {
@@ -775,7 +732,7 @@ curses_character_dialog(const char **choices, const char *prompt)
 
 /* Initialize and display options appropriately */
 void
-curses_init_options()
+curses_init_options(void)
 {
     /* change these from set_gameview to set_in_game */
     set_wc_option_mod_status(WC_ALIGN_MESSAGE | WC_ALIGN_STATUS, set_in_game);
@@ -846,7 +803,7 @@ curses_init_options()
 
 /* Display an ASCII splash screen if the splash_screen option is set */
 void
-curses_display_splash_window()
+curses_display_splash_window(void)
 {
      int i, x_start, y_start;
 
@@ -880,34 +837,6 @@ curses_display_splash_window()
 
 /* Restore colors and cursor state before exiting */
 void
-curses_cleanup()
+curses_cleanup(void)
 {
-#ifdef TEXTCOLOR
-    if (has_colors() && can_change_color()) {
-        init_color(COLOR_YELLOW, orig_yellow.r, orig_yellow.g, orig_yellow.b);
-        init_color(COLOR_WHITE, orig_white.r, orig_white.g, orig_white.b);
-
-        if (COLORS >= 16) {
-            init_color(COLOR_RED + 8, orig_hired.r, orig_hired.g, orig_hired.b);
-            init_color(COLOR_GREEN + 8, orig_higreen.r, orig_higreen.g,
-                       orig_higreen.b);
-            init_color(COLOR_YELLOW + 8, orig_hiyellow.r,
-                       orig_hiyellow.g, orig_hiyellow.b);
-            init_color(COLOR_BLUE + 8, orig_hiblue.r, orig_hiblue.g,
-                       orig_hiblue.b);
-            init_color(COLOR_MAGENTA + 8, orig_himagenta.r,
-                       orig_himagenta.g, orig_himagenta.b);
-            init_color(COLOR_CYAN + 8, orig_hicyan.r, orig_hicyan.g,
-                       orig_hicyan.b);
-            init_color(COLOR_WHITE + 8, orig_hiwhite.r, orig_hiwhite.g,
-                       orig_hiwhite.b);
-# ifdef USE_DARKGRAY
-            if (COLORS > 16) {
-                init_color(CURSES_DARK_GRAY, orig_darkgray.r,
-                           orig_darkgray.g, orig_darkgray.b);
-            }
-# endif
-        }
-    }
-#endif
 }

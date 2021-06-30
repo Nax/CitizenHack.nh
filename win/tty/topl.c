@@ -10,18 +10,14 @@
 #include "tcap.h"
 #include "wintty.h"
 
-#ifndef C /* this matches src/cmd.c */
-#define C(c) (0x1f & (c))
-#endif
-
-static void FDECL(redotoplin, (const char *));
-static void FDECL(topl_putsym, (CHAR_P));
-static void FDECL(removetopl, (int));
-static void FDECL(msghistory_snapshot, (BOOLEAN_P));
-static void FDECL(free_msghistory_snapshot, (BOOLEAN_P));
+static void redotoplin(const char *);
+static void topl_putsym(char);
+static void removetopl(int);
+static void msghistory_snapshot(boolean);
+static void free_msghistory_snapshot(boolean);
 
 int
-tty_doprev_message()
+tty_doprev_message(void)
 {
     register struct WinDesc *cw = wins[WIN_MESSAGE];
     winid prevmsg_win;
@@ -123,8 +119,7 @@ tty_doprev_message()
 }
 
 static void
-redotoplin(str)
-const char *str;
+redotoplin(const char *str)
 {
     int otoplin = ttyDisplay->toplin;
 
@@ -138,20 +133,19 @@ const char *str;
     end_glyphout(); /* in case message printed during graphics output */
     putsyms(str);
     cl_end();
-    ttyDisplay->toplin = 1;
-    if (ttyDisplay->cury && otoplin != 3)
+    ttyDisplay->toplin = TOPLINE_NEED_MORE;
+    if (ttyDisplay->cury && otoplin != TOPLINE_SPECIAL_PROMPT)
         more();
 }
 
 /* for use by tty_putstr() */
 void
-show_topl(str)
-const char *str;
+show_topl(const char *str)
 {
     struct WinDesc *cw = wins[WIN_MESSAGE];
 
     if (!(cw->flags & WIN_STOP)) {
-        if (ttyDisplay->cury && ttyDisplay->toplin == 2)
+        if (ttyDisplay->cury && ttyDisplay->toplin == TOPLINE_NON_EMPTY)
             tty_clear_nhwindow(WIN_MESSAGE);
 
         cw->curx = cw->cury = 0;
@@ -159,14 +153,14 @@ const char *str;
         cl_end();
         addtopl(str);
 
-        if (ttyDisplay->cury && ttyDisplay->toplin != 3)
-            ttyDisplay->toplin = 2;
+        if (ttyDisplay->cury && ttyDisplay->toplin != TOPLINE_SPECIAL_PROMPT)
+            ttyDisplay->toplin = TOPLINE_NON_EMPTY;
     }
 }
 
 /* used by update_topl(); also by tty_putstr() */
 void
-remember_topl()
+remember_topl(void)
 {
     register struct WinDesc *cw = wins[WIN_MESSAGE];
     int idx = cw->maxrow;
@@ -188,27 +182,29 @@ remember_topl()
 }
 
 void
-addtopl(s)
-const char *s;
+addtopl(const char *s)
 {
     register struct WinDesc *cw = wins[WIN_MESSAGE];
 
     tty_curs(BASE_WINDOW, cw->curx + 1, cw->cury);
     putsyms(s);
     cl_end();
-    ttyDisplay->toplin = 1;
+    ttyDisplay->toplin = TOPLINE_NEED_MORE;
 }
 
 void
-more()
+more(void)
 {
     struct WinDesc *cw = wins[WIN_MESSAGE];
 
-    /* avoid recursion -- only happens from interrupts */
-    if (ttyDisplay->inmore++)
-        return;
     if (iflags.debug_fuzzer)
         return;
+
+    /* avoid recursion -- only happens from interrupts */
+    if (ttyDisplay->inmore)
+        return;
+
+    ttyDisplay->inmore++;
 
     if (ttyDisplay->toplin) {
         tty_curs(BASE_WINDOW, cw->curx + 1, cw->cury);
@@ -236,13 +232,12 @@ more()
         home();
         cl_end();
     }
-    ttyDisplay->toplin = 0;
+    ttyDisplay->toplin = TOPLINE_EMPTY;
     ttyDisplay->inmore = 0;
 }
 
 void
-update_topl(bp)
-register const char *bp;
+update_topl(register const char *bp)
 {
     register char *tl, *otl;
     register int n0;
@@ -252,7 +247,7 @@ register const char *bp;
     /* If there is room on the line, print message on same line */
     /* But messages like "You die..." deserve their own line */
     n0 = strlen(bp);
-    if ((ttyDisplay->toplin == 1 || (cw->flags & WIN_STOP))
+    if ((ttyDisplay->toplin == TOPLINE_NEED_MORE || (cw->flags & WIN_STOP))
         && cw->cury == 0
         && n0 + (int) strlen(g.toplines) + 3 < CO - 8 /* room for --More-- */
         && (notdied = strncmp(bp, "You die", 7)) != 0) {
@@ -263,9 +258,9 @@ register const char *bp;
             addtopl(bp);
         return;
     } else if (!(cw->flags & WIN_STOP)) {
-        if (ttyDisplay->toplin == 1) {
+        if (ttyDisplay->toplin == TOPLINE_NEED_MORE) {
             more();
-        } else if (cw->cury) { /* for when flags.toplin == 2 && cury > 1 */
+        } else if (cw->cury) { /* for toplin == TOPLINE_NON_EMPTY && cury > 1 */
             docorner(1, cw->cury + 1); /* reset cury = 0 if redraw screen */
             cw->curx = cw->cury = 0;   /* from home--cls() & docorner(1,n) */
         }
@@ -294,10 +289,8 @@ register const char *bp;
         redotoplin(g.toplines);
 }
 
-static
-void
-topl_putsym(c)
-char c;
+static void
+topl_putsym(char c)
 {
     register struct WinDesc *cw = wins[WIN_MESSAGE];
 
@@ -309,6 +302,7 @@ char c;
         if (ttyDisplay->curx == 0 && ttyDisplay->cury > 0)
             tty_curs(BASE_WINDOW, CO, (int) ttyDisplay->cury - 1);
         backsp();
+        nhassert(ttyDisplay->curx > 0);
         ttyDisplay->curx--;
         cw->curx = ttyDisplay->curx;
         return;
@@ -338,16 +332,14 @@ char c;
 }
 
 void
-putsyms(str)
-const char *str;
+putsyms(const char *str)
 {
     while (*str)
         topl_putsym(*str++);
 }
 
 static void
-removetopl(n)
-register int n;
+removetopl(register int n)
 {
     /* assume addtopl() has been done, so ttyDisplay->toplin is already set */
     while (n-- > 0)
@@ -358,9 +350,7 @@ extern char erase_char; /* from xxxtty.c; don't need kill_char */
 
 /* returns a single keystroke; also sets 'yn_number' */
 char
-tty_yn_function(query, resp, def)
-const char *query, *resp;
-char def;
+tty_yn_function(const char *query, const char *resp, char def)
 /*
  *   Generic yes/no function. 'def' is the default (returned by space or
  *   return; 'esc' returns 'q', or 'n', or the default, depending on
@@ -381,10 +371,10 @@ char def;
     char prompt[BUFSZ];
 
     yn_number = 0L;
-    if (ttyDisplay->toplin == 1 && !(cw->flags & WIN_STOP))
+    if (ttyDisplay->toplin == TOPLINE_NEED_MORE && !(cw->flags & WIN_STOP))
         more();
     cw->flags &= ~WIN_STOP;
-    ttyDisplay->toplin = 3; /* special prompt state */
+    ttyDisplay->toplin = TOPLINE_SPECIAL_PROMPT;
     ttyDisplay->inread++;
     if (resp) {
         char *rb, respbuf[QBUFSZ];
@@ -531,7 +521,7 @@ char def;
     dumplogmsg(g.toplines);
 #endif
     ttyDisplay->inread--;
-    ttyDisplay->toplin = 2;
+    ttyDisplay->toplin = TOPLINE_NON_EMPTY;
     if (ttyDisplay->intr)
         ttyDisplay->intr--;
     if (wins[WIN_MESSAGE]->cury)
@@ -546,8 +536,8 @@ static char **snapshot_mesgs = 0;
 /* collect currently available message history data into a sequential array;
    optionally, purge that data from the active circular buffer set as we go */
 static void
-msghistory_snapshot(purge)
-boolean purge; /* clear message history buffer as we copy it */
+msghistory_snapshot(boolean purge) /* clear message history buffer
+                                      as we copy it */
 {
     char *mesg;
     int i, inidx, outidx;
@@ -592,8 +582,8 @@ boolean purge; /* clear message history buffer as we copy it */
 
 /* release memory allocated to message history snapshot */
 static void
-free_msghistory_snapshot(purged)
-boolean purged; /* True: took history's pointers, False: just cloned them */
+free_msghistory_snapshot(boolean purged) /* True: took history's pointers,
+                                            False: just cloned them */
 {
     if (snapshot_mesgs) {
         /* snapshot pointers are no longer in use */
@@ -623,8 +613,7 @@ boolean purged; /* True: took history's pointers, False: just cloned them */
  * included among the output of the subsequent calls.
  */
 char *
-tty_getmsghistory(init)
-boolean init;
+tty_getmsghistory(boolean init)
 {
     static int nxtidx;
     char *nextmesg;
@@ -664,9 +653,7 @@ boolean init;
  * into message history for ^P recall without having displayed it.
  */
 void
-tty_putmsghistory(msg, restoring_msghist)
-const char *msg;
-boolean restoring_msghist;
+tty_putmsghistory(const char *msg, boolean restoring_msghist)
 {
     static boolean initd = FALSE;
     int idx;
@@ -686,6 +673,13 @@ boolean restoring_msghist;
     }
 
     if (msg) {
+        /* Caller is asking us to remember a top line that needed more.
+           Should we call more?  This can happen when the player has set
+           iflags.force_invmenu and they attempt to shoot with nothing in
+           the quiver. */
+        if (ttyDisplay && ttyDisplay->toplin == TOPLINE_NEED_MORE)
+            ttyDisplay->toplin = TOPLINE_NON_EMPTY;
+
         /* move most recent message to history, make this become most recent */
         remember_topl();
         Strcpy(g.toplines, msg);
@@ -693,6 +687,9 @@ boolean restoring_msghist;
         dumplogmsg(g.toplines);
 #endif
     } else if (snapshot_mesgs) {
+        nhassert(ttyDisplay == NULL ||
+                 ttyDisplay->toplin != TOPLINE_NEED_MORE);
+
         /* done putting arbitrary messages in; put the snapshot ones back */
         for (idx = 0; snapshot_mesgs[idx]; ++idx) {
             remember_topl();

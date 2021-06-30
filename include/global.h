@@ -1,4 +1,4 @@
-/* NetHack 3.7	global.h	$NHDT-Date: 1594032649 2020/07/06 10:50:49 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.104 $ */
+/* NetHack 3.7	global.h	$NHDT-Date: 1612127119 2021/01/31 21:05:19 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.120 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2006. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -49,9 +49,8 @@
 #endif /* DUMB */
 
 /*
- * type xchar: small integers in the range 0 - 127, usually coordinates
- * although they are nonnegative they must not be declared unsigned
- * since otherwise comparisons with signed quantities are done incorrectly
+ * type xchar: small integers (typedef'd as signed char,
+ * so in the range -127 - 127), usually coordinates.
  */
 typedef schar xchar;
 
@@ -163,7 +162,15 @@ extern struct cross_target_s cross_target;
 #endif
 
 #ifdef WIN32
-#include "ntconf.h"
+#include "windconf.h"
+#endif
+
+#include "warnings.h"
+
+/* amiconf.h needs to be the last nested #include of config.h because
+   'make depend' will turn it into a comment, hiding anything after it */
+#ifdef AMIGA
+/*#include "amiconf.h"*/
 #endif
 
 /* Displayable name of this port; don't redefine if defined in *conf.h */
@@ -213,11 +220,15 @@ extern struct cross_target_s cross_target;
 #endif
 #endif
 
+#if !defined(CROSSCOMPILE)
 #if defined(MICRO)
 #if !defined(AMIGA) && !defined(TOS) && !defined(OS2_HPFS)
 #define SHORT_FILENAMES /* filenames are 8.3 */
 #endif
 #endif
+#endif
+
+#include "fnamesiz.h" /* file sizes shared between nethack and recover */
 
 #ifdef VMS
 /* vms_exit() (sys/vms/vmsmisc.c) expects the non-VMS EXIT_xxx values below.
@@ -286,7 +297,7 @@ extern struct cross_target_s cross_target;
    if nethack is built with MONITOR_HEAP enabled and they aren't; this
    declaration has been moved out of the '#else' below to avoid getting
    a complaint from -Wmissing-prototypes when building with MONITOR_HEAP */
-extern char *FDECL(dupstr, (const char *));
+extern char *dupstr(const char *);
 
 /*
  * MONITOR_HEAP is conditionally used for primitive memory leak debugging.
@@ -298,9 +309,9 @@ extern char *FDECL(dupstr, (const char *));
  */
 #ifdef MONITOR_HEAP
 /* plain alloc() is not declared except in alloc.c */
-extern long *FDECL(nhalloc, (unsigned int, const char *, int));
-extern void FDECL(nhfree, (genericptr_t, const char *, int));
-extern char *FDECL(nhdupstr, (const char *, const char *, int));
+extern long *nhalloc(unsigned int, const char *, int);
+extern void nhfree(genericptr_t, const char *, int);
+extern char *nhdupstr(const char *, const char *, int);
 /* this predates C99's __func__; that is trickier to use conditionally
    because it is not implemented as a preprocessor macro; MONITOR_HEAP
    wouldn't gain much benefit from it anyway so continue to live without it;
@@ -316,7 +327,7 @@ extern char *FDECL(nhdupstr, (const char *, const char *, int));
 #define dupstr(s) nhdupstr(s, __FILE__, (int) __LINE__)
 #else /* !MONITOR_HEAP */
 /* declare alloc.c's alloc(); allocations made with it use ordinary free() */
-extern long *FDECL(alloc, (unsigned int));  /* alloc.c */
+extern long *alloc(unsigned int);  /* alloc.c */
 #endif /* ?MONITOR_HEAP */
 
 /* Used for consistency checks of various data files; declare it here so
@@ -365,6 +376,13 @@ struct savefile_info {
 #define TBUFSZ 300 /* g.toplines[] buffer max msg: 3 81char names */
 /* plus longest prefix plus a few extra words */
 
+/* COLBUFSZ is the larger of BUFSZ and COLNO */
+#if BUFSZ > COLNO
+#define COLBUFSZ BUFSZ
+#else
+#define COLBUFSZ COLNO
+#endif
+
 #define PL_NSIZ 32 /* name of player, ghost, shopkeeper */
 #define PL_CSIZ 32 /* sizeof pl_character */
 #define PL_FSIZ 32 /* fruit name */
@@ -393,11 +411,14 @@ struct savefile_info {
 #ifdef UNIX
 #if (NH_DEVEL_STATUS != NH_STATUS_RELEASED)
 /* see end.c */
+#if !defined(CROSS_TO_WASM)
 #ifndef PANICTRACE
 #define PANICTRACE
-#endif
-#endif
-#endif
+#endif  /* PANICTRACE */
+#endif  /* CROSS_TO_WASM */
+#endif  /* NH_DEVEL_STATUS != NH_STATUS_RELEASED */
+#endif  /* UNIX */
+
 /* The following are meaningless if PANICTRACE is not defined: */
 #if defined(__linux__) && defined(__GLIBC__) && (__GLIBC__ >= 2)
 #define PANICTRACE_LIBC
@@ -406,7 +427,9 @@ struct savefile_info {
 #define PANICTRACE_LIBC
 #endif
 #ifdef UNIX
+#if !defined(CROSS_TO_WASM) /* no popen in WASM */
 #define PANICTRACE_GDB
+#endif
 #endif
 
 /* Supply nethack_enter macro if not supplied by port */
@@ -416,8 +439,27 @@ struct savefile_info {
 
 /* Supply nhassert macro if not supplied by port */
 #ifndef nhassert
-#define nhassert(e) ((void)0)
+#define nhassert(expression) (void)((!!(expression)) || \
+        (nhassert_failed(#expression, __FILE__, __LINE__), 0))
 #endif
 
+/* Macros for meta and ctrl modifiers:
+ *   M and C return the meta/ctrl code for the given character;
+ *     e.g., (C('c') is ctrl-c
+ */
+#ifndef M
+#ifndef NHSTDC
+#define M(c) (0x80 | (c))
+#else
+#define M(c) ((c) - 128)
+#endif /* NHSTDC */
+#endif
+
+#ifndef C
+#define C(c) (0x1f & (c))
+#endif
+
+#define unctrl(c) ((c) <= C('z') ? (0x60 | (c)) : (c))
+#define unmeta(c) (0x7f & (c))
 
 #endif /* GLOBAL_H */

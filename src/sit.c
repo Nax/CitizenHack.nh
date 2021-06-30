@@ -9,7 +9,7 @@
 
 /* take away the hero's money */
 void
-take_gold()
+take_gold(void)
 {
     struct obj *otmp, *nobj;
     int lost_money = 0;
@@ -32,7 +32,7 @@ take_gold()
 
 /* #sit command */
 int
-dosit()
+dosit(void)
 {
     static const char sit_message[] = "sit on the %s.";
     register struct trap *trap = t_at(u.ux, u.uy);
@@ -331,7 +331,7 @@ dosit()
 
 /* curse a few inventory items at random! */
 void
-rndcurse()
+rndcurse(void)
 {
     int nobj = 0;
     int cnt, onum;
@@ -394,14 +394,16 @@ rndcurse()
         if (!Blind) {
             pline("%s %s.", Yobjnam2(otmp, "glow"),
                   hcolor(otmp->cursed ? NH_BLACK : (const char *) "brown"));
-            otmp->bknown = 1; /* ok to bypass set_bknown() here */
+            otmp->bknown = Hallucination ? 0 : 1; /* bypass set_bknown() */
+        } else {
+            otmp->bknown = 0; /* bypass set_bknown() */
         }
     }
 }
 
 /* remove a random INTRINSIC ability */
 void
-attrcurse()
+attrcurse(void)
 {
     switch (rnd(11)) {
     case 1:

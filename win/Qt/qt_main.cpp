@@ -10,6 +10,8 @@ extern "C" {
 
 #include "qt_pre.h"
 #include <QtGui/QtGui>
+#include <QtWidgets/QShortcut>
+
 #if QT_VERSION >= 0x050000
 #include <QtWidgets/QtWidgets>
 #endif
@@ -294,7 +296,7 @@ static const char * fire_xpm[] = {
 " . o        ",
 "  o         "};
 /* XPM */
-static const char * get_xpm[] = {
+static const char * pickup_xpm[] = {
 "12 13 3 1",
 " 	c None",
 ".	c #000000000000",
@@ -351,6 +353,25 @@ static const char * eat_xpm[] = {
 "   oo  oo   ",
 "   oo  oo   ",
 "   oo  oo   "};
+/* XPM */
+static const char * search_xpm[] = {
+"12 13 3 1",
+" 	c None",
+".	c #FFFFFFFF0000",
+"X	c #7F0000000000",
+"            ",
+"    XXXXX   ",
+"   X ... X  ",
+"   X.....X  ",
+"   X.....X  ",
+"   X ... X  ",
+"    XXXXX   ",
+"      X     ",
+"      X     ",
+"      X     ",
+"      X     ",
+"      X     ",
+"            "};
 /* XPM */
 static const char * rest_xpm[] = {
 "12 13 2 1",
@@ -435,10 +456,12 @@ aboutMsg()
        but we're using it mid-sentence so strip period off */
     if ((p = strrchr(getversionstring(vbuf), '.')) != 0 && *(p + 1) == '\0')
         *p = '\0';
+    /* it's also long; break it into two pieces */
+    (void) strsubst(vbuf, " - ", "\n- ");
     QString msg;
     msg.sprintf(
         // format
-        "Qt NetHack is a version of NetHack built using" // no newline
+        "NetHack-Qt is a version of NetHack built using" // no newline
 #ifdef KDE
         " KDE and"                                       // ditto
 #endif
@@ -478,10 +501,10 @@ aboutMsg()
 
 class SmallToolButton : public QToolButton {
 public:
-    SmallToolButton(const QPixmap & pm, const QString &textLabel,
-                 const QString& grouptext,
-                 QObject * receiver, const char* slot,
-                 QWidget * parent) :
+    SmallToolButton(const QPixmap &pm, const QString &textLabel,
+                    const QString &grouptext,
+                    QObject *receiver, const char *slot,
+                    QWidget *parent) :
 	QToolButton(parent)
     {
 	setIcon(QIcon(pm));
@@ -508,7 +531,7 @@ NetHackQtMainWindow::NetHackQtMainWindow(NetHackQtKeyBuffer& ks) :
     addToolBar(toolbar);
     menubar = menuBar();
 
-    setWindowTitle("Qt NetHack");
+    setWindowTitle("NetHack-Qt");
     setWindowIcon(QIcon(QPixmap(qt_compact_mode ? nh_icon_small : nh_icon)));
 
 #ifdef MACOSX
@@ -524,9 +547,16 @@ NetHackQtMainWindow::NetHackQtMainWindow(NetHackQtKeyBuffer& ks) :
      *  application menu (and renamed in the process) even if the code
      *  here tries to put them in another menu.
      *  See QtWidgets/doc/qmenubar.html for slightly more information.
-     *  setMenuRole() is supposed to be able to override this behavior.
+     *  setMenuRole() can be used to override this behavior.
      */
 #endif
+
+#ifdef CTRL_V_HACK
+    // NetHackQtBind::notify() sees all control characters except for ^V
+    QShortcut *c_V = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_V), this);
+    connect(c_V, &QShortcut::activated, this, &NetHackQtMainWindow::CtrlV);
+#endif
+
     QMenu* game=new QMenu;
     QMenu* apparel=new QMenu;
     QMenu* act1=new QMenu;
@@ -547,7 +577,7 @@ NetHackQtMainWindow::NetHackQtMainWindow(NetHackQtKeyBuffer& ks) :
 	QMenu* menu;
 	const char* name;
 	int flags;
-        int NDECL((*funct));
+        int (*funct)(void);
     } item[] = {
         { game,    0, 3},
         { game,    "Version",            3, doversion},
@@ -557,7 +587,9 @@ NetHackQtMainWindow::NetHackQtMainWindow(NetHackQtKeyBuffer& ks) :
         { game,
 #ifdef MACOSX
             /* Qt on OSX would rename "Options" to "Preferences..." and
-               move it from intended destination to the application menu */
+               move it from intended destination to the application menu;
+               the ampersand produces &O which makes Alt+O into a keyboard
+               shortcut--except those are disabled by default by Qt on OSX */
                    "Run-time &" // rely on adjacent string concatenation
 #endif
                    "Options",            3, doset},
@@ -566,9 +598,10 @@ NetHackQtMainWindow::NetHackQtMainWindow(NetHackQtKeyBuffer& ks) :
         { game,    "Save-and-exit",      3, dosave},
         { game,
 #ifdef MACOSX
-            /* need something to prevent matching leading "quit"
-               so that it isn't hijacked for the application menu */
-                   "_&"
+            /* need something to prevent matching leading "quit" so that it
+               isn't hijacked for the application menu; the ampersand is to
+               make &Q be a keyboard shortcut (but see Options above) */
+                   "\177&"
 #endif
                    "Quit-without-saving", 3, done2},
 
@@ -599,12 +632,13 @@ NetHackQtMainWindow::NetHackQtMainWindow(NetHackQtKeyBuffer& ks) :
         /* { act1,      "Fight\tShift+F",             "F", 3}, */
         { act1, "Fire from quiver",  2, dofire},
         { act1, "Force",             3, doforce},
-        { act1, "Get",               2, dopickup},
         { act1, "Jump",              3, dojump},
         { act2, "Kick",              2, dokick},
         { act2, "Loot",              3, doloot},
         { act2, "Open door",         3, doopen},
         { act2, "Pay",               3, dopay},
+        // calling this "Get" was confusing to experienced players
+        { act1, "Pick up (was Get)", 3, dopickup},
         { act2, "Rest",              2, donull},
         { act2, "Ride",              3, doride},
         { act2, "Search",            3, dosearch},
@@ -652,26 +686,42 @@ NetHackQtMainWindow::NetHackQtMainWindow(NetHackQtKeyBuffer& ks) :
 	{ 0, 0, 0 }
     };
 
-    int i;
-
-    game->addAction(
+    QAction *actn;
 #ifndef MACOSX
-                    "Qt settings...",
+    (void) game->addAction("Qt settings...", this, SLOT(doQtSettings(bool)));
 #else
-                    /* on OSX, put this in the application menu by using
-                       a name that Qt will move to that menu */
-                    "Preferences...",
+    /* on OSX, put this in the application menu instead of the game menu;
+       Qt would change the action name behind our backs; do it explicitly */
+    actn = game->addAction("Preferences...", this, SLOT(doQtSettings(bool)));
+    actn->setMenuRole(QWidgetAction::PreferencesRole);
+    /* we also want a "Quit NetHack" entry in the application menu;
+       when "_Quit-without-saving" was called "Quit" it got intercepted
+       for that, but now this needs to be added separately; we'll use a
+       handy menu and let the interception put it in the intended place;
+       unlike About, it is not a duplicate; _Quit-without-saving runs
+       nethack's #quit command with "really quit?" prompt, this quit--with
+       Command+q as shortcut--pops up a dialog to choose between quit or
+       cancel-and-resume-playing */
+    actn = game->addAction("Quit NetHack-Qt", this, SLOT(doQuit(bool)));
+    actn->setMenuRole(QWidgetAction::QuitRole);
 #endif
-                    this, SLOT(doQtSettings(bool)));
-    /* on OSX, 'about' will end up in the application menu rather than
-       the help menu (this had trailing "..." but that conflicts with
-       the convention that an elipsis indicates the choice will bring
-       up its own sub-menu) */
-    help->addAction("About Qt NetHack", this, SLOT(doAbout(bool)));
-    //help->addAction("NetHack Guidebook", this, SLOT(doGuidebook(bool)));
+
+    actn = help->addAction("About NetHack-Qt", this, SLOT(doAbout(bool)));
+#ifdef MACOSX
+    actn->setMenuRole(QWidgetAction::AboutRole);
+    /* for OSX, the preceding "About" went into the application menu;
+       now add another duplicate one to the Help dropdown menu */
+    actn = help->addAction("About NetHack-Qt", this, SLOT(doAbout(bool)));
+    actn->setMenuRole(QWidgetAction::NoRole);
+#else
+    nhUse(actn);
+#endif
     help->addSeparator();
 
-    for (i=0; item[i].menu; i++) {
+    //help->addAction("NetHack Guidebook", this, SLOT(doGuidebook(bool)));
+    //help->addSeparator();
+
+    for (int i = 0; item[i].menu; ++i) {
 	if ( item[i].flags & (qt_compact_mode ? 1 : 2) ) {
 	    if (item[i].name) {
                 char actchar[32];
@@ -743,70 +793,64 @@ NetHackQtMainWindow::NetHackQtMainWindow(NetHackQtKeyBuffer& ks) :
 	info->setTitle("Info");
 	menubar->addMenu(info);
 	menubar->addSeparator();
+#ifndef MACOSX
 	help->setTitle("Help");
+#else
+        // On OSX, an entry in the menubar called "Help" will get an
+        // extra action, "Search [______]", inserted as the first entry.
+        // We have no control over what it does and don't want it.
+        //
+        // Using actions() to fetch a list of all entries doesn't find it,
+        // so we don't have its widget pointer to pass to removeAction().
+        //
+        // Altering the name with an invisible character to inhibit
+        // string matching is ludicrous but keeps the unwanted action
+        // from getting inserted into the "Help" menu behind our back.
+        // Underscore works too and is more robust but unless we prepend
+        // it to every entry, "_Help" would stand out as strange.
+	help->setTitle("\177Help");
+        // (Renaming back to "Help" after the fact does reset the menu's
+        // name but it also results in the Search action being added.
+        // Perhaps a custom context menu that changes its name to "Help"
+        // as it is being shown--and possibly changes back afterward--
+        // would work but the name mangling hack is much simpler.)
+#endif
 	menubar->addMenu(help);
     }
-#ifdef MACOSX
-    /* for OSX, the attempt above to add "About Qt NetHack" went into
-       the application menu instead of the help menu; we'll add it to
-       the latter now and have two ways to access it; without the
-       leading underscore (or some other spelling variation such as
-       "'bout"), this one would get intercepted too and then evidently
-       be discarded as a duplicate */
-    help->addSeparator();
-    help->addAction("_About_Qt_NetHack_", this, SLOT(doAbout(bool)));
-    /* we also want a "Quit NetHack" entry in the application menu;
-       when "_Quit-without-saving" was called "Quit" it got intercepted
-       for that, but now it needs to be added separately; we'll use a
-       handy menu and let the interception put it in the intended place */
-    game->addAction("Quit NetHack", this, SLOT(doQuit(bool)));
-#endif
 
+    // order changed: was Again, Get, Kick, Throw, Fire, Drop, Eat, Rest
+    //                now Again, PickUp, Drop, Kick, Throw, Fire, Eat, Rest
     QSignalMapper* sm = new QSignalMapper(this);
-    connect(sm, SIGNAL(mapped(const QString&)), this, SLOT(doKeys(const QString&)));
-    QToolButton* tb;
-    char actchar[32];
-    tb = new SmallToolButton( QPixmap(again_xpm),"Again","Action", sm, SLOT(map()), toolbar );
-    Sprintf(actchar, "%c", g.Cmd.spkeys[NHKF_DOAGAIN]);
-    sm->setMapping(tb, actchar );
-    toolbar->addWidget(tb);
-    tb = new SmallToolButton( QPixmap(get_xpm),"Get","Action", sm, SLOT(map()), toolbar );
-    Sprintf(actchar, "%c", cmd_from_func(dopickup));
-    sm->setMapping(tb, actchar );
-    toolbar->addWidget(tb);
-    tb = new SmallToolButton( QPixmap(kick_xpm),"Kick","Action", sm, SLOT(map()), toolbar );
-    Sprintf(actchar, "%c", cmd_from_func(dokick));
-    sm->setMapping(tb, actchar );
-    toolbar->addWidget(tb);
-    tb = new SmallToolButton( QPixmap(throw_xpm),"Throw","Action", sm, SLOT(map()), toolbar );
-    Sprintf(actchar, "%c", cmd_from_func(dothrow));
-    sm->setMapping(tb, actchar );
-    toolbar->addWidget(tb);
-    tb = new SmallToolButton( QPixmap(fire_xpm),"Fire","Action", sm, SLOT(map()), toolbar );
-    Sprintf(actchar, "%c", cmd_from_func(dofire));
-    sm->setMapping(tb, actchar );
-    toolbar->addWidget(tb);
-    tb = new SmallToolButton( QPixmap(drop_xpm),"Drop","Action", sm, SLOT(map()), toolbar );
-    Sprintf(actchar, "%c", cmd_from_func(doddrop));
-    sm->setMapping(tb, actchar );
-    toolbar->addWidget(tb);
-    tb = new SmallToolButton( QPixmap(eat_xpm),"Eat","Action", sm, SLOT(map()), toolbar );
-    Sprintf(actchar, "%c", cmd_from_func(doeat));
-    sm->setMapping(tb, actchar );
-    toolbar->addWidget(tb);
-    tb = new SmallToolButton( QPixmap(rest_xpm),"Rest","Action", sm, SLOT(map()), toolbar );
-    Sprintf(actchar, "%c", cmd_from_func(donull));
-    sm->setMapping(tb, actchar );
-    toolbar->addWidget(tb);
+    connect(sm, SIGNAL(mapped(const QString&)),
+            this, SLOT(doKeys(const QString&)));
+    // 'donull' is a placeholder here; AddToolButton() will fix it up;
+    // button will be omitted if DOAGAIN is bound to '\0'
+    AddToolButton(toolbar, sm, "Again", donull, QPixmap(again_xpm));
+    // this used to be called "Get" which is confusing to experienced players
+    AddToolButton(toolbar, sm, "Pick up", dopickup, QPixmap(pickup_xpm));
+    AddToolButton(toolbar, sm, "Drop", doddrop, QPixmap(drop_xpm));
+    AddToolButton(toolbar, sm, "Kick", dokick, QPixmap(kick_xpm));
+    AddToolButton(toolbar, sm, "Throw", dothrow, QPixmap(throw_xpm));
+    AddToolButton(toolbar, sm, "Fire", dofire, QPixmap(fire_xpm));
+    AddToolButton(toolbar, sm, "Eat", doeat, QPixmap(eat_xpm));
+    AddToolButton(toolbar, sm, "Search", dosearch, QPixmap(search_xpm));
+    AddToolButton(toolbar, sm, "Rest", donull, QPixmap(rest_xpm));
 
-    connect(game,SIGNAL(triggered(QAction *)),this,SLOT(doMenuItem(QAction *)));
-    connect(apparel,SIGNAL(triggered(QAction *)),this,SLOT(doMenuItem(QAction *)));
-    connect(act1,SIGNAL(triggered(QAction *)),this,SLOT(doMenuItem(QAction *)));
+    connect(game, SIGNAL(triggered(QAction *)),
+            this, SLOT(doMenuItem(QAction *)));
+    connect(apparel, SIGNAL(triggered(QAction *)),
+            this, SLOT(doMenuItem(QAction *)));
+    connect(act1, SIGNAL(triggered(QAction *)),
+            this, SLOT(doMenuItem(QAction *)));
     if (act2 != act1)
-	connect(act2,SIGNAL(triggered(QAction *)),this,SLOT(doMenuItem(QAction *)));
-    connect(magic,SIGNAL(triggered(QAction *)),this,SLOT(doMenuItem(QAction *)));
-    connect(info,SIGNAL(triggered(QAction *)),this,SLOT(doMenuItem(QAction *)));
-    connect(help,SIGNAL(triggered(QAction *)),this,SLOT(doMenuItem(QAction *)));
+	connect(act2, SIGNAL(triggered(QAction *)),
+                this, SLOT(doMenuItem(QAction *)));
+    connect(magic, SIGNAL(triggered(QAction *)),
+            this, SLOT(doMenuItem(QAction *)));
+    connect(info, SIGNAL(triggered(QAction *)),
+            this, SLOT(doMenuItem(QAction *)));
+    connect(help, SIGNAL(triggered(QAction *)),
+            this, SLOT(doMenuItem(QAction *)));
 
 #ifdef KDE
     setMenu (menubar);
@@ -851,6 +895,41 @@ NetHackQtMainWindow::NetHackQtMainWindow(NetHackQtKeyBuffer& ks) :
 	invusage = new NetHackQtInvUsageWindow(hsplitter);
 	vsplitter->insertWidget(0, hsplitter);
 	hsplitter->insertWidget(1, invusage);
+    }
+}
+
+#ifdef CTRL_V_HACK
+// called when ^V is typed while the main window has keyboard focus;
+// all other control characters go through NetHackQtBind::notify()
+void NetHackQtMainWindow::CtrlV()
+{
+    static const char cV[] = { C('V'), '\0' };
+    doKeys(cV);
+}
+#endif
+
+// add a toolbar button to invoke command 'name' via function '(*func)()'
+void NetHackQtMainWindow::AddToolButton(QToolBar *toolbar, QSignalMapper *sm,
+                                        const char *name, int (*func)(void),
+                                        QPixmap xpm)
+{
+    char actchar[2];
+    uchar key;
+
+    // the ^A command is just a keystroke, not a full blown command function
+    if (!strcmp(name, "Again")) {
+        key = ::g.Cmd.spkeys[NHKF_DOAGAIN];
+    } else
+        key = (uchar) cmd_from_func(func);
+
+    // if key is valid, add a button for it; otherwise omit the command
+    // (won't work as intended if a different command is bound to same key)
+    if (key) {
+        QToolButton *tb = new SmallToolButton(xpm, QString(name), "Action",
+                                              sm, SLOT(map()), toolbar);
+        actchar[0] = '\0';
+        sm->setMapping(tb, strkitten(actchar, (char) key));
+        toolbar->addWidget(tb);
     }
 }
 
@@ -929,7 +1008,7 @@ void NetHackQtMainWindow::doQtSettings(bool)
 
 void NetHackQtMainWindow::doAbout(bool)
 {
-    QMessageBox::about(this, "About Qt NetHack", aboutMsg());
+    QMessageBox::about(this, "About NetHack-Qt", aboutMsg());
 }
 
 // on OSX, "quit nethack" has been selected in the application menu or
@@ -939,29 +1018,34 @@ void NetHackQtMainWindow::doQuit(bool)
 {
     // there is a separate Quit-without-saving menu entry in the game menu
     // that leads to nethack's "Really quit?" prompt; OSX players can use
-    // either one, other implementations only have that other one but this
-    // routine is unconditional in case someone wants to change that
+    // either one, other implementations only have that other one (plus
+    // nethack's #quit command itself) but this routine is unconditional
+    // in case someone wants to change that
 #ifdef MACOSX
     QString info;
     info.sprintf("This will end your NetHack session.%s",
                  !g.program_state.something_worth_saving ? ""
                  : "\n(Cancel quitting and use the Save command"
                    "\nto save your current game.)");
-    /* this is similar to closeEvent but the details are different */
+    /* this is similar to closeEvent but the details are different;
+       first choice (Cancel) is the default action for most arbitrary keys;
+       the second choice (Quit) is the action for <return> or <space>;
+       <escape> leaves the popup waiting for some other response;
+       the &<char> settings for Alt+<char> shortcuts don't work on OSX */
     int act = QMessageBox::information(this, "NetHack", info,
-                                       "&Quit without saving",
                                        "&Cancel and return to game",
+                                       "&Quit without saving",
                                        0, 1);
     switch (act) {
     case 0:
-        // quit -- bypass the prompting preformed by done2()
-        g.program_state.stopprint++;
-        done(QUIT);
-        /*NOTREACHED*/
-        break;
-    case 1:
         // cancel
         break; // return to game
+    case 1:
+        // quit -- bypass the prompting preformed by done2()
+        g.program_state.stopprint++;
+        ::done(QUIT);
+        /*NOTREACHED*/
+        break;
     }
 #endif
     return;
@@ -982,12 +1066,26 @@ void NetHackQtMainWindow::doGuidebook(bool)
 }
 #endif
 
+void NetHackQtMainWindow::doKeys(const char *cmds)
+{
+    keysink.Put(cmds);
+    qApp->exit();
+}
+
 void NetHackQtMainWindow::doKeys(const QString& k)
 {
     /* [this should probably be using toLocal8Bit();
        toAscii() is not offered as an alternative...] */
-    keysink.Put(k.toLatin1().constData());
-    qApp->exit();
+    doKeys(k.toLatin1().constData());
+}
+
+// queue up the command name for a function, as if user had typed it
+void NetHackQtMainWindow::FuncAsCommand(int (*func)(void))
+{
+    char cmdbuf[32];
+    Strcpy(cmdbuf, "#");
+    (void) cmdname_from_func(func, &cmdbuf[1], FALSE);
+    doKeys(cmdbuf);
 }
 
 void NetHackQtMainWindow::AddMessageWindow(NetHackQtMessageWindow* window)
@@ -1101,8 +1199,35 @@ void NetHackQtMainWindow::layout()
         // call resizePaperDoll() indirectly...
         qt_settings->resizeDoll();
 #endif
+        // reset widths
+        int w = width(); /* of main window */
+        int d = invusage->width();
+        splittersizes[2] = w / 2 - (d * 1 / 4); // status
+        splittersizes[1] = d;                   // invusage
+        splittersizes[0] = w / 2 - (d * 3 / 4); // messages
+        hsplitter->setSizes(splittersizes);
     }
 }
+
+#ifdef DYNAMIC_STATUSLINES
+// called when 'statuslines' changes from 2 to 3 or vice versa; simpler to
+// destroy and recreate the status window than to adjust existing fields
+NetHackQtWindow *NetHackQtMainWindow::redoStatus()
+{
+    NetHackQtStatusWindow *oldstatus = this->status;
+    if (!oldstatus)
+        return NULL; // not ready yet?
+    this->status = new NetHackQtStatusWindow;
+
+    if (!qt_compact_mode)
+        hsplitter->replaceWidget(2, this->status->Widget());
+
+    delete oldstatus;
+    ShowIfReady();
+
+    return (NetHackQtWindow *) this->status;
+}
+#endif
 
 void NetHackQtMainWindow::resizePaperDoll(bool showdoll)
 {
@@ -1125,8 +1250,10 @@ void NetHackQtMainWindow::resizePaperDoll(bool showdoll)
         hsplitter->setSizes(hsplittersizes);
     }
 
-    // Height limit is 48 pixels per doll cell;
-    // values greater than 44 need taller window which pushes the map down.
+    // Height limit is 48+2 pixels per doll cell plus 1 pixel margin at top;
+    // values greater than 44+2 need taller window which pushes the map down
+    // (when font size 'Large' is used for messages and status; threshold
+    // may vary by 1 or 2 for other sizes).
     // FIXME: this doesn't shrink the window back if size is reduced from 45+
     int oldheight = vsplittersizes[0],
         newheight = w->height();
@@ -1225,10 +1352,10 @@ void NetHackQtMainWindow::keyPressEvent(QKeyEvent* event)
 	if (message) message->Scroll(0,+1);
         break;
     case Qt::Key_Space:
-	if ( flags.rest_on_space ) {
-	    event->ignore();
-	    return;
-	}
+        //if (flags.rest_on_space) {
+        event->ignore(); // punt to NetHackQtBind::notify()
+        return;
+        //}
     case Qt::Key_Enter:
 	if ( map )
 	    map->clickCursor();
@@ -1253,14 +1380,14 @@ void NetHackQtMainWindow::closeEvent(QCloseEvent *e UNUSED)
                               "&Save and exit", "&Quit without saving", 0, 1);
 	switch (act) {
         case 0:
-            // See dosave() function
+            // save portion of save-and-exit
             ok = dosave0();
             break;
         case 1:
             // quit -- bypass the prompting preformed by done2()
             ok = 1;
             g.program_state.stopprint++;
-            done(QUIT);
+            ::done(QUIT);
             /*NOTREACHED*/
             break;
 	}
@@ -1269,6 +1396,7 @@ void NetHackQtMainWindow::closeEvent(QCloseEvent *e UNUSED)
         ok = 1;
     }
     /* if !ok, we should try to continue, but we don't... */
+    nhUse(ok);
     u.uhp = -1;
     NetHackQtBind::qt_exit_nhwindows(0);
     nh_terminate(EXIT_SUCCESS);

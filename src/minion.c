@@ -1,13 +1,20 @@
-/* NetHack 3.7	minion.c	$NHDT-Date: 1596498180 2020/08/03 23:43:00 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.55 $ */
+/* NetHack 3.7	minion.c	$NHDT-Date: 1624322864 2021/06/22 00:47:44 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.60 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2008. */
 /* NetHack may be freely redistributed.  See license for details. */
 
 #include "hack.h"
 
+/* used to pick among the four basic elementals without worrying whether
+   they've been reordered (difficulty reassessment?) or any new ones have
+   been introduced (hybrid types added to 'E'-class?) */
+static const int elementals[4] = {
+    PM_AIR_ELEMENTAL, PM_FIRE_ELEMENTAL,
+    PM_EARTH_ELEMENTAL, PM_WATER_ELEMENTAL
+};
+
 void
-newemin(mtmp)
-struct monst *mtmp;
+newemin(struct monst *mtmp)
 {
     if (!mtmp->mextra)
         mtmp->mextra = newmextra();
@@ -18,8 +25,7 @@ struct monst *mtmp;
 }
 
 void
-free_emin(mtmp)
-struct monst *mtmp;
+free_emin(struct monst *mtmp)
 {
     if (mtmp->mextra && EMIN(mtmp)) {
         free((genericptr_t) EMIN(mtmp));
@@ -30,8 +36,7 @@ struct monst *mtmp;
 
 /* count the number of monsters on the level */
 int
-monster_census(spotted)
-boolean spotted; /* seen|sensed vs all */
+monster_census(boolean spotted) /* seen|sensed vs all */
 {
     struct monst *mtmp;
     int count = 0;
@@ -50,11 +55,11 @@ boolean spotted; /* seen|sensed vs all */
 
 /* mon summons a monster */
 int
-msummon(mon)
-struct monst *mon;
+msummon(struct monst *mon)
 {
     struct permonst *ptr;
     int dtype = NON_PM, cnt = 0, result = 0, census;
+    boolean xlight;
     aligntyp atyp;
     struct monst *mtmp;
 
@@ -68,10 +73,9 @@ struct monst *mon;
         }
 
         atyp = mon->ispriest ? EPRI(mon)->shralign
-                             : mon->isminion ? EMIN(mon)->min_align
-                                             : (ptr->maligntyp == A_NONE)
-                                                   ? A_NONE
-                                                   : sgn(ptr->maligntyp);
+               : mon->isminion ? EMIN(mon)->min_align
+                 : (ptr->maligntyp == A_NONE) ? A_NONE
+                   : sgn(ptr->maligntyp);
     } else {
         ptr = &mons[PM_WIZARD_OF_YENDOR];
         atyp = (ptr->maligntyp == A_NONE) ? A_NONE : sgn(ptr->maligntyp);
@@ -102,7 +106,7 @@ struct monst *mon;
         if (!rn2(6)) {
             switch (atyp) { /* see summon_minion */
             case A_NEUTRAL:
-                dtype = PM_AIR_ELEMENTAL + rn2(4);
+                dtype = elementals[rn2(SIZE(elementals))];
                 break;
             case A_CHAOTIC:
             case A_NONE:
@@ -120,13 +124,13 @@ struct monst *mon;
         return 0;
 
     /* sanity checks */
-    if (cnt > 1 && (mons[dtype].geno & G_UNIQ))
+    if (cnt > 1 && (mons[dtype].geno & G_UNIQ) != 0)
         cnt = 1;
     /*
      * If this daemon is unique and being re-summoned (the only way we
      * could get this far with an extinct dtype), try another.
      */
-    if (g.mvitals[dtype].mvflags & G_GONE) {
+    if ((g.mvitals[dtype].mvflags & G_GONE) != 0) {
         dtype = ndemon(atyp);
         if (dtype == NON_PM)
             return 0;
@@ -135,6 +139,7 @@ struct monst *mon;
     /* some candidates can generate a group of monsters, so simple
        count of non-null makemon() result is not sufficient */
     census = monster_census(FALSE);
+    xlight = FALSE;
 
     while (cnt > 0) {
         mtmp = makemon(&mons[dtype], u.ux, u.uy, MM_EMIN);
@@ -149,10 +154,33 @@ struct monst *mon;
                 EMIN(mtmp)->renegade =
                     (atyp != u.ualign.type) ^ !mtmp->mpeaceful;
             }
-            if (is_demon(ptr) && canseemon(mtmp))
-                pline("%s appears in a cloud of smoke!", Amonnam(mtmp));
+
+            if (mtmp->data->mlet == S_ANGEL && !Blind) {
+                /* for any 'A', 'cloud of smoke' will be 'flash of light';
+                   if more than one monster is being created, that message
+                   might be skipped for this monster but show 'mtmp' anyway */
+                show_transient_light((struct obj *) 0, mtmp->mx, mtmp->my);
+                xlight = TRUE;
+                /* we don't do this for 'burst of flame' (fire elemental)
+                   because those monsters become their own light source */
+            }
+
+            if (cnt == 1 && canseemon(mtmp)) {
+                const char *cloud = 0,
+                           *what = msummon_environ(mtmp->data, &cloud);
+
+                pline("%s appears in a %s of %s!", Amonnam(mtmp),
+                      cloud, what);
+            }
         }
         cnt--;
+    }
+
+    if (xlight) {
+        /* Note: if we forced --More-- here, the 'A's would be visible for
+           long enough to be seen, but like with clairvoyance, some players
+           would be annoyed at the disruption of having to acknowledge it */
+        transient_light_cleanup();
     }
 
     /* how many monsters exist now compared to before? */
@@ -163,9 +191,7 @@ struct monst *mon;
 }
 
 void
-summon_minion(alignment, talk)
-aligntyp alignment;
-boolean talk;
+summon_minion(aligntyp alignment, boolean talk)
 {
     register struct monst *mon;
     int mnum;
@@ -175,7 +201,7 @@ boolean talk;
         mnum = lminion();
         break;
     case A_NEUTRAL:
-        mnum = PM_AIR_ELEMENTAL + rn2(4);
+        mnum = elementals[rn2(SIZE(elementals))];
         break;
     case A_CHAOTIC:
     case A_NONE:
@@ -196,7 +222,7 @@ boolean talk;
             EMIN(mon)->renegade = FALSE;
         }
     } else if (mnum != PM_SHOPKEEPER && mnum != PM_GUARD
-               && mnum != PM_ALIGNED_PRIEST && mnum != PM_HIGH_PRIEST && mnum != PM_ARCH_SHOPKEEPER) {
+               && mnum != PM_ALIGNED_CLERIC && mnum != PM_HIGH_CLERIC && mnum != PM_ARCH_SHOPKEEPER) {
         /* This was mons[mnum].pxlth == 0 but is this restriction
            appropriate or necessary now that the structures are separate? */
         mon = makemon(&mons[mnum], u.ux, u.uy, MM_EMIN);
@@ -225,14 +251,16 @@ boolean talk;
 
 /* returns 1 if it won't attack. */
 int
-demon_talk(mtmp)
-register struct monst *mtmp;
+demon_talk(register struct monst *mtmp)
 {
     long cash, demand, offer;
 
     if (uwep && (uwep->oartifact == ART_EXCALIBUR
                  || uwep->oartifact == ART_DEMONBANE)) {
-        pline("%s looks very angry.", Amonnam(mtmp));
+        if (canspotmon(mtmp))
+            pline("%s looks very angry.", Amonnam(mtmp));
+        else
+            You_feel("tension building.");
         mtmp->mpeaceful = mtmp->mtame = 0;
         set_malign(mtmp);
         newsym(mtmp->mx, mtmp->my);
@@ -305,8 +333,7 @@ register struct monst *mtmp;
 }
 
 long
-bribe(mtmp)
-struct monst *mtmp;
+bribe(struct monst *mtmp)
 {
     char buf[BUFSZ] = DUMMY;
     long offer;
@@ -336,8 +363,7 @@ struct monst *mtmp;
 }
 
 int
-dprince(atyp)
-aligntyp atyp;
+dprince(aligntyp atyp)
 {
     int tryct, pm;
 
@@ -351,8 +377,7 @@ aligntyp atyp;
 }
 
 int
-dlord(atyp)
-aligntyp atyp;
+dlord(aligntyp atyp)
 {
     int tryct, pm;
 
@@ -367,7 +392,7 @@ aligntyp atyp;
 
 /* create lawful (good) lord */
 int
-llord()
+llord(void)
 {
     if (!(g.mvitals[PM_ARCHON].mvflags & G_GONE))
         return PM_ARCHON;
@@ -376,7 +401,7 @@ llord()
 }
 
 int
-lminion()
+lminion(void)
 {
     int tryct;
     struct permonst *ptr;
@@ -391,8 +416,7 @@ lminion()
 }
 
 int
-ndemon(atyp)
-aligntyp atyp; /* A_NONE is used for 'any alignment' */
+ndemon(aligntyp atyp) /* A_NONE is used for 'any alignment' */
 {
     struct permonst *ptr;
 
@@ -416,8 +440,7 @@ aligntyp atyp; /* A_NONE is used for 'any alignment' */
 
 /* guardian angel has been affected by conflict so is abandoning hero */
 void
-lose_guardian_angel(mon)
-struct monst *mon; /* if null, angel hasn't been created yet */
+lose_guardian_angel(struct monst *mon) /* if null, angel hasn't been created yet */
 {
     coord mm;
     int i;
@@ -445,7 +468,7 @@ struct monst *mon; /* if null, angel hasn't been created yet */
 
 /* just entered the Astral Plane; receive tame guardian angel if worthy */
 void
-gain_guardian_angel()
+gain_guardian_angel(void)
 {
     struct monst *mtmp;
     struct obj *otmp;

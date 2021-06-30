@@ -32,11 +32,11 @@ des.map([[
 |             -------------                  -----          -------        |
 ----------------------------------------------------------------------------
 ]]);
-des.region({ region={15,07, 21,10}, lit=1, type="temple", contents = function()
+des.region({ region={15,07, 21,10}, lit=1, type="temple", filled=2, contents = function()
                 des.door({ wall = "random", state = "secret" });
 end })
 des.altar({ x=18, y=08, align="noalign", type="sanctum" })
-des.region({ region={41,06, 48,11}, lit=0, type="morgue", prefilled=0, irregular=1 })
+des.region({ region={41,06, 48,11}, lit=0, type="morgue", filled=1, irregular=1 })
 -- Non diggable walls
 des.non_diggable(selection.area(00,00,75,19))
 -- Invisible barrier separating the left & right halves of the level
@@ -112,15 +112,15 @@ des.monster({ id = "erinys", x=10,y=04,peaceful=0 })
 des.monster({ id = "marilith", x=07,y=09,peaceful=0 })
 des.monster({ id = "nalfeshnee", x=27,y=08,peaceful=0 })
 -- Moloch's horde
-des.monster({ id = "aligned priest", x=20,y=03,align="noalign",peaceful=0 })
-des.monster({ id = "aligned priest", x=15,y=04,align="noalign",peaceful=0 })
-des.monster({ id = "aligned priest", x=11,y=05,align="noalign",peaceful=0 })
-des.monster({ id = "aligned priest", x=11,y=07,align="noalign",peaceful=0 })
-des.monster({ id = "aligned priest", x=11,y=09,align="noalign",peaceful=0 })
-des.monster({ id = "aligned priest", x=11,y=12,align="noalign",peaceful=0 })
-des.monster({ id = "aligned priest", x=15,y=13,align="noalign",peaceful=0 })
-des.monster({ id = "aligned priest", x=17,y=13,align="noalign",peaceful=0 })
-des.monster({ id = "aligned priest", x=21,y=13,align="noalign",peaceful=0 })
+des.monster({ id = "aligned cleric", x=20,y=03,align="noalign",peaceful=0 })
+des.monster({ id = "aligned cleric", x=15,y=04,align="noalign",peaceful=0 })
+des.monster({ id = "aligned cleric", x=11,y=05,align="noalign",peaceful=0 })
+des.monster({ id = "aligned cleric", x=11,y=07,align="noalign",peaceful=0 })
+des.monster({ id = "aligned cleric", x=11,y=09,align="noalign",peaceful=0 })
+des.monster({ id = "aligned cleric", x=11,y=12,align="noalign",peaceful=0 })
+des.monster({ id = "aligned cleric", x=15,y=13,align="noalign",peaceful=0 })
+des.monster({ id = "aligned cleric", x=17,y=13,align="noalign",peaceful=0 })
+des.monster({ id = "aligned cleric", x=21,y=13,align="noalign",peaceful=0 })
 -- A few nasties
 des.monster("L")
 des.monster("L")

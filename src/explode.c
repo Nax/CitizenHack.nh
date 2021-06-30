@@ -1,4 +1,4 @@
-/* NetHack 3.7	explode.c	$NHDT-Date: 1596498168 2020/08/03 23:42:48 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.71 $ */
+/* NetHack 3.7	explode.c	$NHDT-Date: 1619553210 2021/04/27 19:53:30 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.77 $ */
 /*      Copyright (C) 1990 by Ken Arromdee */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -17,6 +17,8 @@ static const int explosion[3][3] = { { S_explode1, S_explode4, S_explode7 },
  * did it, and with a wand, spell, or breath weapon?  Object types share both
  * these disadvantages....
  *
+ * Note: anything with a AT_BOOM AD_PHYS attack uses PHYS_EXPL_TYPE for type.
+ *
  * Important note about Half_physical_damage:
  *      Unlike losehp(), explode() makes the Half_physical_damage adjustments
  *      itself, so the caller should never have done that ahead of time.
@@ -25,12 +27,12 @@ static const int explosion[3][3] = { { S_explode1, S_explode4, S_explode7 },
  *      that Half_physical_damage only affects the damage applied to the hero.
  */
 void
-explode(x, y, type, dam, olet, expltype)
-int x, y;
-int type; /* the same as in zap.c; passes -(wand typ) for some WAND_CLASS */
-int dam;
-char olet;
-int expltype;
+explode(
+    int x, int y, /* explosion's location; adjacent spots are also affected */
+    int type,     /* same as in zap.c; -(wand typ) for some WAND_CLASS */
+    int dam,      /* damage amount */
+    char olet,    /* object class or BURNING_OIL or MON_EXPLODE */
+    int expltype) /* explosion type: controls color of explosion glyphs */
 {
     int i, j, k, damu = dam;
     boolean starting = 1;
@@ -46,6 +48,7 @@ int expltype;
     coord grabxy;
     char hallu_buf[BUFSZ], killr_buf[BUFSZ];
     short exploding_wand_typ = 0;
+    boolean you_exploding = (olet == MON_EXPLODE && type >= 0);
 
     if (olet == WAND_CLASS) { /* retributive strike */
         /* 'type' is passed as (wand's object type * -1); save
@@ -66,7 +69,7 @@ int expltype;
                 type = 0;
         }
         switch (Role_switch) {
-        case PM_PRIEST:
+        case PM_CLERIC:
         case PM_MONK:
         case PM_WIZARD:
             damu /= 5;
@@ -113,51 +116,61 @@ int expltype;
      *  skip harm to gear of any extended targets when inflicting damage.
      */
 
-    if (olet == MON_EXPLODE) {
+    if (olet == MON_EXPLODE && !you_exploding) {
         /* when explode() is called recursively, g.killer.name might change so
            we need to retain a copy of the current value for this explosion */
         str = strcpy(killr_buf, g.killer.name);
         do_hallu = (Hallucination
                     && (strstri(str, "'s explosion")
                         || strstri(str, "s' explosion")));
+    }
+    if (type == PHYS_EXPL_TYPE) {
+        /* currently only gas spores */
         adtyp = AD_PHYS;
-    } else
+    } else {
+        /* If str is e.g. "flaming sphere's explosion" from above, we want to
+         * still assign adtyp appropriately, but not replace str. */
+        const char *adstr = NULL;
+
         switch (abs(type) % 10) {
         case 0:
-            str = "magical blast";
+            adstr = "magical blast";
             adtyp = AD_MAGM;
             break;
         case 1:
-            str = (olet == BURNING_OIL) ? "burning oil"
+            adstr = (olet == BURNING_OIL) ? "burning oil"
                      : (olet == SCROLL_CLASS) ? "tower of flame" : "fireball";
             /* fire damage, not physical damage */
             adtyp = AD_FIRE;
             break;
         case 2:
-            str = "ball of cold";
+            adstr = "ball of cold";
             adtyp = AD_COLD;
             break;
         case 4:
-            str = (olet == WAND_CLASS) ? "death field"
+            adstr = (olet == WAND_CLASS) ? "death field"
                                        : "disintegration field";
             adtyp = AD_DISN;
             break;
         case 5:
-            str = "ball of lightning";
+            adstr = "ball of lightning";
             adtyp = AD_ELEC;
             break;
         case 6:
-            str = "poison gas cloud";
+            adstr = "poison gas cloud";
             adtyp = AD_DRST;
             break;
         case 7:
-            str = "splash of acid";
+            adstr = "splash of acid";
             adtyp = AD_ACID;
             break;
         default:
             impossible("explosion base type %d?", type);
             return;
         }
+        if (!str)
+            str = adstr;
+    }
 
     any_shield = visible = FALSE;
     for (i = 0; i < 3; i++)
@@ -308,18 +321,27 @@ int expltype;
             You_hear("a blast.");
     }
 
-    if (dam)
-        for (i = 0; i < 3; i++)
+    if (dam) {
+        for (i = 0; i < 3; i++) {
             for (j = 0; j < 3; j++) {
                 if (explmask[i][j] == 2)
                     continue;
-                if (i + x - 1 == u.ux && j + y - 1 == u.uy)
+                if (i + x - 1 == u.ux && j + y - 1 == u.uy) {
                     uhurt = (explmask[i][j] == 1) ? 1 : 2;
+                    /* If the player is attacking via polyself into something
+                     * with an explosion attack, leave them (and their gear)
+                     * unharmed, to avoid punishing them from using such
+                     * polyforms creatively */
+                    if (!g.context.mon_moving && you_exploding)
+                        uhurt = 0;
+                }
                 /* for inside_engulfer, only <u.ux,u.uy> is affected */
                 else if (inside_engulfer)
                     continue;
                 idamres = idamnonres = 0;
-                if (type >= 0 && !u.uswallow)
+                /* Affect the floor unless the player caused the explosion from
+                 * inside their engulfer. */
+                if (!(u.uswallow && !g.context.mon_moving))
                     (void) zap_over_floor((xchar) (i + x - 1),
                                           (xchar) (j + y - 1), type,
                                           &shopdamage, exploding_wand_typ);
@@ -412,6 +434,9 @@ int expltype;
                 idamnonres += destroy_mitem(mtmp, WAND_CLASS, (int) adtyp);
                 idamnonres += destroy_mitem(mtmp, RING_CLASS, (int) adtyp);
 
+                if (adtyp == AD_FIRE)
+                    ignite_items(mtmp->minvent);
+
                 if (explmask[i][j] == 1) {
                     golemeffects(mtmp, (int) adtyp, dam + idamres);
                     mtmp->mhp -= idamnonres;
@@ -476,6 +501,8 @@ int expltype;
                     setmangry(mtmp, TRUE);
                 }
             }
+        }
+    }
 
     /* Do your injury last */
     if (uhurt) {
@@ -500,8 +527,10 @@ int expltype;
             You("are unharmed!");
         } else if (adtyp == AD_PHYS || physical_dmg)
             damu = Maybe_Half_Phys(damu);
-        if (adtyp == AD_FIRE)
+        if (adtyp == AD_FIRE) {
             (void) burnarmor(&g.youmonst);
+            ignite_items(g.invent);
+        }
         destroy_item(SCROLL_CLASS, (int) adtyp);
         destroy_item(SPBOOK_CLASS, (int) adtyp);
         destroy_item(POTION_CLASS, (int) adtyp);
@@ -524,20 +553,25 @@ int expltype;
             g.context.botl = 1;
         }
 
+	/* You resisted the damage, lets not keep that to ourselves */
+	if (uhurt == 1)
+	    monstseesu_ad(adtyp);
+
         if (u.uhp <= 0 || (Upolyd && u.mh <= 0)) {
             if (Upolyd) {
                 rehumanize();
             } else {
                 if (olet == MON_EXPLODE) {
                     if (generic) /* explosion was unseen; str=="explosion", */
-                        ;        /* g.killer.name=="gas spore's explosion"    */
+                        ;        /* g.killer.name=="gas spore's explosion". */
                     else if (str != g.killer.name && str != hallu_buf)
                         Strcpy(g.killer.name, str);
                     g.killer.format = KILLED_BY_AN;
                 } else if (type >= 0 && olet != SCROLL_CLASS) {
                     g.killer.format = NO_KILLER_PREFIX;
-                    Sprintf(g.killer.name, "caught %sself in %s own %s", uhim(),
-                            uhis(), str);
+                    Snprintf(g.killer.name, sizeof g.killer.name,
+                             "caught %sself in %s own %s", uhim(),
+                             uhis(), str);
                 } else {
                     g.killer.format = (!strcmpi(str, "tower of flame")
                                      || !strcmpi(str, "fireball"))
@@ -598,11 +632,10 @@ struct scatter_chain {
 
 /* returns number of scattered objects */
 long
-scatter(sx, sy, blastforce, scflags, obj)
-int sx, sy;     /* location of objects to scatter */
-int blastforce; /* force behind the scattering */
-unsigned int scflags;
-struct obj *obj; /* only scatter this obj        */
+scatter(int sx, int sy,  /* location of objects to scatter */
+        int blastforce,  /* force behind the scattering */
+        unsigned int scflags,
+        struct obj *obj) /* only scatter this obj        */
 {
     register struct obj *otmp;
     register int tmp;
@@ -685,7 +718,7 @@ struct obj *obj; /* only scatter this obj        */
             stmp->obj = otmp;
             stmp->ox = sx;
             stmp->oy = sy;
-            tmp = rn2(8); /* get the direction */
+            tmp = rn2(N_DIRS); /* get the direction */
             stmp->dx = xdir[tmp];
             stmp->dy = ydir[tmp];
             tmp = blastforce - (otmp->owt / 40);
@@ -752,6 +785,8 @@ struct obj *obj; /* only scatter this obj        */
                 }
                 stmp->ox = g.bhitpos.x;
                 stmp->oy = g.bhitpos.y;
+                if (IS_SINK(levl[stmp->ox][stmp->oy].typ))
+                    stmp->stopped = TRUE;
             }
         }
     }
@@ -792,9 +827,7 @@ struct obj *obj; /* only scatter this obj        */
  * For now, just perform a "regular" explosion.
  */
 void
-splatter_burning_oil(x, y, diluted_oil)
-int x, y;
-boolean diluted_oil;
+splatter_burning_oil(int x, int y, boolean diluted_oil)
 {
     int dmg = d(diluted_oil ? 3 : 4, 4);
 
@@ -806,9 +839,7 @@ boolean diluted_oil;
 /* lit potion of oil is exploding; extinguish it as a light source before
    possibly killing the hero and attempting to save bones */
 void
-explode_oil(obj, x, y)
-struct obj *obj;
-int x, y;
+explode_oil(struct obj *obj, int x, int y)
 {
     boolean diluted_oil = obj->odiluted;
 
@@ -816,6 +847,87 @@ int x, y;
         impossible("exploding unlit oil");
     end_burn(obj, TRUE);
     splatter_burning_oil(x, y, diluted_oil);
+}
+
+/* Convert a damage type into an explosion display type. */
+int
+adtyp_to_expltype(const int adtyp)
+{
+    switch(adtyp) {
+    case AD_ELEC:
+        /* Electricity isn't magical, but there currently isn't an electric
+         * explosion type. Magical is the next best thing. */
+    case AD_SPEL:
+    case AD_DREN:
+    case AD_ENCH:
+        return EXPL_MAGICAL;
+    case AD_FIRE:
+        return EXPL_FIERY;
+    case AD_COLD:
+        return EXPL_FROSTY;
+    case AD_DRST:
+    case AD_DRDX:
+    case AD_DRCO:
+    case AD_DISE:
+    case AD_PEST:
+    case AD_PHYS: /* gas spore */
+        return EXPL_NOXIOUS;
+    default:
+        impossible("adtyp_to_expltype: bad explosion type %d", adtyp);
+        return EXPL_FIERY;
+    }
+}
+
+/* A monster explodes in a way that produces a real explosion (e.g. a sphere or
+ * gas spore, not a yellow light or similar).
+ * This is some common code between explmu() and explmm().
+ */
+void
+mon_explodes(struct monst *mon, struct attack *mattk)
+{
+    int dmg;
+    int type;
+    if (mattk->damn) {
+        dmg = d((int) mattk->damn, (int) mattk->damd);
+    }
+    else if (mattk->damd) {
+        dmg = d((int) mon->data->mlevel + 1, (int) mattk->damd);
+    }
+    else {
+        dmg = 0;
+    }
+
+    if (mattk->adtyp == AD_PHYS) {
+        type = PHYS_EXPL_TYPE;
+    }
+    else if (mattk->adtyp >= AD_MAGM && mattk->adtyp <= AD_SPC2) {
+        /* The -1, +20, *-1 math is to set it up as a 'monster breath' type for
+         * the explosions (it isn't, but this is the closest analogue). */
+        type = -((mattk->adtyp - 1) + 20);
+    }
+    else {
+        impossible("unknown type for mon_explode %d", mattk->adtyp);
+        return;
+    }
+
+    /* Kill it now so it won't appear to be caught in its own explosion.
+     * Must check to see if already dead - which happens if this is called from
+     * an AT_BOOM attack upon death. */
+    if (!DEADMONSTER(mon)) {
+        mondead(mon);
+    }
+
+    /* This might end up killing you, too; you never know...
+     * also, it is used in explode() messages */
+    Sprintf(g.killer.name, "%s explosion",
+            s_suffix(pmname(mon->data, Mgender(mon))));
+    g.killer.format = KILLED_BY_AN;
+
+    explode(mon->mx, mon->my, type, dmg, MON_EXPLODE,
+            adtyp_to_expltype(mattk->adtyp));
+
+    /* reset killer */
+    g.killer.name[0] = '\0';
 }
 
 /*explode.c*/

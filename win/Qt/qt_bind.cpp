@@ -167,6 +167,11 @@ void NetHackQtBind::qt_init_nhwindows(int* argc, char** argv)
     // This nethack engine feature should be moved into windowport API
     nt_kbhit = NetHackQtBind::qt_kbhit;
 #endif
+
+#ifndef DYNAMIC_STATUSLINES
+    // 'statuslines' option can be set in config file but not via 'O'
+    set_wc2_option_mod_status(WC2_STATUSLINES, set_gameview);
+#endif
 }
 
 int NetHackQtBind::qt_kbhit()
@@ -185,38 +190,62 @@ void NetHackQtBind::qt_player_selection()
 
 void NetHackQtBind::qt_askname()
 {
+    char default_plname[PL_NSIZ];
+    int ch = -1; // -1 => new game
+
     have_asked = true;
+    str_copy(default_plname, g.plname, PL_NSIZ);
 
-    // We do it all here, and nothing in askname
+    // We do it all here (plus qt_plsel.cpp and qt_svsel.cpp),
+    // nothing in player_selection().
 
-    char** saved = get_saved_games();
-    int ch = -1;
-    if ( saved && *saved ) {
-	if ( splash ) splash->hide();
-	NetHackQtSavedGameSelector sgsel((const char**)saved);
-	ch = sgsel.choose();
-	if ( ch >= 0 )
-	    str_copy(g.plname, saved[ch], SIZE(g.plname));
+#ifdef SELECTSAVED
+    char **saved = 0;
+    if (::iflags.wc2_selectsaved)
+        saved = get_saved_games();
+    if (saved && *saved) {
+        if (splash)
+            splash->hide();
+        NetHackQtSavedGameSelector sgsel((const char **) saved);
+        ch = sgsel.choose();
+        if (ch >= 0)
+            str_copy(g.plname, saved[ch], SIZE(g.plname));
+        // caller needs new lock name even if plname[] hasn't changed
+        // because successful get_saved_games() clobbers g.SAVEF[]
+        ::iflags.renameinprogress = TRUE;
     }
     free_saved_games(saved);
+#endif
 
     switch (ch) {
     case -1:
+        // New Game
         if (splash)
             splash->hide();
-        if (NetHackQtPlayerSelector(keybuffer).Choose())
-            return;
+        if (NetHackQtPlayerSelector(keybuffer).Choose()) {
+            // success; handle plname[] verification below prior to returning
+            break;
+        }
         /*FALLTHRU*/
     case -2:
+        // Quit
+        clearlocks();
+        qt_exit_nhwindows(0);
+        nh_terminate(0);
+        /*NOTREACHED*/
         break;
     default:
-        return;
+        // picked a character from the saved games list
+        break;
     }
 
-    // Quit
-    clearlocks();
-    qt_exit_nhwindows(0);
-    nh_terminate(0);
+    if (!*g.plname)
+        // in case Choose() returns with plname[] empty
+        Strcpy(g.plname, default_plname);
+    else if (strcmp(g.plname, default_plname) != 0)
+        // caller needs to set new lock file name
+        ::iflags.renameinprogress = TRUE;
+    return;
 }
 
 void NetHackQtBind::qt_get_nh_event()
@@ -313,22 +342,26 @@ winid NetHackQtBind::qt_create_nhwindow(int type)
 void NetHackQtBind::qt_clear_nhwindow(winid wid)
 {
     NetHackQtWindow* window=id_to_window[(int)wid];
-    window->Clear();
+    if (window)
+        window->Clear();
 }
 
-void NetHackQtBind::qt_display_nhwindow(winid wid, BOOLEAN_P block)
+void NetHackQtBind::qt_display_nhwindow(winid wid, boolean block)
 {
     NetHackQtWindow* window=id_to_window[(int)wid];
-    window->Display(block);
+    if (window)
+        window->Display(block);
 }
 
 void NetHackQtBind::qt_destroy_nhwindow(winid wid)
 {
     NetHackQtWindow* window=id_to_window[(int)wid];
-    main->RemoveWindow(window);
-    if (window->Destroy())
-	delete window;
-    id_to_window[(int)wid] = 0;
+    if (window) {
+        main->RemoveWindow(window);
+        if (window->Destroy())
+            delete window;
+        id_to_window[(int) wid] = 0;
+    }
 }
 
 void NetHackQtBind::qt_curs(winid wid, int x, int y)
@@ -355,7 +388,7 @@ void NetHackQtBind::qt_putstr(winid wid, int attr, const QString& text)
     window->PutStr(attr,text);
 }
 
-void NetHackQtBind::qt_display_file(const char *filename, BOOLEAN_P must_exist)
+void NetHackQtBind::qt_display_file(const char *filename, boolean must_exist)
 {
     NetHackQtTextWindow* window=new NetHackQtTextWindow(mainWidget());
     bool complain = false;
@@ -392,15 +425,15 @@ void NetHackQtBind::qt_display_file(const char *filename, BOOLEAN_P must_exist)
 void NetHackQtBind::qt_start_menu(winid wid, unsigned long mbehavior UNUSED)
 {
     NetHackQtWindow* window=id_to_window[(int)wid];
-    window->StartMenu();
+    window->StartMenu(wid == WIN_INVEN);
 }
 
-void NetHackQtBind::qt_add_menu(winid wid, int glyph,
-    const ANY_P * identifier, CHAR_P ch, CHAR_P gch, int attr,
+void NetHackQtBind::qt_add_menu(winid wid, const glyph_info *glyphinfo,
+    const ANY_P * identifier, char ch, char gch, int attr,
     const char *str, unsigned itemflags)
 {
     NetHackQtWindow* window=id_to_window[(int)wid];
-    window->AddMenu(glyph, identifier, ch, gch, attr,
+    window->AddMenu(glyphinfo->glyph, identifier, ch, gch, attr,
             QString::fromLatin1(str),
             itemflags);
 }
@@ -417,10 +450,11 @@ int NetHackQtBind::qt_select_menu(winid wid, int how, MENU_ITEM_P **menu_list)
     return window->SelectMenu(how,menu_list);
 }
 
-void NetHackQtBind::qt_update_inventory()
+void NetHackQtBind::qt_update_inventory(int arg UNUSED)
 {
     if (main)
-	main->updateInventory();
+	main->updateInventory(); // update the paper doll inventory subset
+
     /* doesn't work yet
     if (g.program_state.something_worth_saving && iflags.perm_invent)
         display_inventory(NULL, false);
@@ -446,11 +480,13 @@ void NetHackQtBind::qt_cliparound_window(winid wid, int x, int y)
     NetHackQtWindow* window=id_to_window[(int)wid];
     window->ClipAround(x,y);
 }
-void NetHackQtBind::qt_print_glyph(winid wid,XCHAR_P x,XCHAR_P y,int glyph,int bkglyph UNUSED)
+void NetHackQtBind::qt_print_glyph(winid wid,xchar x,xchar y,
+                                   const glyph_info *glyphinfo,
+                                   const glyph_info *bkglyphinfo UNUSED)
 {
     /* TODO: bkglyph */
     NetHackQtWindow* window=id_to_window[(int)wid];
-    window->PrintGlyph(x,y,glyph);
+    window->PrintGlyph(x,y,glyphinfo);
 }
 //void NetHackQtBind::qt_print_glyph_compose(winid wid,xchar x,xchar y,int glyph1, int glyph2)
 //{
@@ -476,7 +512,22 @@ int NetHackQtBind::qt_nhgetch()
     // Process events until a key arrives.
     //
     while (keybuffer.Empty()) {
-	qApp->exec();
+        int exc = qApp->exec();
+        /*
+         * On OSX (possibly elsewhere), this prevents an infinite
+         * loop repeatedly issuing the complaint:
+QCoreApplication::exec: The event loop is already running
+         * to stderr if you syncronously start nethack from a terminal
+         * then switch focus back to that terminal and type ^C.
+         *  SIGINT -> done1() -> done2() -> yn_function("Really quit?")
+         * in the core asks for another keystroke.
+         *
+         * However, it still issues one such complaint, and whatever
+         * prompt wanted a response ("Really quit?") is shown in the
+         * message window but is auto-answered with ESC.
+         */
+        if (exc == -1)
+            keybuffer.Put('\033');
     }
 
     // after getting a key rather than before
@@ -494,7 +545,10 @@ int NetHackQtBind::qt_nh_poskey(int *x, int *y, int *mod)
     // Process events until a key or map-click arrives.
     //
     while (keybuffer.Empty() && clickbuffer.Empty()) {
-	qApp->exec();
+        int exc = qApp->exec();
+        // [see comment above in qt_nhgetch()]
+        if (exc == -1)
+            keybuffer.Put('\033');
     }
 
     // after getting a key or click rather than before
@@ -524,8 +578,77 @@ int NetHackQtBind::qt_doprev_message()
     return 0;
 }
 
+// display "--More--" as a prompt and wait for a response from the user
+//
+// Used by qt_display_nhwindow(WIN_MESSAGE, TRUE) where second argument
+// True requests blocking.  We need it to support MSGTYPE=stop but the
+// core also uses that in various other situations.
+char NetHackQtBind::qt_more()
+{
+    char ch = '\033';
+
+    // without this gameover hack, quitting via menu or window close
+    // button ends up provoking a complaint from qt_nhgetch() [see the
+    // ^C comment in that routine] when the core triggers --More-- via
+    //  done2() -> really_done() -> display_nhwindow(WIN_MESSAGE, TRUE)
+    // (get rid of this if the exec() loop issue gets properly fixed)
+    if (::g.program_state.gameover)
+        return ch; // bypass --More-- and just continue with program exit
+
+    NetHackQtMessageWindow *mesgwin = main ? main->GetMessageWindow() : NULL;
+
+    // kill any typeahead; for '!popup_dialog' this forces qt_nhgetch()
+    keybuffer.Drain();
+
+    if (mesgwin && !::iflags.wc_popup_dialog && WIN_MESSAGE != WIN_ERR) {
+
+        mesgwin->AddToStr("--More--");
+        bool retry = false;
+        int complain = 0;
+        do {
+            ch = NetHackQtBind::qt_nhgetch();
+            switch (ch) {
+            case '\0': // hypothetical
+                ch = '\033';
+                /*FALLTHRU*/
+            case ' ':
+            case '\n':
+            case '\r':
+            case '\033':
+                retry = false;
+                break;
+            default:
+                if (++complain > 1)
+                    NetHackQtBind::qt_nhbell();
+                // typing anything caused the most recent message line
+                // (which happens to our prompt) from having highlighting
+                // be removed; put that back
+                if (mesgwin)
+                    mesgwin->RehighlightPrompt();
+                retry = true;
+                break;
+            }
+        } while (retry);
+        // unhighlight the line with the prompt; does not erase the window
+        NetHackQtBind::qt_clear_nhwindow(WIN_MESSAGE);
+
+    } else {
+        // use a popup dialog box; unlike yn_function(), we don't show
+        // the prompt+response in the message window
+        NetHackQtYnDialog dialog(main, "--More--", " \033\n\r", ' ');
+        ch = dialog.Exec();
+        if (ch == '\0') {
+            ch = '\033';
+        }
+        // discard any input that YnDialog() might have left pending
+        keybuffer.Drain();
+    }
+
+    return ch;
+}
+
 char NetHackQtBind::qt_yn_function(const char *question_,
-                                   const char *choices, CHAR_P def)
+                                   const char *choices, char def)
 {
     QString question(QString::fromLatin1(question_));
     QString message;
@@ -533,10 +656,13 @@ char NetHackQtBind::qt_yn_function(const char *question_,
     int result = -1;
 
     if (choices) {
-        // anything beyond <esc> is hidden>
-        QString choicebuf = choices;
-        size_t cb = choicebuf.indexOf('\033');
-        choicebuf = choicebuf.mid(0U, cb);
+        QString choicebuf((int) strlen(choices) + 1, QChar('\0'));
+        for (const char *p = choices; *p; ++p) {
+            if (*p == '\033') // <esc> and anything beyond is hidden
+                break;
+            choicebuf += visctrl(*p);
+        }
+        choicebuf.truncate(QBUFSZ - 1); // no effect if already shorter
         message = QString("%1 [%2] ").arg(question, choicebuf);
         if (def)
             message += QString("(%1) ").arg(QChar(def));
@@ -580,6 +706,13 @@ char NetHackQtBind::qt_yn_function(const char *question_,
                     Strcpy(cbuf, visctrl(def));
 		} else {
 		    NetHackQtBind::qt_nhbell();
+                    // typing anything caused the most recent message line
+                    // (which happens to our prompt) from having highlighting
+                    // be removed; put that back
+                    NetHackQtMessageWindow
+                            *mesgwin = main ? main->GetMessageWindow() : NULL;
+                    if (mesgwin)
+                        mesgwin->RehighlightPrompt();
 		    // and try again...
 		}
 	    } else {
@@ -617,14 +750,16 @@ char NetHackQtBind::qt_yn_function(const char *question_,
             Sprintf(eos(cbuf), " %ld", ::yn_number);
         message += QString(" %1").arg(cbuf);
 
-        // add the prompt with appended response to the messsage window
-	NetHackQtBind::qt_putstr(WIN_MESSAGE, ATR_BOLD, message);
+        // add the prompt with appended response to the message window
+        if (WIN_MESSAGE != WIN_ERR)
+            NetHackQtBind::qt_putstr(WIN_MESSAGE, ATR_BOLD, message);
 
         result = ret;
     }
 
     // unhighlight the prompt; does not erase the multi-line message window
-    NetHackQtBind::qt_clear_nhwindow(WIN_MESSAGE);
+    if (WIN_MESSAGE != WIN_ERR)
+        NetHackQtBind::qt_clear_nhwindow(WIN_MESSAGE);
 
     return (char) result;
 }
@@ -632,7 +767,7 @@ char NetHackQtBind::qt_yn_function(const char *question_,
 void NetHackQtBind::qt_getlin(const char *prompt, char *line)
 {
     NetHackQtStringRequestor requestor(mainWidget(),prompt);
-    if (!requestor.Get(line)) {
+    if (!requestor.Get(line, BUFSZ, 40)) {
         Strcpy(line, "\033");
         // discard any input that Get() might have left pending
         keybuffer.Drain();
@@ -663,10 +798,17 @@ void NetHackQtBind::qt_getlin(const char *prompt, char *line)
     NetHackQtBind::qt_clear_nhwindow(WIN_MESSAGE);
 }
 
+// User has typed '#' to begin entering an extended command; core calls us.
 int NetHackQtBind::qt_get_ext_cmd()
 {
-    NetHackQtExtCmdRequestor requestor(mainWidget());
-    return requestor.get();
+    NetHackQtExtCmdRequestor *xcmd;
+    int result;
+    do {
+        xcmd = new NetHackQtExtCmdRequestor(mainWidget());
+        result = xcmd->get();
+        delete xcmd;
+    } while (result == xcmdNoMatch);
+    return result;
 }
 
 void NetHackQtBind::qt_number_pad(int)
@@ -698,7 +840,20 @@ void NetHackQtBind::qt_outrip(winid wid, int how, time_t when)
     window->UseRIP(how, when);
 }
 
-char *NetHackQtBind::qt_getmsghistory(BOOLEAN_P init)
+void NetHackQtBind::qt_preference_update(const char *optname)
+{
+#ifdef DYNAMIC_STATUSLINES  // defined in qt_main.h
+    if (!strcmp(optname, "statuslines")) {
+        // delete and recreate status window
+        // to toggle statuslines from 2 to 3 or vice versa
+        id_to_window[WIN_STATUS] = main->redoStatus();
+    }
+#else
+    nhUse(optname);
+#endif
+}
+
+char *NetHackQtBind::qt_getmsghistory(boolean init)
 {
     NetHackQtMessageWindow *window = main->GetMessageWindow();
     if (window)
@@ -706,7 +861,7 @@ char *NetHackQtBind::qt_getmsghistory(BOOLEAN_P init)
     return NULL;
 }
 
-void NetHackQtBind::qt_putmsghistory(const char *msg, BOOLEAN_P is_restoring)
+void NetHackQtBind::qt_putmsghistory(const char *msg, boolean is_restoring)
 {
     NetHackQtMessageWindow *window = main->GetMessageWindow();
     if (!window)
@@ -747,6 +902,7 @@ void NetHackQtBind::qt_putmsghistory(const char *msg, BOOLEAN_P is_restoring)
     }
 }
 
+// event loop callback
 bool NetHackQtBind::notify(QObject *receiver, QEvent *event)
 {
     // Ignore Alt-key navigation to menubar, it's annoying when you
@@ -756,7 +912,9 @@ bool NetHackQtBind::notify(QObject *receiver, QEvent *event)
         return true;
 
     bool result = QApplication::notify(receiver, event);
-    if (event->type() == QEvent::KeyPress) {
+    int evtyp = event->type();
+
+    if (evtyp == QEvent::KeyPress) {
         QKeyEvent *key_event = (QKeyEvent *) event;
 
         if (!key_event->isAccepted()) {
@@ -778,10 +936,11 @@ bool NetHackQtBind::notify(QObject *receiver, QEvent *event)
             if (ch > 128)
                 ch = 0;
             // on OSX, ascii control codes are not sent, force them
-            if ((mod & Qt::ControlModifier) != 0) {
-                if (ch == 0 && k >= Qt::Key_A && k <= Qt::Key_Underscore)
+            if (ch == 0 && (mod & Qt::ControlModifier) != 0) {
+                if (k >= Qt::Key_A && k <= Qt::Key_Underscore)
                     ch = (QChar) (k - (Qt::Key_A - 1));
             }
+            //raw_printf("notify()=%d \"%s\"", k, visctrl(ch.cell()));
             // if we have a valid character, queue it up
             if (ch != 0) {
                 bool alt = ((mod & Qt::AltModifier) != 0
@@ -792,6 +951,18 @@ bool NetHackQtBind::notify(QObject *receiver, QEvent *event)
                 qApp->exit();
                 result = true;
             }
+
+#if 0   /* this was a failed attempt to prevent qt_more() from looping
+         * after command+q (on OSX) is used to bring up the quit dialog;
+         * now qt_more() uses an early return if program_state.gameover
+         * is set */
+        } else if (evtyp == QEvent::FocusOut
+                   || evtyp == QEvent::ShortcutOverride
+                   || evtyp == QEvent::PlatformSurface) {
+            // leave qt_nhgetch()'s event loop if focus switches somewhere else
+            qApp->exit();
+            result = false;
+#endif
         }
     }
     return result;
@@ -812,12 +983,15 @@ static void Qt_positionbar(char *) {}
 
 struct window_procs Qt_procs = {
     "Qt",
-    WC_COLOR | WC_HILITE_PET
-    | WC_ASCII_MAP | WC_TILED_MAP
-    | WC_FONT_MAP | WC_TILE_FILE | WC_TILE_WIDTH | WC_TILE_HEIGHT
-    | WC_POPUP_DIALOG
-    | WC_PLAYER_SELECTION | WC_SPLASH_SCREEN,
-    0L,
+    (WC_COLOR | WC_HILITE_PET
+     | WC_ASCII_MAP | WC_TILED_MAP
+     | WC_FONT_MAP | WC_TILE_FILE | WC_TILE_WIDTH | WC_TILE_HEIGHT
+     | WC_POPUP_DIALOG | WC_PLAYER_SELECTION | WC_SPLASH_SCREEN),
+    (WC2_HITPOINTBAR
+#ifdef SELECTSAVED
+     | WC2_SELECTSAVED
+#endif
+     | WC2_STATUSLINES),
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, /* color availability */
     nethack_qt_::NetHackQtBind::qt_init_nhwindows,
     nethack_qt_::NetHackQtBind::qt_player_selection,
@@ -838,7 +1012,7 @@ struct window_procs Qt_procs = {
     nethack_qt_::NetHackQtBind::qt_add_menu,
     nethack_qt_::NetHackQtBind::qt_end_menu,
     nethack_qt_::NetHackQtBind::qt_select_menu,
-    genl_message_menu,      /* no need for X-specific handling */
+    genl_message_menu,      /* no need for Qt-specific handling */
     nethack_qt_::NetHackQtBind::qt_update_inventory,
     nethack_qt_::NetHackQtBind::qt_mark_synch,
     nethack_qt_::NetHackQtBind::qt_wait_synch,
@@ -875,8 +1049,7 @@ struct window_procs Qt_procs = {
 #else
     genl_outrip,
 #endif
-    genl_preference_update,
-
+    nethack_qt_::NetHackQtBind::qt_preference_update,
     nethack_qt_::NetHackQtBind::qt_getmsghistory,
     nethack_qt_::NetHackQtBind::qt_putmsghistory,
     genl_status_init,
@@ -890,16 +1063,18 @@ struct window_procs Qt_procs = {
 };
 
 #ifndef WIN32
-#if defined(USER_SOUNDS) && !defined(QT_NO_SOUND)
-extern "C" void play_usersound(const char* filename, int volume UNUSED)
-#else
-extern "C" void play_usersound(const char* filename UNUSED, int volume UNUSED)
-#endif
+extern "C" void play_usersound(const char *, int);
+
+/* called from core, sounds.c */
+void
+play_usersound(const char *filename, int volume UNUSED)
 {
-#ifdef USER_SOUNDS
-#ifndef QT_NO_SOUND
+#if defined(USER_SOUNDS) && !defined(QT_NO_SOUND)
     QSound::play(filename);
-#endif
+#else
+    nhUse(filename);
 #endif
 }
-#endif
+#endif /*!WIN32*/
+
+//qt_bind.cpp

@@ -44,7 +44,7 @@ des.replace_terrain({ region={13,5, 33,15}, fromterrain="C", toterrain=".", chan
 des.region(selection.area(00,00,75,19), "lit")
 des.region(selection.area(35,00,49,03), "unlit")
 des.region(selection.area(43,12,49,16), "unlit")
-des.region({ region={19,11,33,15}, lit=0, type="ordinary", prefilled=0, irregular=1 })
+des.region({ region={19,11,33,15}, lit=0, type="ordinary", irregular=1 })
 des.region(selection.area(30,10,31,10), "unlit")
 -- Stairs
 des.stair("down", 30,10)
@@ -61,7 +61,10 @@ des.door("closed",15,10)
 des.door("locked",19,10)
 des.door("locked",20,10)
 -- Neferet the Green, the quest leader
-des.monster("Neferet the Green", 23, 05)
+des.monster({ id = "Neferet the Green", coord = {23, 05}, inventory = function()
+   des.object({ id = "elven cloak", spe = 5 });
+   des.object({ id = "quarterstaff", spe = 5 });
+end })
 -- The treasure of the quest leader
 des.object("chest", 24, 05)
 -- apprentice guards for the audience chamber

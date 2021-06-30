@@ -1,4 +1,4 @@
-/* NetHack 3.7	allmain.c	$NHDT-Date: 1596498146 2020/08/03 23:42:26 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.145 $ */
+/* NetHack 3.7	allmain.c	$NHDT-Date: 1621208846 2021/05/16 23:47:26 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.152 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -13,14 +13,14 @@
 #endif
 
 #ifdef POSITIONBAR
-static void NDECL(do_positionbar);
+static void do_positionbar(void);
 #endif
-static void FDECL(regen_hp, (int));
-static void FDECL(interrupt_multi, (const char *));
-static void FDECL(debug_fields, (const char *));
+static void regen_hp(int);
+static void interrupt_multi(const char *);
+static void debug_fields(const char *);
 
 void
-early_init()
+early_init(void)
 {
     decl_globals_init();
     objects_globals_init();
@@ -29,8 +29,7 @@ early_init()
 }
 
 void
-moveloop(resuming)
-boolean resuming;
+moveloop(boolean resuming)
 {
 #if defined(MICRO) || defined(WIN32)
     char ch;
@@ -69,7 +68,6 @@ boolean resuming;
         g.context.seer_turn = (long) rnd(30);
     }
     g.context.botlx = TRUE; /* for STATUS_HILITES */
-    update_inventory(); /* for perm_invent */
     if (resuming) { /* restoring old game */
         read_engr_at(u.ux, u.uy); /* subset of pickup() */
     }
@@ -86,6 +84,11 @@ boolean resuming;
     g.context.move = 0;
 
     g.program_state.in_moveloop = 1;
+    /* for perm_invent preset at startup, display persistent inventory after
+       invent is fully populated and the in_moveloop flag has been set */
+    if (iflags.perm_invent)
+        update_inventory();
+
     for (;;) {
 #ifdef SAFERHANGUP
         if (g.program_state.done_hup)
@@ -177,6 +180,19 @@ boolean resuming;
 
                     g.monstermoves++; /* [obsolete (for a long time...)] */
                     g.moves++;
+                    /*
+                     * Never allow 'moves' to grow big enough to wrap.
+                     * We don't care what the maximum possible 'long int'
+                     * is for the current configuration, we want a value
+                     * that is the same for all viable configurations.
+                     * When imposing the limit, use a mystic decimal value
+                     * instead of a magic binary one such as 0x7fffffffL.
+                     */
+                    if (g.moves >= 1000000000L) {
+                        display_nhwindow(WIN_MESSAGE, TRUE);
+                        pline_The("dungeon capitulates.");
+                        done(ESCAPED);
+                    }
 
                     if (flags.time && !g.context.run)
                         iflags.time_botl = TRUE; /* 'moves' just changed */
@@ -184,6 +200,8 @@ boolean resuming;
                     /********************************/
                     /* once-per-turn things go here */
                     /********************************/
+
+                    l_nhcore_call(NHCORE_MOVELOOP_TURN);
 
                     if (Glib)
                         glibr();
@@ -215,17 +233,7 @@ boolean resuming;
                     if (wtcap > MOD_ENCUMBER && u.umoved) {
                         if (!(wtcap < EXT_ENCUMBER ? g.moves % 30
                                                    : g.moves % 10)) {
-                            if (Upolyd && u.mh > 1) {
-                                u.mh--;
-                                g.context.botl = TRUE;
-                            } else if (!Upolyd && u.uhp > 1) {
-                                u.uhp--;
-                                g.context.botl = TRUE;
-                            } else {
-                                You("pass out from exertion!");
-                                exercise(A_CON, FALSE);
-                                fall_asleep(-10, FALSE);
-                            }
+                            overexert_hp();
                         }
                     }
 
@@ -446,7 +454,8 @@ boolean resuming;
                 domove();
             } else {
                 --g.multi;
-                rhack(g.save_cm);
+                nhassert(g.command_count != 0);
+                rhack(g.command_line);
             }
         } else if (g.multi == 0) {
 #ifdef MAIL
@@ -471,10 +480,11 @@ boolean resuming;
     }
 }
 
+#define U_CAN_REGEN() (Regeneration || (Sleepy && u.usleep))
+
 /* maybe recover some lost health (or lose some when an eel out of water) */
 static void
-regen_hp(wtcap)
-int wtcap;
+regen_hp(int wtcap)
 {
     int heal = 0;
     boolean reached_full = FALSE,
@@ -491,7 +501,7 @@ int wtcap;
                 && (!Half_physical_damage || !(g.moves % 2L)))
                 heal = -1;
         } else if (u.mh < u.mhmax) {
-            if (Regeneration || (encumbrance_ok && !(g.moves % 20L)))
+            if (U_CAN_REGEN() || (encumbrance_ok && !(g.moves % 20L)))
                 heal = 1;
         }
         if (heal) {
@@ -506,7 +516,7 @@ int wtcap;
            no !Upolyd check here, so poly'd hero recovered lost u.uhp
            once u.mh reached u.mhmax; that may have been convenient
            for the player, but it didn't make sense for gameplay...] */
-        if (u.uhp < u.uhpmax && (encumbrance_ok || Regeneration)) {
+        if (u.uhp < u.uhpmax && (encumbrance_ok || U_CAN_REGEN())) {
             if (u.ulevel > 9) {
                 if (!(g.moves % 3L)) {
                     int Con = (int) ACURR(A_CON);
@@ -523,8 +533,10 @@ int wtcap;
                 if (!(g.moves % (long) ((MAXULEV + 12) / (u.ulevel + 2) + 1)))
                     heal = 1;
             }
-            if (Regeneration && !heal)
+            if (U_CAN_REGEN() && !heal)
                 heal = 1;
+            if (Sleepy && u.usleep)
+                heal++;
 
             if (heal) {
                 g.context.botl = TRUE;
@@ -541,8 +553,10 @@ int wtcap;
         interrupt_multi("You are in full health.");
 }
 
+#undef U_CAN_REGEN
+
 void
-stop_occupation()
+stop_occupation(void)
 {
     if (g.occupation) {
         if (!maybe_finished_meal(TRUE))
@@ -554,10 +568,11 @@ stop_occupation()
     } else if (g.multi >= 0) {
         nomul(0);
     }
+    cmdq_clear();
 }
 
 void
-display_gamewindows()
+display_gamewindows(void)
 {
     WIN_MESSAGE = create_nhwindow(NHW_MESSAGE);
     if (VIA_WINDOWPORT()) {
@@ -593,7 +608,7 @@ display_gamewindows()
 }
 
 void
-newgame()
+newgame(void)
 {
     int i;
 
@@ -620,6 +635,8 @@ newgame()
     init_artifacts(); /* before u_init() in case $WIZKIT specifies
                        * any artifacts */
     u_init();
+
+    l_nhcore_init();
 
 #ifndef NO_SIGNAL
     (void) signal(SIGINT, (SIG_RET_TYPE) done1);
@@ -661,8 +678,7 @@ newgame()
 
 /* show "welcome [back] to nethack" message at program startup */
 void
-welcome(new_game)
-boolean new_game; /* false => restoring an old game */
+welcome(boolean new_game) /* false => restoring an old game */
 {
     char buf[BUFSZ];
     boolean currentgend = Upolyd ? u.mfemale : flags.female;
@@ -698,51 +714,31 @@ boolean new_game; /* false => restoring an old game */
                    : "%s %s, the%s %s %s, welcome back to CitizenHack!",
           Hello((struct monst *) 0), g.plname, buf, g.urace.adj,
           (currentgend && g.urole.name.f) ? g.urole.name.f : g.urole.name.m);
+
+    l_nhcore_call(new_game ? NHCORE_START_NEW_GAME : NHCORE_RESTORE_OLD_GAME);
 }
 
 #ifdef POSITIONBAR
 static void
-do_positionbar()
+do_positionbar(void)
 {
     static char pbar[COLNO];
     char *p;
+    stairway *stway = g.stairs;
 
     p = pbar;
-    /* up stairway */
-    if (g.upstair.sx
-        && (glyph_to_cmap(g.level.locations[g.upstair.sx][g.upstair.sy].glyph)
-                == S_upstair
-            || glyph_to_cmap(g.level.locations[g.upstair.sx][g.upstair.sy].glyph)
-                   == S_upladder)) {
-        *p++ = '<';
-        *p++ = g.upstair.sx;
-    }
-    if (g.sstairs.sx
-        && (glyph_to_cmap(g.level.locations[g.sstairs.sx][g.sstairs.sy].glyph)
-                == S_upstair
-            || glyph_to_cmap(g.level.locations[g.sstairs.sx][g.sstairs.sy].glyph)
-                   == S_upladder)) {
-        *p++ = '<';
-        *p++ = g.sstairs.sx;
-    }
+    /* TODO: use the same method as getpos() so objects don't cover stairs */
+    while (stway) {
+        int x = stway->sx;
+        int y = stway->sy;
+        int glyph = glyph_to_cmap(g.level.locations[x][y].glyph);
 
-    /* down stairway */
-    if (g.dnstair.sx
-        && (glyph_to_cmap(g.level.locations[g.dnstair.sx][g.dnstair.sy].glyph)
-                == S_dnstair
-            || glyph_to_cmap(g.level.locations[g.dnstair.sx][g.dnstair.sy].glyph)
-                   == S_dnladder)) {
-        *p++ = '>';
-        *p++ = g.dnstair.sx;
-    }
-    if (g.sstairs.sx
-        && (glyph_to_cmap(g.level.locations[g.sstairs.sx][g.sstairs.sy].glyph)
-                == S_dnstair
-            || glyph_to_cmap(g.level.locations[g.sstairs.sx][g.sstairs.sy].glyph)
-                   == S_dnladder)) {
-        *p++ = '>';
-        *p++ = g.sstairs.sx;
-    }
+        if (is_cmap_stairs(glyph)) {
+            *p++ = (stway->up ? '<' : '>');
+            *p++ = stway->sx;
+        }
+        stway = stway->next;
+     }
 
     /* hero location */
     if (u.ux) {
@@ -757,8 +753,7 @@ do_positionbar()
 #endif
 
 static void
-interrupt_multi(msg)
-const char *msg;
+interrupt_multi(const char *msg)
 {
     if (g.multi > 0 && !g.context.travel && !g.context.run) {
         nomul(0);
@@ -790,7 +785,7 @@ static const struct early_opt earlyopts[] = {
 };
 
 #ifdef WIN32
-extern int FDECL(windows_early_options, (const char *));
+extern int windows_early_options(const char *);
 #endif
 
 /*
@@ -801,10 +796,7 @@ extern int FDECL(windows_early_options, (const char *));
  */
 
 int
-argcheck(argc, argv, e_arg)
-int argc;
-char *argv[];
-enum earlyarg e_arg;
+argcheck(int argc, char *argv[], enum earlyarg e_arg)
 {
     int i, idx;
     boolean match = FALSE;
@@ -893,8 +885,7 @@ enum earlyarg e_arg;
  *                    can be debugged without buffering.
  */
 static void
-debug_fields(opts)
-const char *opts;
+debug_fields(const char *opts)
 {
     char *op;
     boolean negated = FALSE;

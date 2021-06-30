@@ -6,33 +6,33 @@
 #include "sp_lev.h"
 
 /* lua_CFunction prototypes */
-static int FDECL(l_selection_new, (lua_State *));
-static int FDECL(l_selection_clone, (lua_State *));
-static int FDECL(l_selection_getpoint, (lua_State *));
-static int FDECL(l_selection_setpoint, (lua_State *));
-static int FDECL(l_selection_not, (lua_State *));
-static int FDECL(l_selection_filter_percent, (lua_State *));
-static int FDECL(l_selection_rndcoord, (lua_State *));
-static boolean FDECL(params_sel_2coords, (lua_State *, struct selectionvar **,
-                                          schar *, schar *, schar *, schar *));
-static int FDECL(l_selection_line, (lua_State *));
-static int FDECL(l_selection_randline, (lua_State *));
-static int FDECL(l_selection_rect, (lua_State *));
-static int FDECL(l_selection_fillrect, (lua_State *));
-static int FDECL(l_selection_grow, (lua_State *));
-static int FDECL(l_selection_filter_mapchar, (lua_State *));
-static int FDECL(l_selection_match, (lua_State *));
-static int FDECL(l_selection_flood, (lua_State *));
-static int FDECL(l_selection_circle, (lua_State *));
-static int FDECL(l_selection_ellipse, (lua_State *));
-static int FDECL(l_selection_gradient, (lua_State *));
-static int FDECL(l_selection_iterate, (lua_State *));
-static int FDECL(l_selection_gc, (lua_State *));
-static int FDECL(l_selection_not, (lua_State *));
-static int FDECL(l_selection_and, (lua_State *));
-static int FDECL(l_selection_or, (lua_State *));
-static int FDECL(l_selection_xor, (lua_State *));
-static int FDECL(l_selection_not, (lua_State *));
+static int l_selection_new(lua_State *);
+static int l_selection_clone(lua_State *);
+static int l_selection_getpoint(lua_State *);
+static int l_selection_setpoint(lua_State *);
+static int l_selection_not(lua_State *);
+static int l_selection_filter_percent(lua_State *);
+static int l_selection_rndcoord(lua_State *);
+static boolean params_sel_2coords(lua_State *, struct selectionvar **,
+                                  xchar *, xchar *, xchar *, xchar *);
+static int l_selection_line(lua_State *);
+static int l_selection_randline(lua_State *);
+static int l_selection_rect(lua_State *);
+static int l_selection_fillrect(lua_State *);
+static int l_selection_grow(lua_State *);
+static int l_selection_filter_mapchar(lua_State *);
+static int l_selection_match(lua_State *);
+static int l_selection_flood(lua_State *);
+static int l_selection_circle(lua_State *);
+static int l_selection_ellipse(lua_State *);
+static int l_selection_gradient(lua_State *);
+static int l_selection_iterate(lua_State *);
+static int l_selection_gc(lua_State *);
+static int l_selection_not(lua_State *);
+static int l_selection_and(lua_State *);
+static int l_selection_or(lua_State *);
+static int l_selection_xor(lua_State *);
+static int l_selection_not(lua_State *);
 #if 0
 /* the following do not appear to currently be
    used and because they are static, the OSX
@@ -40,16 +40,14 @@ static int FDECL(l_selection_not, (lua_State *));
    if ifdef'd out the prototype here and the
    function body below.
  */
-static int FDECL(l_selection_add, (lua_State *));
-static int FDECL(l_selection_sub, (lua_State *));
-static int FDECL(l_selection_ipairs, (lua_State *));
-static struct selectionvar *FDECL(l_selection_to, (lua_State *, int));
+static int l_selection_add(lua_State *);
+static int l_selection_sub(lua_State *);
+static int l_selection_ipairs(lua_State *);
+static struct selectionvar *l_selection_to(lua_State *, int);
 #endif
 
 struct selectionvar *
-l_selection_check(L, index)
-lua_State *L;
-int index;
+l_selection_check(lua_State *L, int index)
 {
     struct selectionvar *sel;
 
@@ -61,8 +59,7 @@ int index;
 }
 
 static int
-l_selection_gc(L)
-lua_State *L;
+l_selection_gc(lua_State *L)
 {
     struct selectionvar *sel = l_selection_check(L, 1);
 
@@ -73,9 +70,7 @@ lua_State *L;
 
 #if 0
 static struct selectionvar *
-l_selection_to(L, index)
-lua_State *L;
-int index;
+l_selection_to(lua_State *L, int index)
 {
     struct selectionvar *sel = (struct selectionvar *)lua_touserdata(L, index);
 
@@ -86,8 +81,7 @@ int index;
 #endif
 
 static struct selectionvar *
-l_selection_push(L)
-lua_State *L;
+l_selection_push(lua_State *L)
 {
     struct selectionvar *tmp = selection_new();
     struct selectionvar
@@ -106,8 +100,7 @@ lua_State *L;
 
 /* local sel = selection.new(); */
 static int
-l_selection_new(L)
-lua_State *L;
+l_selection_new(lua_State *L)
 {
     (void) l_selection_push(L);
     return 1;
@@ -116,8 +109,7 @@ lua_State *L;
 /* Replace the topmost selection in the stack with a clone of it. */
 /* local sel = selection.clone(sel); */
 static int
-l_selection_clone(L)
-lua_State *L;
+l_selection_clone(lua_State *L)
 {
     struct selectionvar *sel = l_selection_check(L, 1);
     struct selectionvar *tmp;
@@ -139,11 +131,10 @@ lua_State *L;
 /* local sel = selection.set(sel); */
 /* TODO: allow setting multiple coordinates at once: set({x,y}, {x,y}, ...); */
 static int
-l_selection_setpoint(L)
-lua_State *L;
+l_selection_setpoint(lua_State *L)
 {
     struct selectionvar *sel = (struct selectionvar *) 0;
-    schar x = -1, y = -1;
+    xchar x = -1, y = -1;
     int val = 1;
     int argc = lua_gettop(L);
     long crd = 0L;
@@ -153,15 +144,15 @@ lua_State *L;
     } else if (argc == 1) {
         sel = l_selection_check(L, 1);
     } else if (argc == 2) {
-        x = (schar) luaL_checkinteger(L, 1);
-        y = (schar) luaL_checkinteger(L, 2);
+        x = (xchar) luaL_checkinteger(L, 1);
+        y = (xchar) luaL_checkinteger(L, 2);
         lua_pop(L, 2);
         (void) l_selection_new(L);
         sel = l_selection_check(L, 1);
     } else {
         sel = l_selection_check(L, 1);
-        x = (schar) luaL_checkinteger(L, 2);
-        y = (schar) luaL_checkinteger(L, 3);
+        x = (xchar) luaL_checkinteger(L, 2);
+        y = (xchar) luaL_checkinteger(L, 3);
         val = (int) luaL_optinteger(L, 4, 1);
     }
 
@@ -184,12 +175,11 @@ lua_State *L;
 
 /* local value = selection.get(sel, x, y); */
 static int
-l_selection_getpoint(L)
-lua_State *L;
+l_selection_getpoint(lua_State *L)
 {
     struct selectionvar *sel = l_selection_check(L, 1);
-    schar x = (schar) luaL_checkinteger(L, 2);
-    schar y = (schar) luaL_checkinteger(L, 3);
+    xchar x = (xchar) luaL_checkinteger(L, 2);
+    xchar y = (xchar) luaL_checkinteger(L, 3);
     int val;
     long crd;
 
@@ -209,8 +199,7 @@ lua_State *L;
 /* local s = selection.negate(); */
 /* local s = sel:negate(); */
 static int
-l_selection_not(L)
-lua_State *L;
+l_selection_not(lua_State *L)
 {
     int argc = lua_gettop(L);
     struct selectionvar *sel, *sel2;
@@ -230,8 +219,7 @@ lua_State *L;
 
 /* local sel = selection.area(4,5, 40,10) & selection.rect(7,8, 60,14); */
 static int
-l_selection_and(L)
-lua_State *L;
+l_selection_and(lua_State *L)
 {
     int x,y;
     struct selectionvar *sela = l_selection_check(L, 1);
@@ -251,8 +239,7 @@ lua_State *L;
 
 /* local sel = selection.area(4,5, 40,10) | selection.rect(7,8, 60,14); */
 static int
-l_selection_or(L)
-lua_State *L;
+l_selection_or(lua_State *L)
 {
     int x,y;
     struct selectionvar *sela = l_selection_check(L, 1);
@@ -272,8 +259,7 @@ lua_State *L;
 
 /* local sel = selection.area(4,5, 40,10) ~ selection.rect(7,8, 60,14); */
 static int
-l_selection_xor(L)
-lua_State *L;
+l_selection_xor(lua_State *L)
 {
     int x,y;
     struct selectionvar *sela = l_selection_check(L, 1);
@@ -294,8 +280,7 @@ lua_State *L;
 
 /* local s = selection.percentage(sel, 50); */
 static int
-l_selection_filter_percent(L)
-lua_State *L;
+l_selection_filter_percent(lua_State *L)
 {
     struct selectionvar *ret;
     int p;
@@ -313,12 +298,11 @@ lua_State *L;
 /* local x,y = selection.rndcoord(sel); */
 /* local x,y = selection.rndcoord(sel, 1); */
 static int
-l_selection_rndcoord(L)
-lua_State *L;
+l_selection_rndcoord(lua_State *L)
 {
     struct selectionvar *sel = l_selection_check(L, 1);
     int removeit = (int) luaL_optinteger(L, 2, 0);
-    schar x, y;
+    xchar x, y;
     selection_rndcoord(sel, &x, &y, removeit);
     update_croom();
     if (g.coder && g.coder->croom) {
@@ -341,19 +325,17 @@ lua_State *L;
 /* function(selection, x1,y1, x2,y2) */
 /* selection:function(x1,y1, x2,y2) */
 static boolean
-params_sel_2coords(L, sel, x1,y1, x2,y2)
-lua_State *L;
-struct selectionvar **sel;
-schar *x1, *y1, *x2, *y2;
+params_sel_2coords(lua_State *L, struct selectionvar **sel,
+                   xchar *x1, xchar *y1, xchar *x2, xchar *y2)
 {
     int argc = lua_gettop(L);
 
     if (argc == 4) {
         (void) l_selection_new(L);
-        *x1 = (schar) luaL_checkinteger(L, 1);
-        *y1 = (schar) luaL_checkinteger(L, 2);
-        *x2 = (schar) luaL_checkinteger(L, 3);
-        *y2 = (schar) luaL_checkinteger(L, 4);
+        *x1 = (xchar) luaL_checkinteger(L, 1);
+        *y1 = (xchar) luaL_checkinteger(L, 2);
+        *x2 = (xchar) luaL_checkinteger(L, 3);
+        *y2 = (xchar) luaL_checkinteger(L, 4);
         *sel = l_selection_check(L, 5);
         lua_remove(L, 1);
         lua_remove(L, 1);
@@ -362,10 +344,10 @@ schar *x1, *y1, *x2, *y2;
         return TRUE;
     } else if (argc == 5) {
         *sel = l_selection_check(L, 1);
-        *x1 = (schar) luaL_checkinteger(L, 2);
-        *y1 = (schar) luaL_checkinteger(L, 3);
-        *x2 = (schar) luaL_checkinteger(L, 4);
-        *y2 = (schar) luaL_checkinteger(L, 5);
+        *x1 = (xchar) luaL_checkinteger(L, 2);
+        *y1 = (xchar) luaL_checkinteger(L, 3);
+        *x2 = (xchar) luaL_checkinteger(L, 4);
+        *y2 = (xchar) luaL_checkinteger(L, 5);
         lua_pop(L, 4);
         return TRUE;
     }
@@ -376,14 +358,10 @@ schar *x1, *y1, *x2, *y2;
 /* local s = selection.line(x1,y1, x2,y2); */
 /* s:line(x1,y1, x2,y2); */
 static int
-l_selection_line(L)
-lua_State *L;
+l_selection_line(lua_State *L)
 {
     struct selectionvar *sel = NULL;
-    schar x1;
-    schar y1;
-    schar x2;
-    schar y2;
+    xchar x1, y1, x2, y2;
 
     if (!params_sel_2coords(L, &sel, &x1, &y1, &x2, &y2)) {
         nhl_error(L, "selection.line: illegal arguments");
@@ -400,14 +378,10 @@ lua_State *L;
 
 /* local s = selection.rect(sel, x1,y1, x2,y2); */
 static int
-l_selection_rect(L)
-lua_State *L;
+l_selection_rect(lua_State *L)
 {
     struct selectionvar *sel = NULL;
-    schar x1;
-    schar y1;
-    schar x2;
-    schar y2;
+    xchar x1, y1, x2, y2;
 
     if (!params_sel_2coords(L, &sel, &x1, &y1, &x2, &y2)) {
         nhl_error(L, "selection.rect: illegal arguments");
@@ -432,15 +406,11 @@ lua_State *L;
 /* s:fillrect(x1,y1, x2,y2); */
 /* selection.area(x1,y1, x2,y2); */
 static int
-l_selection_fillrect(L)
-lua_State *L;
+l_selection_fillrect(lua_State *L)
 {
     struct selectionvar *sel = NULL;
     int y;
-    schar x1;
-    schar y1;
-    schar x2;
-    schar y2;
+    xchar x1, y1, x2, y2;
 
     if (!params_sel_2coords(L, &sel, &x1, &y1, &x2, &y2)) {
         nhl_error(L, "selection.fillrect: illegal arguments");
@@ -468,27 +438,26 @@ lua_State *L;
 /* TODO: selection.randline(x1,y1, x2,y2, roughness); */
 /* TODO: selection.randline({x1,y1}, {x2,y2}, roughness); */
 static int
-l_selection_randline(L)
-lua_State *L;
+l_selection_randline(lua_State *L)
 {
     int argc = lua_gettop(L);
     struct selectionvar *sel = (struct selectionvar *) 0;
-    schar x1, y1, x2, y2;
+    xchar x1 = 0, y1 = 0, x2 = 0, y2 = 0;
     int roughness = 7;
 
     if (argc == 6) {
         sel = l_selection_check(L, 1);
-        x1 = (schar) luaL_checkinteger(L, 2);
-        y1 = (schar) luaL_checkinteger(L, 3);
-        x2 = (schar) luaL_checkinteger(L, 4);
-        y2 = (schar) luaL_checkinteger(L, 5);
+        x1 = (xchar) luaL_checkinteger(L, 2);
+        y1 = (xchar) luaL_checkinteger(L, 3);
+        x2 = (xchar) luaL_checkinteger(L, 4);
+        y2 = (xchar) luaL_checkinteger(L, 5);
         roughness = (int) luaL_checkinteger(L, 6);
         lua_pop(L, 5);
     } else if (argc == 5 && lua_type(L, 1) == LUA_TNUMBER) {
-        x1 = (schar) luaL_checkinteger(L, 1);
-        y1 = (schar) luaL_checkinteger(L, 2);
-        x2 = (schar) luaL_checkinteger(L, 3);
-        y2 = (schar) luaL_checkinteger(L, 4);
+        x1 = (xchar) luaL_checkinteger(L, 1);
+        y1 = (xchar) luaL_checkinteger(L, 2);
+        x2 = (xchar) luaL_checkinteger(L, 3);
+        y2 = (xchar) luaL_checkinteger(L, 4);
         roughness = (int) luaL_checkinteger(L, 5);
         lua_pop(L, 5);
         (void) l_selection_new(L);
@@ -509,8 +478,7 @@ lua_State *L;
 /* local s = selection.grow(sel); */
 /* local s = selection.grow(sel, "north"); */
 static int
-l_selection_grow(L)
-lua_State *L;
+l_selection_grow(lua_State *L)
 {
     int argc = lua_gettop(L);
     const char *const growdirs[] = { "all", "random", "north", "west", "east", "south", NULL };
@@ -531,8 +499,7 @@ lua_State *L;
 
 /* local s = selection.filter_mapchar(sel, mapchar, lit); */
 static int
-l_selection_filter_mapchar(L)
-lua_State *L;
+l_selection_filter_mapchar(lua_State *L)
 {
     int argc = lua_gettop(L);
     struct selectionvar *sel = l_selection_check(L, 1);
@@ -565,8 +532,7 @@ lua_State *L;
 
 /* local s = selection.match([[...]]); */
 static int
-l_selection_match(L)
-lua_State *L;
+l_selection_match(lua_State *L)
 {
     int argc = lua_gettop(L);
     struct selectionvar *sel = (struct selectionvar *) 0;
@@ -605,16 +571,15 @@ lua_State *L;
 
 /* local s = selection.floodfill(x,y); */
 static int
-l_selection_flood(L)
-lua_State *L;
+l_selection_flood(lua_State *L)
 {
     int argc = lua_gettop(L);
     struct selectionvar *sel = (struct selectionvar *) 0;
-    schar x, y;
+    xchar x = 0, y = 0;
 
     if (argc == 2) {
-        x = (schar) luaL_checkinteger(L, 1);
-        y = (schar) luaL_checkinteger(L, 2);
+        x = (xchar) luaL_checkinteger(L, 1);
+        y = (xchar) luaL_checkinteger(L, 2);
         lua_pop(L, 2);
         (void) l_selection_new(L);
         sel = l_selection_check(L, 1);
@@ -639,25 +604,24 @@ lua_State *L;
 /* local s = selection.circle(sel, x, y, radius); */
 /* local s = selection.circle(sel, x, y, radius, filled); */
 static int
-l_selection_circle(L)
-lua_State *L;
+l_selection_circle(lua_State *L)
 {
     int argc = lua_gettop(L);
     struct selectionvar *sel = (struct selectionvar *) 0;
-    schar x = 0, y = 0;
+    xchar x = 0, y = 0;
     int r = 0, filled = 0;
 
     if (argc == 3) {
-        x = (schar) luaL_checkinteger(L, 1);
-        y = (schar) luaL_checkinteger(L, 2);
+        x = (xchar) luaL_checkinteger(L, 1);
+        y = (xchar) luaL_checkinteger(L, 2);
         r = (int) luaL_checkinteger(L, 3);
         lua_pop(L, 3);
         (void) l_selection_new(L);
         sel = l_selection_check(L, 1);
         filled = 0;
     } else if (argc == 4 && lua_type(L, 1) == LUA_TNUMBER) {
-        x = (schar) luaL_checkinteger(L, 1);
-        y = (schar) luaL_checkinteger(L, 2);
+        x = (xchar) luaL_checkinteger(L, 1);
+        y = (xchar) luaL_checkinteger(L, 2);
         r = (int) luaL_checkinteger(L, 3);
         filled = (int) luaL_checkinteger(L, 4); /* TODO: boolean*/
         lua_pop(L, 4);
@@ -665,8 +629,8 @@ lua_State *L;
         sel = l_selection_check(L, 1);
     } else if (argc == 4 || argc == 5) {
         sel = l_selection_check(L, 1);
-        x = (schar) luaL_checkinteger(L, 2);
-        y = (schar) luaL_checkinteger(L, 3);
+        x = (xchar) luaL_checkinteger(L, 2);
+        y = (xchar) luaL_checkinteger(L, 3);
         r = (int) luaL_checkinteger(L, 4);
         filled = (int) luaL_optinteger(L, 5, 0); /* TODO: boolean */
     } else {
@@ -688,17 +652,16 @@ lua_State *L;
 /* local s = selection.ellipse(sel, x, y, radius1, radius2); */
 /* local s = selection.ellipse(sel, x, y, radius1, radius2, filled); */
 static int
-l_selection_ellipse(L)
-lua_State *L;
+l_selection_ellipse(lua_State *L)
 {
     int argc = lua_gettop(L);
     struct selectionvar *sel = (struct selectionvar *) 0;
-    schar x = 0, y = 0;
+    xchar x = 0, y = 0;
     int r1 = 0, r2 = 0, filled = 0;
 
     if (argc == 4) {
-        x = (schar) luaL_checkinteger(L, 1);
-        y = (schar) luaL_checkinteger(L, 2);
+        x = (xchar) luaL_checkinteger(L, 1);
+        y = (xchar) luaL_checkinteger(L, 2);
         r1 = (int) luaL_checkinteger(L, 3);
         r2 = (int) luaL_checkinteger(L, 4);
         lua_pop(L, 4);
@@ -706,8 +669,8 @@ lua_State *L;
         sel = l_selection_check(L, 1);
         filled = 0;
     } else if (argc == 5 && lua_type(L, 1) == LUA_TNUMBER) {
-        x = (schar) luaL_checkinteger(L, 1);
-        y = (schar) luaL_checkinteger(L, 2);
+        x = (xchar) luaL_checkinteger(L, 1);
+        y = (xchar) luaL_checkinteger(L, 2);
         r1 = (int) luaL_checkinteger(L, 3);
         r2 = (int) luaL_checkinteger(L, 4);
         filled = (int) luaL_optinteger(L, 5, 0); /* TODO: boolean */
@@ -716,8 +679,8 @@ lua_State *L;
         sel = l_selection_check(L, 1);
     } else if (argc == 5 || argc == 6) {
         sel = l_selection_check(L, 1);
-        x = (schar) luaL_checkinteger(L, 2);
-        y = (schar) luaL_checkinteger(L, 3);
+        x = (xchar) luaL_checkinteger(L, 2);
+        y = (xchar) luaL_checkinteger(L, 3);
         r1 = (int) luaL_checkinteger(L, 4);
         r2 = (int) luaL_checkinteger(L, 5);
         filled = (int) luaL_optinteger(L, 6, 0); /* TODO: boolean */
@@ -741,14 +704,13 @@ lua_State *L;
 /* selection.gradient({ type = "radial", x = 3, y = 5, x2 = 10, y2 = 12,
  *                      mindist = 4, maxdist = 10, limited = false });    */
 static int
-l_selection_gradient(L)
-lua_State *L;
+l_selection_gradient(lua_State *L)
 {
     int argc = lua_gettop(L);
     struct selectionvar *sel = (struct selectionvar *) 0;
     /* if x2 and y2 aren't set, the gradient has a single center point of x,y;
      * if they are set, the gradient is centered on a (x,y) to (x2,y2) line */
-    schar x = 0, y = 0, x2 = -1, y2 = -1;
+    xchar x = 0, y = 0, x2 = -1, y2 = -1;
     /* points will not be added within mindist of the center; the chance for a
      * point between mindist and maxdist to be added to the selection starts at
      * 0% at mindist and increases linearly to 100% at maxdist */
@@ -756,7 +718,7 @@ lua_State *L;
     /* if limited is true, no points farther than maxdist will be added; if
      * false, all points farther than maxdist will be added */
     boolean limited = FALSE;
-    long type;
+    long type = 0;
     static const char *const gradtypes[] = {
         "radial", "square", NULL
     };
@@ -767,10 +729,10 @@ lua_State *L;
     if (argc == 1 && lua_type(L, 1) == LUA_TTABLE) {
         lcheck_param_table(L);
         type = gradtypes2i[get_table_option(L, "type", "radial", gradtypes)];
-        x = (schar) get_table_int(L, "x");
-        y = (schar) get_table_int(L, "y");
-        x2 = (schar) get_table_int_opt(L, "x2", -1);
-        y2 = (schar) get_table_int_opt(L, "y2", -1);
+        x = (xchar) get_table_int(L, "x");
+        y = (xchar) get_table_int(L, "y");
+        x2 = (xchar) get_table_int_opt(L, "x2", -1);
+        y2 = (xchar) get_table_int_opt(L, "y2", -1);
         /* maxdist is required because there's no obvious default value for it,
          * whereas mindist has an obvious defalt of 0 */
         maxdist = get_table_int(L, "maxdist");
@@ -801,8 +763,7 @@ lua_State *L;
 
 /* sel:iterate(function(x,y) ... end); */
 static int
-l_selection_iterate(L)
-lua_State *L;
+l_selection_iterate(lua_State *L)
 {
     int argc = lua_gettop(L);
     struct selectionvar *sel = (struct selectionvar *) 0;
@@ -866,8 +827,7 @@ static const luaL_Reg l_selection_meta[] = {
 };
 
 int
-l_selection_register(L)
-lua_State *L;
+l_selection_register(lua_State *L)
 {
     int lib_id, meta_id;
 

@@ -1,4 +1,4 @@
-/* NetHack 3.7	sp_lev.h	$NHDT-Date: 1599434249 2020/09/06 23:17:29 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.39 $ */
+/* NetHack 3.7	sp_lev.h	$NHDT-Date: 1622361649 2021/05/30 08:00:49 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.47 $ */
 /* Copyright (c) 1989 by Jean-Christophe Collet			  */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -91,7 +91,7 @@ struct sp_coder {
     struct mkroom *tmproomlist[MAX_NESTED_ROOMS + 1];
     boolean failed_room[MAX_NESTED_ROOMS + 1];
     int n_subroom;
-    int lvl_is_joined;
+    boolean lvl_is_joined;
     boolean check_inaccessibles;
     int allow_flips;
 };
@@ -127,19 +127,21 @@ typedef struct {
 typedef struct {
     packed_coord coord;
     xchar x, y, type;
+    boolean spider_on_web;
 } spltrap;
 
 typedef struct {
     Str_or_Len name, appear_as;
     short id;
-    aligntyp align;
+    unsigned int sp_amask; /* splev amask */
     packed_coord coord;
     xchar x, y, class, appear;
     schar peaceful, asleep;
     short female, invis, cancelled, revived, avenge, fleeing, blinded,
-        paralyzed, stunned, confused;
+        paralyzed, stunned, confused, waiting;
     long seentraps;
     short has_invent;
+    long mm_flags; /* makemon flags */
 } monster;
 
 typedef struct {
@@ -159,7 +161,7 @@ typedef struct {
 typedef struct {
     packed_coord coord;
     xchar x, y;
-    aligntyp align;
+    unsigned int sp_amask; /* splev amask */
     xchar shrine;
 } altar;
 
@@ -185,7 +187,8 @@ typedef struct _room {
     Str_or_Len parent;
     xchar x, y, w, h;
     xchar xalign, yalign;
-    xchar rtype, chance, rlit, filled, joined;
+    xchar rtype, chance, rlit, needfill;
+    boolean joined;
 } room;
 
 struct mapfragment {
@@ -194,9 +197,10 @@ struct mapfragment {
 };
 
 #define SET_TYPLIT(x, y, ttyp, llit) \
-    {                                                             \
+    do {                                                          \
         if ((x) >= 1 && (y) >= 0 && (x) < COLNO && (y) < ROWNO) { \
-            if ((ttyp) < MAX_TYPE)                                \
+            if ((ttyp) < MAX_TYPE && levl[(x)][(y)].typ != STAIRS \
+                && levl[(x)][(y)].typ != LADDER)                  \
                 levl[(x)][(y)].typ = (ttyp);                      \
             if ((ttyp) == LAVAPOOL)                               \
                 levl[(x)][(y)].lit = 1;                           \
@@ -207,6 +211,6 @@ struct mapfragment {
                     levl[(x)][(y)].lit = (llit);                  \
             }                                                     \
         }                                                         \
-    }
+    } while (0)
 
 #endif /* SP_LEV_H */

@@ -1,4 +1,4 @@
-/* NetHack 3.7	obj.h	$NHDT-Date: 1596498552 2020/08/03 23:49:12 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.76 $ */
+/* NetHack 3.7	obj.h	$NHDT-Date: 1611097668 2021/01/19 23:07:48 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.85 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2006. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -40,19 +40,24 @@ struct obj {
     unsigned owt;
     long quan; /* number of items */
 
-    schar spe; /* quality of weapon, weptool, armor or ring (+ or -);
-                  number of charges for wand or charged tool ( >= -1 );
-                  number of candles attached to candelabrum;
-                  marks your eggs, tin variety and spinach tins;
-                  candy bar wrapper index;
-                  Schroedinger's Box (1) or royal coffers for a court (2);
-                  tells which fruit a fruit is;
-                  special for uball and amulet;
-                  scroll of mail (normal==0, bones or wishing==1, written==2);
-                  historic and gender for statues */
-#define STATUE_HISTORIC 0x01
-#define STATUE_MALE 0x02
-#define STATUE_FEMALE 0x04
+#define SPE_LIM 99 /* abs(obj->spe) <= 99, cap for enchanted and charged
+                    * objects (and others; named fruit index excepted) */
+    schar spe; /* quality of weapon, weptool, armor, or some rings (+ or -);
+                * number of charges for wand or charged tool ( >= -1 );
+                * number of candles attached to candelabrum (0..7);
+                * magic lamp (1 iff djinni inside => lamp is lightable);
+                * oil lamp, tallow/wax candle (1 for no apparent reason?);
+                * marks spinach tins (1 iff corpsenm==NON_PM);
+                * marks tin variety (various: homemade, stir fried, &c);
+                * eggs laid by you (1), eggs upgraded with rojal jelly (2);
+                * Schroedinger's Box (1) or royal coffers for a court (2);
+                * named fruit index;
+                * candy bar wrapper index;
+                * scroll of mail (normal==0, bones or wishing==1, written==2);
+                * splash of venom (normal==0, wishing==1);
+                * gender for corpses, statues, and figurines (0..3,
+                *   CORPSTAT_GENDER),
+                * historic flag for statues (4, CORPSTAT_HISTORIC) */
     char oclass;    /* object class */
     char invlet;    /* designation in inventory */
     char oartifact; /* artifact array index */
@@ -115,12 +120,15 @@ struct obj {
 #define leashmon corpsenm /* gets m_id of attached pet */
 #define fromsink corpsenm /* a potion from a sink */
 #define novelidx corpsenm /* 3.6 tribute - the index of the novel title */
+#define migr_species corpsenm /* species to endow for MIGR_TO_SPECIES */
     int usecount;           /* overloaded for various things that tally */
 #define spestudied usecount /* # of times a spellbook has been studied */
     unsigned oeaten;        /* nutrition left in food, if partly eaten */
     long age;               /* creation date */
     long owornmask;
     unsigned lua_ref_cnt;  /* # of lua script references for this object */
+    xchar omigr_from_dnum; /* where obj is migrating from */
+    xchar omigr_from_dlevel; /* where obj is migrating from */
     struct oextra *oextra; /* pointer to oextra struct */
 };
 
@@ -246,13 +254,16 @@ struct obj {
 #define stale_egg(egg) \
     ((g.monstermoves - (egg)->age) > (2 * MAX_EGG_HATCH_TIME))
 #define ofood(o) ((o)->otyp == CORPSE || (o)->otyp == EGG || (o)->otyp == TIN)
+    /* note: sometimes eggs and tins have special corpsenm values that
+       shouldn't be used as an index into mons[]                       */
 #define polyfodder(obj) \
-    (ofood(obj) && (pm_to_cham((obj)->corpsenm) != NON_PM       \
+    (ofood(obj) && (obj)->corpsenm >= LOW_PM                            \
+     && (pm_to_cham((obj)->corpsenm) != NON_PM                          \
                     || dmgtype(&mons[(obj)->corpsenm], AD_POLY)))
 #define mlevelgain(obj) (ofood(obj) && (obj)->corpsenm == PM_WRAITH)
 #define mhealup(obj) (ofood(obj) && (obj)->corpsenm == PM_NURSE)
-#define Is_pudding(o)                                                 \
-    (o->otyp == GLOB_OF_GRAY_OOZE || o->otyp == GLOB_OF_BROWN_PUDDING \
+#define Is_pudding(o) \
+    (o->otyp == GLOB_OF_GRAY_OOZE || o->otyp == GLOB_OF_BROWN_PUDDING   \
      || o->otyp == GLOB_OF_GREEN_SLIME || o->otyp == GLOB_OF_BLACK_PUDDING)
 
 /* Containers */
@@ -262,10 +273,13 @@ struct obj {
     (/* (Is_container(o) || (o)->otyp == STATUE) && */ \
      (o)->cobj != (struct obj *) 0)
 #define Is_container(o) ((o)->otyp >= LARGE_BOX && (o)->otyp <= BAG_OF_TRICKS)
-#define Is_box(otmp) (otmp->otyp == LARGE_BOX || otmp->otyp == CHEST)
-#define Is_mbag(otmp) \
-    (otmp->otyp == BAG_OF_HOLDING || otmp->otyp == BAG_OF_TRICKS || otmp->otyp == BAG_OF_FORTUNE)
+#define Is_box(o) ((o)->otyp == LARGE_BOX || (o)->otyp == CHEST)
+#define Is_mbag(o) ((o)->otyp == BAG_OF_HOLDING || (o)->otyp == BAG_OF_TRICKS || (o)->otyp == BAG_OF_FORTUNE)
 #define SchroedingersBox(o) ((o)->otyp == LARGE_BOX && (o)->spe == 1)
+/* usually waterproof; random chance to be subjected to leakage if cursed;
+   excludes statues, which aren't vulernable to water even when cursed */
+#define Waterproof_container(o) \
+    ((o)->otyp == OILSKIN_SACK || (o)->otyp == ICE_BOX || Is_box(o))
 
 /* dragon gear */
 #define Is_dragon_scales(obj) \
@@ -307,22 +321,26 @@ struct obj {
     (otmp->otyp == TALLOW_CANDLE || otmp->otyp == WAX_CANDLE)
 #define MAX_OIL_IN_FLASK 400 /* maximum amount of oil in a potion of oil */
 
-/* MAGIC_LAMP intentionally excluded below */
-/* age field of this is relative age rather than absolute */
-#define age_is_relative(otmp)                                       \
+/* age field of this is relative age rather than absolute; does not include
+   magic lamp */
+#define age_is_relative(otmp) \
     ((otmp)->otyp == BRASS_LANTERN || (otmp)->otyp == OIL_LAMP      \
      || (otmp)->otyp == CANDELABRUM_OF_INVOCATION                   \
      || (otmp)->otyp == TALLOW_CANDLE || (otmp)->otyp == WAX_CANDLE \
      || (otmp)->otyp == POT_OIL)
-/* object can be ignited */
-#define ignitable(otmp)                                             \
+/* object can be ignited; magic lamp used to excluded here too but all
+   usage of this macro ended up testing
+     (ignitable(obj) || obj->otyp == MAGIC_LAMP)
+   so include it; brass lantern can be lit but not by fire */
+#define ignitable(otmp) \
     ((otmp)->otyp == BRASS_LANTERN || (otmp)->otyp == OIL_LAMP      \
+     || ((otmp)->otyp == MAGIC_LAMP && (otmp)->spe > 0)             \
      || (otmp)->otyp == CANDELABRUM_OF_INVOCATION                   \
      || (otmp)->otyp == TALLOW_CANDLE || (otmp)->otyp == WAX_CANDLE \
      || (otmp)->otyp == POT_OIL)
 
 /* things that can be read */
-#define is_readable(otmp)                                                    \
+#define is_readable(otmp) \
     ((otmp)->otyp == FORTUNE_COOKIE || (otmp)->otyp == T_SHIRT               \
      || (otmp)->otyp == ALCHEMY_SMOCK || (otmp)->otyp == CREDIT_CARD         \
      || (otmp)->otyp == CAN_OF_GREASE || (otmp)->otyp == MAGIC_MARKER        \
@@ -345,6 +363,10 @@ struct obj {
      || ((o)->oartifact == ART_EYES_OF_THE_OVERWORLD                    \
          && !undiscovered_artifact(ART_EYES_OF_THE_OVERWORLD)))
 #define pair_of(o) ((o)->otyp == LENSES || is_gloves(o) || is_boots(o))
+
+#define unpolyable(o) ((o)->otyp == WAN_POLYMORPH \
+                       || (o)->otyp == SPE_POLYMORPH \
+                       || (o)->otyp == POT_POLYMORPH)
 
 /* achievement tracking; 3.6.x did this differently */
 #define is_mines_prize(o) ((o)->o_id == g.context.achieveo.mines_prize_oid)
@@ -397,8 +419,8 @@ struct obj {
  *          for it to include/extern.h.  The majority of these are currently
  *          located in mkobj.c for convenience.
  *
- *          void FDECL(newXX, (struct obj *));
- *          void FDECL(free_XX, (struct obj *));
+ *          void newXX(struct obj *);
+ *          void free_XX(struct obj *);
  *
  *          void
  *          newxx(otmp)

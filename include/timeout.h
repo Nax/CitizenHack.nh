@@ -6,7 +6,7 @@
 #define TIMEOUT_H
 
 /* generic timeout function */
-typedef void FDECL((*timeout_proc), (ANY_P *, long));
+typedef void (*timeout_proc)(ANY_P *, long);
 
 /* kind of timer */
 enum timer_type {
@@ -29,6 +29,7 @@ enum timeout_types {
     ROT_ORGANIC = 0, /* for buried organics */
     ROT_CORPSE,
     REVIVE_MON,
+    ZOMBIFY_MON,
     BURN_OBJECT,
     HATCH_EGG,
     FIG_TRANSFORM,

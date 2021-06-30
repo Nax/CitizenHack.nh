@@ -1,17 +1,16 @@
-/* NetHack 3.7	steal.c	$NHDT-Date: 1596498213 2020/08/03 23:43:33 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.84 $ */
+/* NetHack 3.7	steal.c	$NHDT-Date: 1620329782 2021/05/06 19:36:22 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.90 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
 
 #include "hack.h"
 
-static int NDECL(stealarm);
-static int NDECL(unstolenarm);
-static const char *FDECL(equipname, (struct obj *));
+static int stealarm(void);
+static int unstolenarm(void);
+static const char *equipname(struct obj *);
 
 static const char *
-equipname(otmp)
-register struct obj *otmp;
+equipname(register struct obj* otmp)
 {
     return ((otmp == uarmu) ? shirt_simple_name(otmp)
             : (otmp == uarmf) ? boots_simple_name(otmp)
@@ -24,8 +23,7 @@ register struct obj *otmp;
 
 /* proportional subset of gold; return value actually fits in an int */
 long
-somegold(lmoney)
-long lmoney;
+somegold(long lmoney)
 {
 #ifdef LINT /* long conv. ok */
     int igold = 0;
@@ -60,8 +58,7 @@ long lmoney;
  * Deals in gold only, as leprechauns don't care for lesser coins.
 */
 struct obj *
-findgold(chain)
-register struct obj *chain;
+findgold(register struct obj* chain)
 {
     while (chain && chain->otyp != GOLD_PIECE)
         chain = chain->nobj;
@@ -72,8 +69,7 @@ register struct obj *chain;
  * Steal gold coins only.  Leprechauns don't care for lesser coins.
 */
 void
-stealgold(mtmp)
-register struct monst *mtmp;
+stealgold(register struct monst* mtmp)
 {
     register struct obj *fgold = g_at(u.ux, u.uy);
     register struct obj *ygold;
@@ -135,7 +131,7 @@ register struct monst *mtmp;
 
 /* monster who was stealing from hero has just died */
 void
-thiefdead()
+thiefdead(void)
 {
     /* hero is busy taking off an item of armor which takes multiple turns */
     g.stealmid = 0;
@@ -148,7 +144,7 @@ thiefdead()
 /* called via (*g.afternmv)() when hero finishes taking off armor that
    was slated to be stolen but the thief died in the interim */
 static int
-unstolenarm(VOID_ARGS)
+unstolenarm(void)
 {
     struct obj *obj;
 
@@ -165,7 +161,7 @@ unstolenarm(VOID_ARGS)
 }
 
 static int
-stealarm(VOID_ARGS)
+stealarm(void)
 {
     register struct monst *mtmp;
     register struct obj *otmp;
@@ -205,9 +201,9 @@ stealarm(VOID_ARGS)
 /* An object you're wearing has been taken off by a monster (theft or
    seduction).  Also used if a worn item gets transformed (stone to flesh). */
 void
-remove_worn_item(obj, unchain_ball)
-struct obj *obj;
-boolean unchain_ball; /* whether to unpunish or just unwield */
+remove_worn_item(
+    struct obj *obj,
+    boolean unchain_ball) /* whether to unpunish or just unwield */
 {
     if (donning(obj))
         cancel_don();
@@ -266,9 +262,7 @@ boolean unchain_ball; /* whether to unpunish or just unwield */
  * Nymphs and monkeys won't steal coins.
  */
 int
-steal(mtmp, objnambuf)
-struct monst *mtmp;
-char *objnambuf;
+steal(struct monst* mtmp, char* objnambuf)
 {
     struct obj *otmp;
     int tmp, could_petrify, armordelay, olddelay, icnt,
@@ -499,20 +493,18 @@ char *objnambuf;
 
 /* Returns 1 if otmp is free'd, 0 otherwise. */
 int
-mpickobj(mtmp, otmp)
-register struct monst *mtmp;
-register struct obj *otmp;
+mpickobj(register struct monst* mtmp, register struct obj* otmp)
 {
     int freed_otmp;
     boolean snuff_otmp = FALSE;
 
     if (!otmp) {
         impossible("monster (%s) taking or picking up nothing?",
-                   mtmp->data->mname);
+                   pmname(mtmp->data, Mgender(mtmp)));
         return 1;
     } else if (otmp == uball || otmp == uchain) {
         impossible("monster (%s) taking or picking up attached %s (%s)?",
-                   mtmp->data->mname,
+                   pmname(mtmp->data, Mgender(mtmp)),
                    (otmp == uchain) ? "chain" : "ball", simpleonames(otmp));
         return 0;
     }
@@ -535,6 +527,11 @@ register struct obj *otmp;
        and if it's eventually dropped in a shop, shk will claim it */
     if (!mtmp->mtame)
         otmp->no_charge = 0;
+    /* if monster is unseen, info hero knows about this object becomes lost;
+       continual pickup and drop by pets makes this too annoying if it is
+       applied to them */
+    if (!mtmp->mtame && !canseemon(mtmp))
+        unknow_object(otmp);
     /* Must do carrying effects on object prior to add_to_minv() */
     carry_obj_effects(otmp);
     /* add_to_minv() might free otmp [if merged with something else],
@@ -548,8 +545,7 @@ register struct obj *otmp;
 
 /* called for AD_SAMU (the Wizard and quest nemeses) */
 void
-stealamulet(mtmp)
-struct monst *mtmp;
+stealamulet(struct monst* mtmp)
 {
     char buf[BUFSZ];
     struct obj *otmp = 0, *obj = 0;
@@ -631,10 +627,10 @@ struct monst *mtmp;
 /* when a mimic gets poked with something, it might take that thing
    (at present, only implemented for when the hero does the poking) */
 void
-maybe_absorb_item(mon, obj, ochance, achance)
-struct monst *mon;
-struct obj *obj;
-int ochance, achance; /* percent chance for ordinary item, artifact */
+maybe_absorb_item(
+    struct monst *mon,
+    struct obj *obj,
+    int ochance, int achance) /* percent chance for ordinary item, artifact */
 {
     if (obj == uball || obj == uchain || obj->oclass == ROCK_CLASS
         || obj_resists(obj, 100 - ochance, 100 - achance)
@@ -674,33 +670,22 @@ int ochance, achance; /* percent chance for ordinary item, artifact */
 
 /* drop one object taken from a (possibly dead) monster's inventory */
 void
-mdrop_obj(mon, obj, verbosely)
-struct monst *mon;
-struct obj *obj;
-boolean verbosely;
+mdrop_obj(
+    struct monst *mon,
+    struct obj *obj,
+    boolean verbosely)
 {
     int omx = mon->mx, omy = mon->my;
-    boolean update_mon = FALSE;
+    long unwornmask = obj->owornmask;
 
-    if (obj->owornmask) {
-        /* perform worn item handling if the monster is still alive */
-        if (!DEADMONSTER(mon)) {
-            mon->misc_worn_check &= ~obj->owornmask;
-            update_mon = TRUE;
-
-        /* don't charge for an owned saddle on dead steed (provided
-           that the hero is within the same shop at the time) */
-        } else if (mon->mtame && (obj->owornmask & W_SADDLE) != 0L
-                   && !obj->unpaid && costly_spot(omx, omy)
-                   /* being at costly_spot guarantees lev->roomno is not 0 */
-                   && index(in_rooms(u.ux, u.uy, SHOPBASE),
-                            levl[omx][omy].roomno)) {
-            obj->no_charge = 1;
-        }
-        /* this should be done even if the monster has died */
-        if (obj->owornmask & W_WEP)
-            setmnotwielded(mon, obj);
-        obj->owornmask = 0L;
+    extract_from_minvent(mon, obj, FALSE, TRUE);
+    /* don't charge for an owned saddle on dead steed (provided
+        that the hero is within the same shop at the time) */
+    if (unwornmask && mon->mtame && (unwornmask & W_SADDLE) != 0L
+        && !obj->unpaid && costly_spot(omx, omy)
+        /* being at costly_spot guarantees lev->roomno is not 0 */
+        && index(in_rooms(u.ux, u.uy, SHOPBASE), levl[omx][omy].roomno)) {
+        obj->no_charge = 1;
     }
     /* obj_no_longer_held(obj); -- done by place_object */
     if (verbosely && cansee(omx, omy))
@@ -710,8 +695,9 @@ boolean verbosely;
         stackobj(obj);
     }
     /* do this last, after placing obj on floor; removing steed's saddle
-       throws rider, possibly inflicting fatal damage and producing bones */
-    if (update_mon)
+       throws rider, possibly inflicting fatal damage and producing bones; this
+       is why we had to call extract_from_minvent() with do_intrinsics=FALSE */
+    if (!DEADMONSTER(mon) && unwornmask)
         update_mon_intrinsics(mon, obj, FALSE, TRUE);
 }
 
@@ -719,8 +705,7 @@ boolean verbosely;
    even leaving the game entirely; when that happens, prevent them from
    taking the Amulet, invocation items, or quest artifact with them */
 void
-mdrop_special_objs(mon)
-struct monst *mon;
+mdrop_special_objs(struct monst* mon)
 {
     struct obj *obj, *otmp;
 
@@ -731,16 +716,10 @@ struct monst *mon;
            current role's quest artifact is rescued too--quest artifacts
            for the other roles are not */
         if (obj_resists(obj, 0, 0) || is_quest_artifact(obj)) {
-            obj_extract_self(obj);
             if (mon->mx) {
                 mdrop_obj(mon, obj, FALSE);
             } else { /* migrating monster not on map */
-                if (obj->owornmask) {
-                    mon->misc_worn_check &= ~obj->owornmask;
-                    if (obj->owornmask & W_WEP)
-                        setmnotwielded(mon, obj);
-                    obj->owornmask = 0L;
-                }
+                extract_from_minvent(mon, obj, TRUE, TRUE);
                 rloco(obj);
             }
         }
@@ -749,10 +728,10 @@ struct monst *mon;
 
 /* release the objects the creature is carrying */
 void
-relobj(mtmp, show, is_pet)
-struct monst *mtmp;
-int show;
-boolean is_pet; /* If true, pet should keep wielded/worn items */
+relobj(
+    struct monst *mtmp,
+    int show,
+    boolean is_pet) /* If true, pet should keep wielded/worn items */
 {
     struct obj *otmp;
     int omx = mtmp->mx, omy = mtmp->my;
@@ -767,7 +746,6 @@ boolean is_pet; /* If true, pet should keep wielded/worn items */
     } /* isgd && has gold */
 
     while ((otmp = (is_pet ? droppables(mtmp) : mtmp->minvent)) != 0) {
-        obj_extract_self(otmp);
         mdrop_obj(mtmp, otmp, is_pet && flags.verbose);
     }
 

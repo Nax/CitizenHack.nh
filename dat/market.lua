@@ -26,7 +26,7 @@ des.map([[
 ---------------------------------------------------------------------------
 ]]);
 
-des.region({ region={5,1,73,19}, lit=1, type="shop", prefilled=0 })
+des.region({ region={5,1,73,19}, lit=1, type="shop", filled=1 })
 des.door("locked",4,10)
 
 local y = { 1, 19 }

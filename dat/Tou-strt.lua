@@ -36,7 +36,7 @@ des.map([[
 ]]);
 -- Dungeon Description
 des.region(selection.area(00,00,75,19), "lit")
-des.region({ region={14,01, 20,03}, lit=0, type="morgue", prefilled=0 })
+des.region({ region={14,01, 20,03}, lit=0, type="morgue", filled=1 })
 des.region(selection.area(07,10,11,12), "unlit")
 des.region(selection.area(04,16,08,18), "unlit")
 des.region(selection.area(17,16,21,18), "unlit")
@@ -95,7 +95,10 @@ des.monster("forest centaur")
 des.monster("forest centaur")
 des.monster("C")
 -- Twoflower
-des.monster("Twoflower", 64, 03)
+des.monster({ id = "Twoflower", coord = {64, 03}, inventory = function()
+   des.object({ id = "walking shoes", spe = 3 });
+   des.object({ id = "hawaiian shirt", spe = 3 });
+end })
 -- The treasure of Twoflower
 des.object("chest", 64, 03)
 -- guides for the audience chamber

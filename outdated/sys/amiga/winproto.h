@@ -40,10 +40,10 @@ void amii_getret(void);
 
 /* winmenu.c */
 void amii_start_menu(winid window, unsigned long);
-void FDECL(amii_add_menu, (winid, int, const anything *, CHAR_P, CHAR_P, int,
-                           const char *, unsigned int));
-void FDECL(amii_end_menu, (winid, const char *));
-int FDECL(amii_select_menu, (winid, int, menu_item **));
+void amii_add_menu(winid, int, const anything *, CHAR_P, CHAR_P, int,
+                   const char *, unsigned int);
+void amii_end_menu(winid, const char *);
+int amii_select_menu(winid, int, menu_item **);
 int DoMenuScroll(int win, int blocking, int how, menu_item **);
 void ReDisplayData(winid win);
 void DisplayData(winid win, int start);
@@ -65,7 +65,7 @@ void Abort(long rc);
 #endif
 void CleanUp(void);
 void flush_glyph_buffer(struct Window *w);
-void amiga_print_glyph(winid window, int color_index, int glyph, int bkglyph);
+void amiga_print_glyph(winid window, int color_index, int glyph);
 void start_glyphout(winid window);
 void amii_end_glyphout(winid window);
 struct NewWindow *DupNewWindow(struct NewWindow *win);
@@ -142,7 +142,7 @@ void Abort(long rc);
 #endif
 
 /* amirip.c */
-void FDECL(amii_outrip, (winid tmpwin, int how, time_t when));
+void amii_outrip(winid tmpwin, int how, time_t when);
 
 /* winchar.c */
 void SetMazeType(MazeType);

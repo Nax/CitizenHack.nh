@@ -1,4 +1,4 @@
-/* NetHack 3.7	end.c	$NHDT-Date: 1597182933 2020/08/11 21:55:33 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.212 $ */
+/* NetHack 3.7	end.c	$NHDT-Date: 1621380392 2021/05/18 23:26:32 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.225 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -20,26 +20,26 @@
 #define nowrap_add(a, b) (a = ((a + b) < 0 ? LONG_MAX : (a + b)))
 
 #ifndef NO_SIGNAL
-static void FDECL(done_intr, (int));
+static void done_intr(int);
 #if defined(UNIX) || defined(VMS) || defined(__EMX__)
-static void FDECL(done_hangup, (int));
+static void done_hangup(int);
 #endif
 #endif
-static void FDECL(disclose, (int, BOOLEAN_P));
-static void FDECL(get_valuables, (struct obj *));
-static void FDECL(sort_valuables, (struct valuable_data *, int));
-static void NDECL(done_object_cleanup);
-static void FDECL(artifact_score, (struct obj *, BOOLEAN_P, winid));
-static void FDECL(really_done, (int)) NORETURN;
-static void FDECL(savelife, (int));
-static boolean FDECL(should_query_disclose_option, (int, char *));
+static void disclose(int, boolean);
+static void get_valuables(struct obj *);
+static void sort_valuables(struct valuable_data *, int);
+static void done_object_cleanup(void);
+static void artifact_score(struct obj *, boolean, winid);
+static void really_done(int) NORETURN;
+static void savelife(int);
+static boolean should_query_disclose_option(int, char *);
 #ifdef DUMPLOG
-static void NDECL(dump_plines);
+static void dump_plines(void);
 #endif
-static void FDECL(dump_everything, (int, time_t));
+static void dump_everything(int, time_t);
 
 #if defined(__BEOS__) || defined(MICRO) || defined(OS2) || defined(WIN32)
-extern void FDECL(nethack_exit, (int)) NORETURN;
+extern void nethack_exit(int) NORETURN;
 #else
 #define nethack_exit exit
 #endif
@@ -94,22 +94,35 @@ extern void FDECL(nethack_exit, (int)) NORETURN;
 #endif
 #endif
 
-static void NDECL(NH_abort);
+static void NH_abort(void);
 #ifndef NO_SIGNAL
-static void FDECL(panictrace_handler, (int));
+static void panictrace_handler(int);
 #endif
-static boolean NDECL(NH_panictrace_libc);
-static boolean NDECL(NH_panictrace_gdb);
+static boolean NH_panictrace_libc(void);
+static boolean NH_panictrace_gdb(void);
 
 #ifndef NO_SIGNAL
 /* called as signal() handler, so sent at least one arg */
 /*ARGUSED*/
 void
-panictrace_handler(sig_unused)
-int sig_unused UNUSED;
+panictrace_handler(int sig_unused UNUSED)
 {
 #define SIG_MSG "\nSignal received.\n"
     int f2;
+
+#ifdef CURSES_GRAPHICS
+    if (iflags.window_inited && WINDOWPORT("curses")) {
+        extern void curses_uncurse_terminal(void); /* wincurs.h */
+
+        /* it is risky calling this during a program-terminating signal,
+           but without it the subsequent backtrace is useless because
+           that ends up being scrawled all over the screen; call is
+           here rather than in NH_abort() because panic() calls both
+           exit_nhwindows(), which makes this same call under curses,
+           then NH_abort() and we don't want to call this twice */
+        curses_uncurse_terminal();
+    }
+#endif
     
     f2 = (int) write(2, SIG_MSG, sizeof SIG_MSG - 1);
     nhUse(f2);  /* what could we do if write to fd#2 (stderr) fails  */
@@ -117,8 +130,7 @@ int sig_unused UNUSED;
 }
 
 void
-panictrace_setsignals(set)
-boolean set;
+panictrace_setsignals(boolean set)
 {
 #define SETSIGNAL(sig) \
     (void) signal(sig, set ? (SIG_RET_TYPE) panictrace_handler : SIG_DFL);
@@ -154,12 +166,14 @@ boolean set;
 #endif /* NO_SIGNAL */
 
 static void
-NH_abort()
+NH_abort(void)
 {
     int gdb_prio = SYSOPT_PANICTRACE_GDB;
     int libc_prio = SYSOPT_PANICTRACE_LIBC;
-    static boolean aborting = FALSE;
+    static volatile boolean aborting = FALSE;
 
+    /* don't execute this code recursively if a second abort is requested
+       while this routine or the code it calls is executing */
     if (aborting)
         return;
     aborting = TRUE;
@@ -190,14 +204,14 @@ NH_abort()
 }
 
 static boolean
-NH_panictrace_libc()
+NH_panictrace_libc(void)
 {
 #ifdef PANICTRACE_LIBC
     void *bt[20];
     size_t count, x;
     char **info, buf[BUFSZ];
 
-    raw_print("Generating more information you may report:\n");
+    raw_print("  Generating more information you may report:\n");
     count = backtrace(bt, SIZE(bt));
     info = backtrace_symbols(bt, count);
     for (x = 0; x < count; x++) {
@@ -229,7 +243,7 @@ NH_panictrace_libc()
 #endif /* PANICTRACE_GDB */
 
 static boolean
-NH_panictrace_gdb()
+NH_panictrace_gdb(void)
 {
 #ifdef PANICTRACE_GDB
     /* A (more) generic method to get a stack trace - invoke
@@ -248,7 +262,7 @@ NH_panictrace_gdb()
             gdbpath, ARGV0, getpid(), greppath);
     gdb = popen(buf, "w");
     if (gdb) {
-        raw_print("Generating more information you may report:\n");
+        raw_print("  Generating more information you may report:\n");
         fprintf(gdb, "bt\nquit\ny");
         fflush(gdb);
         sleep(4); /* ugly */
@@ -287,10 +301,10 @@ static NEARDATA const char *ends[] = {
 
 static boolean Schroedingers_cat = FALSE;
 
+/* called as signal() handler, so sent at least one arg */
 /*ARGSUSED*/
 void
-done1(sig_unused) /* called as signal() handler, so sent at least one arg */
-int sig_unused UNUSED;
+done1(int sig_unused UNUSED)
 {
 #ifndef NO_SIGNAL
     (void) signal(SIGINT, SIG_IGN);
@@ -311,7 +325,7 @@ int sig_unused UNUSED;
 
 /* "#quit" command or keyboard interrupt */
 int
-done2()
+done2(void)
 {
     if (iflags.debug_fuzzer)
         return 0;
@@ -361,10 +375,10 @@ done2()
 }
 
 #ifndef NO_SIGNAL
+/* called as signal() handler, so sent at least 1 arg */
 /*ARGSUSED*/
 static void
-done_intr(sig_unused) /* called as signal() handler, so sent at least 1 arg */
-int sig_unused UNUSED;
+done_intr(int sig_unused UNUSED)
 {
     done_stopprint++;
     (void) signal(SIGINT, SIG_IGN);
@@ -377,21 +391,21 @@ int sig_unused UNUSED;
 #if defined(UNIX) || defined(VMS) || defined(__EMX__)
 /* signal() handler */
 static void
-done_hangup(sig)
-int sig;
+done_hangup(int sig)
 {
     g.program_state.done_hup++;
-    sethanguphandler((void FDECL((*), (int) )) SIG_IGN);
+    sethanguphandler((void (*)(int)) SIG_IGN);
     done_intr(sig);
     return;
 }
 #endif
 #endif /* NO_SIGNAL */
 
+DISABLE_WARNING_FORMAT_NONLITERAL /* one compiler warns if the format
+                                     string is the result of a ? x : y */
+
 void
-done_in_by(mtmp, how)
-struct monst *mtmp;
-int how;
+done_in_by(struct monst *mtmp, int how)
 {
     char buf[BUFSZ];
     struct permonst *mptr = mtmp->data,
@@ -409,16 +423,17 @@ int how;
     /* "killed by the high priest of Crom" is okay,
        "killed by the high priest" alone isn't */
     if ((mptr->geno & G_UNIQ) != 0 && !(imitator && !mimicker)
-        && !(mptr == &mons[PM_HIGH_PRIEST] && !mtmp->ispriest)) {
+        && !(mptr == &mons[PM_HIGH_CLERIC] && !mtmp->ispriest)) {
         if (!type_is_pname(mptr))
             Strcat(buf, "the ");
         g.killer.format = KILLED_BY;
     }
     /* _the_ <invisible> <distorted> ghost of Dudley */
-    if (mptr == &mons[PM_GHOST] && has_mname(mtmp)) {
+    if (mptr == &mons[PM_GHOST] && has_mgivenname(mtmp)) {
         Strcat(buf, "the ");
         g.killer.format = KILLED_BY;
     }
+    (void) monhealthdescr(mtmp, TRUE, eos(buf));
     if (mtmp->minvis)
         Strcat(buf, "invisible ");
     if (distorted)
@@ -426,14 +441,15 @@ int how;
 
     if (imitator) {
         char shape[BUFSZ];
-        const char *realnm = champtr->mname, *fakenm = mptr->mname;
+        const char *realnm = pmname(champtr, Mgender(mtmp)),
+                             *fakenm = pmname(mptr, Mgender(mtmp));
         boolean alt = is_vampshifter(mtmp);
 
         if (mimicker) {
             /* realnm is already correct because champtr==mptr;
                set up fake mptr for type_is_pname/the_unique_pm */
             mptr = &mons[mtmp->mappearance];
-            fakenm = mptr->mname;
+            fakenm = pmname(mptr, Mgender(mtmp));
         } else if (alt && strstri(realnm, "vampire")
                    && !strcmp(fakenm, "vampire bat")) {
             /* special case: use "vampire in bat form" in preference
@@ -458,8 +474,8 @@ int how;
         mptr = mtmp->data; /* reset for mimicker case */
     } else if (mptr == &mons[PM_GHOST]) {
         Strcat(buf, "ghost");
-        if (has_mname(mtmp))
-            Sprintf(eos(buf), " of %s", MNAME(mtmp));
+        if (has_mgivenname(mtmp))
+            Sprintf(eos(buf), " of %s", MGIVENNAME(mtmp));
     } else if (mtmp->isshk) {
         const char *shknm = shkname(mtmp),
                    *honorific = shkname_is_pname(mtmp) ? ""
@@ -472,12 +488,43 @@ int how;
            it overrides the effect of Hallucination on priestname() */
         Strcat(buf, m_monnam(mtmp));
     } else {
-        Strcat(buf, mptr->mname);
-        if (has_mname(mtmp))
-            Sprintf(eos(buf), " called %s", MNAME(mtmp));
+        Strcat(buf, pmname(mptr, Mgender(mtmp)));
+        if (has_mgivenname(mtmp))
+            Sprintf(eos(buf), " called %s", MGIVENNAME(mtmp));
     }
 
     Strcpy(g.killer.name, buf);
+
+    /* might need to fix up multi_reason if 'mtmp' caused the reason */
+    if (g.multi_reason
+        && g.multi_reason > g.multireasonbuf
+        && g.multi_reason < g.multireasonbuf + sizeof g.multireasonbuf - 1) {
+        char reasondummy, *p;
+        unsigned reasonmid = 0;
+
+        /*
+         * multireasonbuf[] contains 'm_id:reason' and multi_reason
+         * points at the text past the colon, so we have something
+         * like "42:paralyzed by a ghoul"; if mtmp->m_id matches 42
+         * then we truncate 'reason' at its first space so that final
+         * death reason becomes "Killed by a ghoul, while paralyzed."
+         * instead of "Killed by a ghoul, while paralyzed by a ghoul."
+         * (3.6.x gave "Killed by a ghoul, while paralyzed by a monster."
+         * which is potenitally misleading when the monster is also
+         * the killer.)
+         *
+         * Note that if the hero is life-saved and then killed again
+         * before the helplessness has cleared, the second death will
+         * report the truncated helplessness reason even if some other
+         * monster peforms the /coup de grace/.
+         */
+        if (sscanf(g.multireasonbuf, "%u:%c", &reasonmid, &reasondummy) == 2
+            && mtmp->m_id == reasonmid) {
+            if ((p = index(g.multireasonbuf, ' ')) != 0)
+                *p = '\0';
+        }
+    }
+
     /*
      * Chicken and egg issue:
      *  Ordinarily Unchanging ought to override something like this,
@@ -491,6 +538,8 @@ int how;
         u.ugrave_arise = PM_WRAITH;
     else if (mptr->mlet == S_MUMMY && g.urace.mummynum != NON_PM)
         u.ugrave_arise = g.urace.mummynum;
+    else if (zombie_maker(mtmp) && zombie_form(g.youmonst.data) != NON_PM)
+        u.ugrave_arise = zombie_form(g.youmonst.data);
     else if (mptr->mlet == S_VAMPIRE && Race_if(PM_HUMAN))
         u.ugrave_arise = PM_VAMPIRE;
     else if (mptr == &mons[PM_GHOUL])
@@ -504,6 +553,8 @@ int how;
     done(how);
     return;
 }
+
+RESTORE_WARNING_FORMAT_NONLITERAL
 
 /* some special cases for overriding while-helpless reason */
 static const struct {
@@ -523,8 +574,7 @@ static const struct {
 /* clear away while-helpless when the cause of death caused that
    helplessness (ie, "petrified by <foo> while getting stoned") */
 static void
-fixup_death(how)
-int how;
+fixup_death(int how)
 {
     int i;
 
@@ -536,6 +586,7 @@ int how;
                     g.multi_reason = death_fixups[i].include;
                 else /* remove the helplessness reason */
                     g.multi_reason = (char *) 0;
+                g.multireasonbuf[0] = '\0'; /* dynamic buf stale either way */
                 if (death_fixups[i].unmulti) /* possibly hide helplessness */
                     g.multi = 0L;
                 break;
@@ -547,9 +598,11 @@ int how;
 #define NOTIFY_NETHACK_BUGS
 #endif
 
+DISABLE_WARNING_FORMAT_NONLITERAL
+
 /*VARARGS1*/
-void panic
-VA_DECL(const char *, str)
+void
+panic VA_DECL(const char *, str)
 {
     VA_START(str);
     VA_INIT(str, char *);
@@ -627,10 +680,10 @@ VA_DECL(const char *, str)
     really_done(PANICKED);
 }
 
+RESTORE_WARNING_FORMAT_NONLITERAL
+
 static boolean
-should_query_disclose_option(category, defquery)
-int category;
-char *defquery;
+should_query_disclose_option(int category, char *defquery)
 {
     int idx;
     char disclose, *dop;
@@ -672,7 +725,7 @@ char *defquery;
 
 #ifdef DUMPLOG
 static void
-dump_plines()
+dump_plines(void)
 {
     int i, j;
     char buf[BUFSZ], **strp;
@@ -695,9 +748,8 @@ dump_plines()
 
 /*ARGSUSED*/
 static void
-dump_everything(how, when)
-int how;
-time_t when; /* date+time at end of game */
+dump_everything(int how,
+                time_t when) /* date+time at end of game */
 {
 #ifdef DUMPLOG
     char pbuf[BUFSZ], datetimebuf[24]; /* [24]: room for 64-bit bogus value */
@@ -765,9 +817,7 @@ time_t when; /* date+time at end of game */
 }
 
 static void
-disclose(how, taken)
-int how;
-boolean taken;
+disclose(int how, boolean taken)
 {
     char c = '\0', defquery;
     char qbuf[QBUFSZ];
@@ -818,9 +868,14 @@ boolean taken;
         if (should_query_disclose_option('c', &defquery)) {
             int acnt = count_achievements();
 
-            Sprintf(qbuf, "Do you want to see your conduct%s%s?",
-                    (acnt > 0) ? " and achievement" : "",
-                    (acnt > 1) ? "s" : "");
+            Sprintf(qbuf, "Do you want to see your conduct%s?",
+                    /* this was distinguishing between one achievement and
+                       multiple achievements, but "conduct and achievement"
+                       looked strange if multiple conducts got shown (which
+                       is usual for an early game death); we could switch
+                       to plural vs singular for conducts but the less
+                       specific "conduct and achievements" is sufficient */
+                    (acnt > 0) ? " and achievements" : "");
             c = yn_function(qbuf, ynqchars, defquery);
         } else {
             c = defquery;
@@ -845,11 +900,15 @@ boolean taken;
 
 /* try to get the player back in a viable state after being killed */
 static void
-savelife(how)
-int how;
+savelife(int how)
 {
-    int uhpmin = max(2 * u.ulevel, 10);
+    int uhpmin;
 
+    /* life-drain/level-loss to experience level 0 kills without actually
+       reducing ulevel below 1, but include this for bulletproofing */
+    if (u.ulevel < 1)
+        u.ulevel = 1;
+    uhpmin = max(2 * u.ulevel, 10);
     if (u.uhpmax < uhpmin)
         u.uhpmax = uhpmin;
     u.uhp = u.uhpmax;
@@ -893,8 +952,7 @@ int how;
  * intact.
  */
 static void
-get_valuables(list)
-struct obj *list; /* inventory or container contents */
+get_valuables(struct obj *list) /* inventory or container contents */
 {
     register struct obj *obj;
     register int i;
@@ -928,9 +986,8 @@ struct obj *list; /* inventory or container contents */
  *  as easily use qsort, but we don't care about efficiency here.
  */
 static void
-sort_valuables(list, size)
-struct valuable_data list[];
-int size; /* max value is less than 20 */
+sort_valuables(struct valuable_data list[],
+               int size) /* max value is less than 20 */
 {
     register int i, j;
     struct valuable_data ltmp;
@@ -956,14 +1013,12 @@ int size; /* max value is less than 20 */
  * odds_and_ends() was used for 3.6.0 and 3.6.1.
  * Schroedinger's Cat is handled differently as of 3.6.2.
  */
-static boolean FDECL(odds_and_ends, (struct obj *, int));
+static boolean odds_and_ends(struct obj *, int);
 
 #define CAT_CHECK 2
 
 static boolean
-odds_and_ends(list, what)
-struct obj *list;
-int what;
+odds_and_ends(struct obj *list, int what)
 {
     struct obj *otmp;
 
@@ -984,7 +1039,7 @@ int what;
 
 /* deal with some objects which may be in an abnormal state at end of game */
 static void
-done_object_cleanup()
+done_object_cleanup(void)
 {
     int ox, oy;
 
@@ -1040,10 +1095,10 @@ done_object_cleanup()
 
 /* called twice; first to calculate total, then to list relevant items */
 static void
-artifact_score(list, counting, endwin)
-struct obj *list;
-boolean counting; /* true => add up points; false => display them */
-winid endwin;
+artifact_score(struct obj *list,
+               boolean counting, /* true => add up points;
+                                    false => display them */
+               winid endwin)
 {
     char pbuf[BUFSZ];
     struct obj *otmp;
@@ -1077,8 +1132,7 @@ winid endwin;
 
 /* Be careful not to call panic from here! */
 void
-done(how)
-int how;
+done(int how)
 {
     boolean survive = FALSE;
 
@@ -1186,8 +1240,7 @@ int how;
 
 /* separated from done() in order to specify the __noreturn__ attribute */
 static void
-really_done(how)
-int how;
+really_done(int how)
 {
     boolean taken;
     char pbuf[BUFSZ];
@@ -1375,8 +1428,8 @@ int how;
 
         umoney = money_cnt(g.invent);
         tmp = u.umoney0;
-        umoney += hidden_gold(); /* accumulate gold from containers */
-        tmp = umoney - tmp;      /* net gain */
+        umoney += hidden_gold(TRUE); /* accumulate gold from containers */
+        tmp = umoney - tmp;          /* net gain */
 
         if (tmp < 0L)
             tmp = 0L;
@@ -1406,7 +1459,7 @@ int how;
              (u.ugrave_arise != PM_GREEN_SLIME)
                  ? "body rises from the dead"
                  : "revenant persists",
-             an(mons[u.ugrave_arise].mname));
+             an(pmname(&mons[u.ugrave_arise], Ugender)));
         display_nhwindow(WIN_MESSAGE, FALSE);
     }
 
@@ -1620,9 +1673,8 @@ int how;
 }
 
 void
-container_contents(list, identified, all_containers, reportempty)
-struct obj *list;
-boolean identified, all_containers, reportempty;
+container_contents(struct obj *list, boolean identified,
+                   boolean all_containers, boolean reportempty)
 {
     register struct obj *box, *obj;
     char buf[BUFSZ];
@@ -1662,7 +1714,7 @@ boolean identified, all_containers, reportempty;
                                      ? SORTLOOT_LOOT : 0)
                                  | (flags.sortpack ? SORTLOOT_PACK : 0));
                     sortedcobj = sortloot(&box->cobj, sortflags, FALSE,
-                                          (boolean FDECL((*), (OBJ_P))) 0);
+                                          (boolean (*)(OBJ_P)) 0);
                     for (srtc = sortedcobj; ((obj = srtc->obj) != 0); ++srtc) {
                         if (identified) {
                             discover_object(obj->otyp, TRUE, FALSE);
@@ -1698,10 +1750,11 @@ boolean identified, all_containers, reportempty;
 
 /* should be called with either EXIT_SUCCESS or EXIT_FAILURE */
 void
-nh_terminate(status)
-int status;
+nh_terminate(int status)
 {
     g.program_state.in_moveloop = 0; /* won't be returning to normal play */
+
+    l_nhcore_call(NHCORE_GAME_EXIT);
 #ifdef MAC
     getreturn("to exit");
 #endif
@@ -1710,6 +1763,7 @@ int status;
     if (!g.program_state.panicking) {
         freedynamicdata();
         dlb_cleanup();
+        l_nhcore_done();
     }
 
 #ifdef VMS
@@ -1729,10 +1783,7 @@ int status;
 
 /* set a delayed killer, ensure non-delayed killer is cleared out */
 void
-delayed_killer(id, format, killername)
-int id;
-int format;
-const char *killername;
+delayed_killer(int id, int format, const char *killername)
 {
     struct kinfo *k = find_delayed_killer(id);
 
@@ -1751,8 +1802,7 @@ const char *killername;
 }
 
 struct kinfo *
-find_delayed_killer(id)
-int id;
+find_delayed_killer(int id)
 {
     struct kinfo *k;
 
@@ -1764,8 +1814,7 @@ int id;
 }
 
 void
-dealloc_killer(kptr)
-struct kinfo *kptr;
+dealloc_killer(struct kinfo *kptr)
 {
     struct kinfo *prev = &g.killer, *k;
 
@@ -1787,8 +1836,7 @@ struct kinfo *kptr;
 }
 
 void
-save_killers(nhfp)
-NHFILE *nhfp;
+save_killers(NHFILE *nhfp)
 {
     struct kinfo *kptr;
 
@@ -1808,8 +1856,7 @@ NHFILE *nhfp;
 }
 
 void
-restore_killers(nhfp)
-NHFILE *nhfp;
+restore_killers(NHFILE *nhfp)
 {
     struct kinfo *kptr;
 
@@ -1823,8 +1870,7 @@ NHFILE *nhfp;
 }
 
 static int
-wordcount(p)
-char *p;
+wordcount(char *p)
 {
     int words = 0;
 
@@ -1840,8 +1886,7 @@ char *p;
 }
 
 static void
-bel_copy1(inp, out)
-char **inp, *out;
+bel_copy1(char **inp, char *out)
 {
     char *in = *inp;
 
@@ -1855,8 +1900,7 @@ char **inp, *out;
 }
 
 char *
-build_english_list(in)
-char *in;
+build_english_list(char *in)
 {
     char *out, *p = in;
     int len = (int) strlen(p), words = wordcount(p);

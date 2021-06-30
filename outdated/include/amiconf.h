@@ -14,6 +14,11 @@
 
 #include <time.h> /* get time_t defined before use! */
 
+#ifdef CROSS_TO_AMIGA
+#include <stdlib.h>
+#include <string.h>
+#endif
+
 #ifdef __SASC_60    /* since SAS can prevent re-inclusion */
 #include <stdlib.h> /* general things, including builtins */
 #include <string.h>
@@ -40,6 +45,8 @@ typedef long off_t;
                              LEVELDIR, SAVEDIR, BONESDIR, DATADIR,    \
                              SCOREDIR, LOCKDIR, CONFIGDIR, and TROUBLEDIR */
 
+#define PATHLEN 130
+
 /* data librarian defs */
 #ifndef NOCWD_ASSUMPTIONS
 #define DLBFILE "NetHack:nhdat"   /* main library */
@@ -49,7 +56,11 @@ typedef long off_t;
 #define DLBFILE2 "nhsdat" /* sound library */
 #endif
 
+#ifndef CROSS_TO_AMIGA
 #define FILENAME_CMP stricmp /* case insensitive */
+#else
+#define FILENAME_CMP strcmpi /* case insensitive */
+#endif
 
 #ifndef __SASC_60
 #define O_BINARY 0
@@ -65,38 +76,40 @@ typedef long off_t;
 #define MFLOPPY /* You'll probably want this; provides assistance \
                  * for typical personal computer configurations   \
                  */
+#ifndef CROSS_TO_AMIGA
 #define RANDOM
+#endif
 
 /* ### amidos.c ### */
 
-extern void FDECL(nethack_exit, (int));
+extern void nethack_exit(int);
 
 /* ### amiwbench.c ### */
 
-extern void NDECL(ami_wbench_init);
-extern void NDECL(ami_wbench_args);
-extern int FDECL(ami_wbench_getsave, (int));
-extern void FDECL(ami_wbench_unlink, (char *));
-extern int FDECL(ami_wbench_iconsize, (char *));
-extern void FDECL(ami_wbench_iconwrite, (char *));
-extern int FDECL(ami_wbench_badopt, (const char *));
-extern void NDECL(ami_wbench_cleanup);
-extern void FDECL(getlind, (const char *, char *, const char *));
+extern void ami_wbench_init(void);
+extern void ami_wbench_args(void);
+extern int ami_wbench_getsave(int);
+extern void ami_wbench_unlink(char *);
+extern int ami_wbench_iconsize(char *);
+extern void ami_wbench_iconwrite(char *);
+extern int ami_wbench_badopt(const char *);
+extern void ami_wbench_cleanup(void);
+extern void getlind(const char *, char *, const char *);
 
 /* ### winreq.c ### */
 
 extern void amii_setpens(int);
 
-extern void FDECL(exit, (int));
-extern void NDECL(CleanUp);
-extern void FDECL(Abort, (long));
-extern int NDECL(getpid);
-extern char *FDECL(CopyFile, (const char *, const char *));
-extern int NDECL(kbhit);
-extern int NDECL(WindowGetchar);
-extern void FDECL(ami_argset, (int *, char *[]));
-extern void FDECL(ami_mkargline, (int *, char **[]));
-extern void FDECL(ami_wininit_data, (int));
+extern void exit(int);
+extern void CleanUp(void);
+extern void Abort(long);
+extern int getpid(void);
+extern char *CopyFile(const char *, const char *);
+extern int kbhit(void);
+extern int WindowGetchar(void);
+extern void ami_argset(int *, char *[]);
+extern void ami_mkargline(int *, char **[]);
+extern void ami_wininit_data(int);
 
 #define FromWBench 0 /* A hint for compiler ... */
 /* extern boolean FromWBench;	/* how were we run? */
@@ -119,11 +132,9 @@ extern char **ami_argv;
 #endif
 
 #ifdef AZTEC_C
-extern FILE *FDECL(freopen, (const char *, const char *, FILE *));
-extern char *FDECL(gets, (char *));
+extern FILE *freopen(const char *, const char *, FILE *);
+extern char *gets(char *);
 #endif
-
-#define msmsg printf
 
 /*
  * If AZTEC_C  we can't use the long cpath in vision.c....
@@ -138,7 +149,9 @@ extern char *FDECL(gets, (char *));
 
 #define TEXTCOLOR /* Use colored monsters and objects */
 #define HACKFONT  /* Use special hack.font */
-#define SHELL     /* Have a shell escape command (!) */
+#ifndef CROSS_TO_AMIGA   /* issues with prototype and spawnl */
+#define SHELL  /* Have a shell escape command (!) */
+#endif
 #define MAIL      /* Get mail at unexpected occasions */
 #define DEFAULT_ICON "NetHack:default.icon" /* private icon */
 #define AMIFLUSH /* toss typeahead (select flush in .cnf) */
@@ -178,7 +191,7 @@ extern int amibbs; /* BBS mode? */
 
 #ifdef AMII_GRAPHICS
 extern int amii_numcolors;
-void FDECL(amii_setpens, (int));
+void amii_setpens(int);
 #endif
 
 /* for cmd.c: override version in micro.h */
@@ -186,5 +199,24 @@ void FDECL(amii_setpens, (int));
 #undef M
 #define M(c) ((c) -128)
 #endif
+struct ami_sysflags {
+	char sysflagsid[10];
+#ifdef AMIFLUSH
+	boolean altmeta;  /* use ALT keys as META */
+	boolean amiflush; /* kill typeahead */
+#endif
+#ifdef AMII_GRAPHICS	        
+	int numcols;
+	unsigned short amii_dripens[20]; /* DrawInfo Pens currently there are 13 in v39 */
+	AMII_COLOR_TYPE amii_curmap[AMII_MAXCOLORS]; /* colormap */
+#endif
+#ifdef OPT_DISPMAP
+	boolean fast_map; /* use optimized, less flexible map display */
+#endif
+#ifdef MFLOPPY
+	boolean asksavedisk;
+#endif
+};
+extern struct ami_sysflags sysflags;
 
 #endif /* AMICONF_H */

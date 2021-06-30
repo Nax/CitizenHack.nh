@@ -1,6 +1,6 @@
 # depend.awk -- awk script used to construct makefile dependencies
 # for nethack's source files (`make depend' support for Makefile.src).
-# $NHDT-Date: 1575916941 2019/12/09 18:42:21 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.10 $
+# $NHDT-Date: 1612127123 2021/01/31 21:05:23 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.13 $
 #
 # usage:
 #   cd src ; nawk -f depend.awk ../include/*.h list-of-.c/.cpp-files
@@ -113,8 +113,13 @@ function output_specials(			i, sp, alt_sp)
 #
 function format_dep(target, source,		col, n, i, list)
 {
+  if (substr(target,1,1) == "$") {
+	prefix = ""
+  } else {
+	prefix = "$(TARGETPFX)"
+  }
   split("", done)			#``for (x in done) delete done[x]''
-  printf("%s:", target);  col = length(target) + 1
+  printf("%s%s:", prefix, target);  col = length(target) + 1 + length(prefix)
   #- printf("\t");  col += 8 - (col % 8);
   #- if (col == 8) { printf("\t"); col += 8 }
   source = depend("", source, 0)
@@ -132,13 +137,13 @@ function format_dep(target, source,		col, n, i, list)
   source = list[2]
   if (source ~ /\// && substr(source, 1, 11) != "../include/") {
     if (source ~ /\.cpp$/ )
-      print "\t$(CXX) $(CXXFLAGS) -c -o $@ " source
+      print "\t$(TARGET_CXX) $(TARGET_CXXFLAGS) -c -o $@ " source
     else if (source ~ /\/X11\//)	# "../win/X11/foo.c"
-      print "\t$(CC) $(CFLAGS) $(X11CFLAGS) -c -o $@ " source
+      print "\t$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -c -o $@ " source
     else if (source ~ /\/gnome\//)	# "../win/gnome/foo.c"
-      print "\t$(CC) $(CFLAGS) $(GNOMEINC) -c -o $@ " source
+      print "\t$(TARGET_CC) $(TARGET_CFLAGS) $(GNOMEINC) -c -o $@ " source
     else
-      print "\t$(CC) $(CFLAGS) -c -o $@ " source
+      print "\t$(TARGET_CC) $(TARGET_CFLAGS) -c -o $@ " source
   }
 }
 

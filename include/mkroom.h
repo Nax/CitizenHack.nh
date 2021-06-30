@@ -9,12 +9,12 @@
 /* mkroom.h - types and structures for room and shop initialization */
 
 struct mkroom {
-    schar lx, hx, ly, hy; /* usually xchar, but hx may be -1 */
+    xchar lx, hx, ly, hy; /* usually xchar, but hx may be -1 */
     schar rtype;          /* type of room (zoo, throne, etc...) */
     schar orig_rtype;     /* same as rtype, but not zeroed later */
     schar rlit;           /* is the room lit ? */
     schar needfill;       /* sp_lev: does the room need filling? */
-    schar needjoining;    /* sp_lev */
+    boolean needjoining;  /* sp_lev: should the room connect to others? */
     schar doorct;         /* door count */
     schar fdoor;          /* index for the first door of the room */
     schar nsubrooms;      /* number of subrooms */
@@ -89,6 +89,14 @@ enum roomtype_types {
                        * searching required */
 #define ROOMOFFSET  3 /* (levl[x][y].roomno - ROOMOFFSET) gives g.rooms[] index,
                        * for inside-squares and non-shared boundaries */
+
+/* Values for needfill */
+#define FILL_NONE    0 /* do not fill this room with anything */
+#define FILL_NORMAL  1 /* fill the room normally (OROOM or THEMEROOM gets
+                          fill_ordinary_room; any other room type gets stocked
+                          with its usual monsters/objects/terrain) */
+#define FILL_LVFLAGS 2 /* special rooms only; set the room's rtype and level
+                          flags as appropriate, but do not put anything in it */
 
 #define IS_ROOM_PTR(x)      ((x) >= g.rooms && (x) < g.rooms + MAXNROFROOMS)
 #define IS_ROOM_INDEX(x)    ((x) >= 0 && (x) < MAXNROFROOMS)
