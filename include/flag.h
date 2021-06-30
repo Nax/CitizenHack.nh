@@ -80,6 +80,7 @@ struct flag {
 #define PARANOID_EATING     0x0200
     int pickup_burden; /* maximum burden before prompt */
     int pile_limit;    /* controls feedback when walking over objects */
+    char discosort;    /* order of dodiscovery/doclassdisco output: o,s,c,a */
     char sortloot; /* 'n'=none, 'l'=loot (pickup), 'f'=full ('l'+invent) */
     char inv_order[MAXOCLASSES];
     char pickup_types[MAXOCLASSES];
@@ -93,8 +94,7 @@ struct flag {
     char end_disclose[NUM_DISCLOSURE_OPTIONS + 1]; /* disclose various
                                                       info upon exit */
     char menu_style;    /* User interface style setting */
-    boolean made_fruit; /* don't easily let the user overflow the number of
-                           fruits */
+    boolean made_fruit; /* don't easily let user overflow fruit limit */
 
     /* KMH, role patch -- Variables used during startup.
      *
@@ -174,6 +174,7 @@ struct instance_flags {
      * a structure of their own elsewhere some day.
      */
     boolean debug_fuzzer;  /* fuzz testing */
+    boolean in_lua;        /* executing a lua script */
     boolean defer_plname;  /* X11 hack: askname() might not set g.plname */
     boolean herecmd_menu;  /* use menu when mouseclick on yourself */
     boolean invis_goldsym; /* gold symbol is ' '? */
@@ -292,8 +293,10 @@ struct instance_flags {
 #endif
     boolean clicklook;       /* allow right-clicking for look */
     boolean cmdassist;       /* provide detailed assistance for some comnds */
+    boolean fireassist;      /* autowield launcher when using fire-command */
     boolean time_botl;       /* context.botl for 'time' (moves) only */
     boolean wizweight;       /* display weight of everything in wizard mode */
+    boolean wizmgender;      /* test gender info from core in window port */
     /*
      * Window capability support.
      */

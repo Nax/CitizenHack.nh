@@ -1,4 +1,4 @@
-/* NetHack 3.7	hack.c	$NHDT-Date: 1603507385 2020/10/24 02:43:05 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.269 $ */
+/* NetHack 3.7	hack.c	$NHDT-Date: 1617035736 2021/03/29 16:35:36 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.281 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -7,17 +7,17 @@
 
 /* #define DEBUG */ /* uncomment for debugging */
 
-static void NDECL(maybe_wail);
-static int NDECL(moverock);
-static void NDECL(dosinkfall);
-static boolean FDECL(findtravelpath, (int));
-static boolean FDECL(trapmove, (int, int, struct trap *));
-static struct monst *FDECL(monstinroom, (struct permonst *, int));
-static boolean FDECL(doorless_door, (int, int));
-static void FDECL(move_update, (BOOLEAN_P));
-static int NDECL(pickup_checks);
-static void FDECL(maybe_smudge_engr, (int, int, int, int));
-static void NDECL(domove_core);
+static void maybe_wail(void);
+static int moverock(void);
+static void dosinkfall(void);
+static boolean findtravelpath(int);
+static boolean trapmove(int, int, struct trap *);
+static struct monst *monstinroom(struct permonst *, int);
+static boolean doorless_door(int, int);
+static void move_update(boolean);
+static int pickup_checks(void);
+static void maybe_smudge_engr(int, int, int, int);
+static void domove_core(void);
 
 #define IS_SHOP(x) (g.rooms[x].rtype >= SHOPBASE)
 
@@ -27,8 +27,7 @@ static void NDECL(domove_core);
 #define TRAVP_VALID  2
 
 anything *
-uint_to_any(ui)
-unsigned ui;
+uint_to_any(unsigned ui)
 {
     g.tmp_anything = cg.zeroany;
     g.tmp_anything.a_uint = ui;
@@ -36,8 +35,7 @@ unsigned ui;
 }
 
 anything *
-long_to_any(lng)
-long lng;
+long_to_any(long lng)
 {
     g.tmp_anything = cg.zeroany;
     g.tmp_anything.a_long = lng;
@@ -45,8 +43,7 @@ long lng;
 }
 
 anything *
-monst_to_any(mtmp)
-struct monst *mtmp;
+monst_to_any(struct monst *mtmp)
 {
     g.tmp_anything = cg.zeroany;
     g.tmp_anything.a_monst = mtmp;
@@ -54,8 +51,7 @@ struct monst *mtmp;
 }
 
 anything *
-obj_to_any(obj)
-struct obj *obj;
+obj_to_any(struct obj *obj)
 {
     g.tmp_anything = cg.zeroany;
     g.tmp_anything.a_obj = obj;
@@ -63,9 +59,7 @@ struct obj *obj;
 }
 
 boolean
-revive_nasty(x, y, msg)
-int x, y;
-const char *msg;
+revive_nasty(int x, int y, const char *msg)
 {
     register struct obj *otmp, *otmp2;
     struct monst *mtmp;
@@ -100,7 +94,7 @@ const char *msg;
 }
 
 static int
-moverock()
+moverock(void)
 {
     register xchar rx, ry, sx, sy;
     register struct obj *otmp;
@@ -184,6 +178,9 @@ moverock()
             }
 
             if (ttmp) {
+                int newlev = 0; /* lint suppression */
+                d_level dest;
+
                 /* if a trap operates on the boulder, don't attempt
                    to move any others at this location; return -1
                    if another boulder is in hero's way, or 0 if he
@@ -242,16 +239,14 @@ moverock()
                         newsym(rx, ry);
                     return sobj_at(BOULDER, sx, sy) ? -1 : 0;
                 case LEVEL_TELEP:
-                case TELEP_TRAP: {
-                    int newlev = 0; /* lint suppression */
-                    d_level dest;
-
-                    if (ttmp->ttyp == LEVEL_TELEP) {
-                        newlev = random_teleport_level();
-                        if (newlev == depth(&u.uz) || In_endgame(&u.uz))
-                            /* trap didn't work; skip "disappears" message */
-                            goto dopush;
-                    }
+                    /* 20% chance of picking current level; 100% chance for
+                       that if in single-level branch (Knox) or in endgame */
+                    newlev = random_teleport_level();
+                    /* if trap doesn't work, skip "disappears" message */
+                    if (newlev == depth(&u.uz))
+                        goto dopush;
+                    /*FALLTHRU*/
+                case TELEP_TRAP:
                     if (u.usteed)
                         pline("%s pushes %s and suddenly it disappears!",
                               upstart(y_monnam(u.usteed)), the(xname(otmp)));
@@ -270,7 +265,6 @@ moverock()
                     }
                     seetrap(ttmp);
                     return sobj_at(BOULDER, sx, sy) ? -1 : 0;
-                }
                 default:
                     break; /* boulder not affected by this trap */
                 }
@@ -394,8 +388,7 @@ moverock()
  *  Returns TRUE if still eating, FALSE when done.
  */
 int
-still_chewing(x, y)
-xchar x, y;
+still_chewing(xchar x, xchar y)
 {
     struct rm *lev = &levl[x][y];
     struct obj *boulder = sobj_at(BOULDER, x, y);
@@ -566,12 +559,11 @@ xchar x, y;
 }
 
 void
-movobj(obj, ox, oy)
-register struct obj *obj;
-register xchar ox, oy;
+movobj(register struct obj *obj, register xchar ox, register xchar oy)
 {
     /* optimize by leaving on the fobj chain? */
     remove_object(obj);
+    maybe_unhide_at(obj->ox, obj->oy);
     newsym(obj->ox, obj->oy);
     place_object(obj, ox, oy);
     newsym(ox, oy);
@@ -580,7 +572,7 @@ register xchar ox, oy;
 static NEARDATA const char fell_on_sink[] = "fell onto a sink";
 
 static void
-dosinkfall()
+dosinkfall(void)
 {
     register struct obj *obj;
     int dmg;
@@ -666,8 +658,7 @@ dosinkfall()
 
 /* intended to be called only on ROCKs or TREEs */
 boolean
-may_dig(x, y)
-register xchar x, y;
+may_dig(register xchar x, register xchar y)
 {
     struct rm *lev = &levl[x][y];
 
@@ -676,17 +667,14 @@ register xchar x, y;
 }
 
 boolean
-may_passwall(x, y)
-register xchar x, y;
+may_passwall(register xchar x, register xchar y)
 {
     return (boolean) !(IS_STWALL(levl[x][y].typ)
                        && (levl[x][y].wall_info & W_NONPASSWALL));
 }
 
 boolean
-bad_rock(mdat, x, y)
-struct permonst *mdat;
-register xchar x, y;
+bad_rock(struct permonst *mdat, register xchar x, register xchar y)
 {
     return (boolean) ((Sokoban && sobj_at(BOULDER, x, y))
                       || (IS_ROCK(levl[x][y].typ)
@@ -700,8 +688,7 @@ register xchar x, y;
    the reason why:  1: can't fit, 2: possessions won't fit, 3: sokoban
    returns 0 if we can squeeze through */
 int
-cant_squeeze_thru(mon)
-struct monst *mon;
+cant_squeeze_thru(struct monst *mon)
 {
     int amt;
     struct permonst *ptr = mon->data;
@@ -727,8 +714,7 @@ struct monst *mon;
 }
 
 boolean
-invocation_pos(x, y)
-xchar x, y;
+invocation_pos(xchar x, xchar y)
 {
     return (boolean) (Invocation_lev(&u.uz)
                       && x == g.inv_pos.x && y == g.inv_pos.y);
@@ -738,9 +724,7 @@ xchar x, y;
  * mode is one of DO_MOVE, TEST_MOVE, TEST_TRAV, or TEST_TRAP
  */
 boolean
-test_move(ux, uy, dx, dy, mode)
-int ux, uy, dx, dy;
-int mode;
+test_move(int ux, int uy, int dx, int dy, int mode)
 {
     int x = ux + dx;
     int y = uy + dy;
@@ -970,13 +954,14 @@ int mode;
  * Returns TRUE if a path was found.
  */
 static boolean
-findtravelpath(mode)
-int mode;
+findtravelpath(int mode)
 {
     /* if travel to adjacent, reachable location, use normal movement rules */
     if ((mode == TRAVP_TRAVEL || mode == TRAVP_VALID) && g.context.travel1
-        && distmin(u.ux, u.uy, u.tx, u.ty) == 1
-        && !(u.ux != u.tx && u.uy != u.ty && NODIAG(u.umonnum))) {
+        /* was '&& distmin(u.ux, u.uy, u.tx, u.ty) == 1' */
+        && distu(u.tx, u.ty) <= 2 /* one step away */
+        /* handle restricted diagonals */
+        && crawl_destination(u.tx, u.ty)) {
         end_running(FALSE);
         if (test_move(u.ux, u.uy, u.tx - u.ux, u.ty - u.uy, TEST_MOVE)) {
             if (mode == TRAVP_TRAVEL) {
@@ -1028,14 +1013,13 @@ int mode;
                 int dir;
                 int x = travelstepx[set][i];
                 int y = travelstepy[set][i];
-                static int ordered[] = { 0, 2, 4, 6, 1, 3, 5, 7 };
                 /* no diagonal movement for grid bugs */
-                int dirmax = NODIAG(u.umonnum) ? 4 : 8;
+                int dirmax = NODIAG(u.umonnum) ? 4 : N_DIRS;
                 boolean alreadyrepeated = FALSE;
 
                 for (dir = 0; dir < dirmax; ++dir) {
-                    int nx = x + xdir[ordered[dir]];
-                    int ny = y + ydir[ordered[dir]];
+                    int nx = x + xdir[dirs_ord[dir]];
+                    int ny = y + ydir[dirs_ord[dir]];
 
                     /*
                      * When guessing and trying to travel as close as possible
@@ -1210,8 +1194,7 @@ int mode;
 }
 
 boolean
-is_valid_travelpt(x,y)
-int x,y;
+is_valid_travelpt(int x, int y)
 {
     int tx = u.tx;
     int ty = u.ty;
@@ -1235,9 +1218,8 @@ int x,y;
    return true iff moving should continue to intended destination
    (all failures and most successful escapes leave hero at original spot) */
 static boolean
-trapmove(x, y, desttrap)
-int x, y;              /* targetted destination, <u.ux+u.dx,u.uy+u.dy> */
-struct trap *desttrap; /* nonnull if another trap at <x,y> */
+trapmove(int x, int y,       /* targetted destination, <u.ux+u.dx,u.uy+u.dy> */
+         struct trap *desttrap) /* nonnull if another trap at <x,y> */
 {
     boolean anchored = FALSE;
     const char *predicament, *culprit;
@@ -1376,7 +1358,7 @@ struct trap *desttrap; /* nonnull if another trap at <x,y> */
 }
 
 boolean
-u_rooted()
+u_rooted(void)
 {
     if (!g.youmonst.data->mmove) {
         You("are rooted %s.",
@@ -1390,7 +1372,7 @@ u_rooted()
 }
 
 void
-domove()
+domove(void)
 {
         int ux1 = u.ux, uy1 = u.uy;
 
@@ -1403,7 +1385,7 @@ domove()
 }
 
 static void
-domove_core()
+domove_core(void)
 {
     register struct monst *mtmp;
     register struct rm *tmpr;
@@ -1631,22 +1613,22 @@ domove_core()
     /* attack monster */
     if (mtmp) {
         /* don't stop travel when displacing pets; if the
-           displace fails for some reason, attack() in uhitm.c
+           displace fails for some reason, do_attack() in uhitm.c
            will stop travel rather than domove */
         if (!is_safemon(mtmp) || g.context.forcefight)
             nomul(0);
         /* only attack if we know it's there */
         /* or if we used the 'F' command to fight blindly */
-        /* or if it hides_under, in which case we call attack() to print
+        /* or if it hides_under, in which case we call do_attack() to print
          * the Wait! message.
          * This is different from ceiling hiders, who aren't handled in
-         * attack().
+         * do_attack().
          */
 
         /* If they used a 'm' command, trying to move onto a monster
          * prints the below message and wastes a turn.  The exception is
          * if the monster is unseen and the player doesn't remember an
-         * invisible monster--then, we fall through to attack() and
+         * invisible monster--then, we fall through to do_attack() and
          * attack_check(), which still wastes a turn, but prints a
          * different message and makes the player remember the monster.
          */
@@ -1682,7 +1664,7 @@ domove_core()
 
             /* try to attack; note that it might evade;
                also, we don't attack tame when _safepet_ */
-            else if (attack(mtmp))
+            else if (do_attack(mtmp))
                 return;
         }
     }
@@ -1746,9 +1728,10 @@ domove_core()
                because you don't see remembered terrain while underwater;
                although the hero can attack an adjacent monster this way,
                assume he can't reach out far enough to distinguish terrain */
-            Sprintf(buf, (Is_waterlevel(&u.uz) && levl[x][y].typ == AIR)
-                             ? "an air bubble"
-                             : "nothing");
+            Sprintf(buf, "%s",
+                    (Is_waterlevel(&u.uz) && levl[x][y].typ == AIR)
+                         ? "an air bubble"
+                         : "nothing");
         } else if (solid) {
             /* glyph might indicate unseen terrain if hero is blind;
                unlike searching, this won't reveal what that terrain is
@@ -1769,7 +1752,11 @@ domove_core()
 
         nomul(0);
         if (explo) {
-            wake_nearby();
+            struct attack *attk;
+            /* no monster has been attacked so we have bypassed explum() */
+            wake_nearto(u.ux, u.uy, 7 * 7); /* same radius as explum() */
+            if ((attk = attacktype_fordmg(g.youmonst.data, AT_EXPL, AD_ANY)))
+                explum((struct monst *) 0, attk);
             u.mh = -1; /* dead in the current form */
             rehumanize();
         }
@@ -1844,7 +1831,7 @@ domove_core()
 
     /*
      * If safepet at destination then move the pet to the hero's
-     * previous location using the same conditions as in attack().
+     * previous location using the same conditions as in do_attack().
      * there are special extenuating circumstances:
      * (1) if the pet dies then your god angers,
      * (2) if the pet gets trapped then your god may disapprove.
@@ -1888,14 +1875,12 @@ domove_core()
             /* can't swap places when pet won't fit thru the opening */
             You("stop.  %s won't fit through.", upstart(y_monnam(mtmp)));
             didnt_move = TRUE;
-        } else if ((mtmp->mpeaceful || mtmp->mtame) && mtmp->mtrapped) {
-            /* Since peaceful monsters simply being unable to move out of traps
-             * was inconsistent with pets being able to but being untamed in
-             * the process, apply this logic equally to pets and peacefuls. */
+        } else if (mtmp->mpeaceful && mtmp->mtrapped) {
+            /* all mtame are also mpeaceful, so this affects pets too */
             You("stop.  %s can't move out of that trap.",
                 upstart(y_monnam(mtmp)));
             didnt_move = TRUE;
-        } else if (mtmp->mpeaceful && !mtmp->mtame
+        } else if (mtmp->mpeaceful
                    && (!goodpos(u.ux0, u.uy0, mtmp, 0)
                        || t_at(u.ux0, u.uy0) != NULL
                        || mundisplaceable(mtmp))) {
@@ -1914,10 +1899,11 @@ domove_core()
             You("%s %s.", mtmp->mpeaceful ? "swap places with" : "frighten",
                 x_monnam(mtmp,
                          mtmp->mtame ? ARTICLE_YOUR
-                         : (!has_mname(mtmp) && !type_is_pname(mtmp->data))
-                           ? ARTICLE_THE : ARTICLE_NONE,
+                         : (!has_mgivenname(mtmp)
+                            && !type_is_pname(mtmp->data)) ? ARTICLE_THE
+                           : ARTICLE_NONE,
                          (mtmp->mpeaceful && !mtmp->mtame) ? "peaceful" : 0,
-                         has_mname(mtmp) ? SUPPRESS_SADDLE : 0, FALSE));
+                         has_mgivenname(mtmp) ? SUPPRESS_SADDLE : 0, FALSE));
 
             /* check for displacing it into pools and traps */
             switch (minliquid(mtmp) ? 2 : mintrap(mtmp)) {
@@ -2047,8 +2033,7 @@ domove_core()
 }
 
 static void
-maybe_smudge_engr(x1,y1,x2,y2)
-int x1, y1, x2, y2;
+maybe_smudge_engr(int x1, int y1, int x2, int y2)
 {
     struct engr *ep;
 
@@ -2061,30 +2046,38 @@ int x1, y1, x2, y2;
     }
 }
 
+/* HP loss or passing out from overexerting yourself */
+void
+overexert_hp(void)
+{
+    int *hp = (!Upolyd ? &u.uhp : &u.mh);
+
+    if (*hp > 1) {
+        *hp -= 1;
+        g.context.botl = TRUE;
+    } else {
+        You("pass out from exertion!");
+        exercise(A_CON, FALSE);
+        fall_asleep(-10, FALSE);
+    }
+}
+
 /* combat increases metabolism */
 boolean
-overexertion()
+overexertion(void)
 {
     /* this used to be part of domove() when moving to a monster's
-       position, but is now called by attack() so that it doesn't
+       position, but is now called by do_attack() so that it doesn't
        execute if you decline to attack a peaceful monster */
     gethungry();
     if ((g.moves % 3L) != 0L && near_capacity() >= HVY_ENCUMBER) {
-        int *hp = (!Upolyd ? &u.uhp : &u.mh);
-
-        if (*hp > 1) {
-            *hp -= 1;
-        } else {
-            You("pass out from exertion!");
-            exercise(A_CON, FALSE);
-            fall_asleep(-10, FALSE);
-        }
+        overexert_hp();
     }
     return (boolean) (g.multi < 0); /* might have fainted (forced to sleep) */
 }
 
 void
-invocation_message()
+invocation_message(void)
 {
     /* a special clue-msg when on the Invocation position */
     if (invocation_pos(u.ux, u.uy) && !On_stairs(u.ux, u.uy)) {
@@ -2111,7 +2104,7 @@ invocation_message()
    might be going into solid rock, inhibiting levitation or flight,
    or coming back out of such, reinstating levitation/flying */
 void
-switch_terrain()
+switch_terrain(void)
 {
     struct rm *lev = &levl[u.ux][u.uy];
     boolean blocklev = (IS_ROCK(lev->typ) || closed_door(u.ux, u.uy)
@@ -2150,8 +2143,7 @@ switch_terrain()
 
 /* set or clear u.uinwater */
 void
-set_uinwater(in_out)
-int in_out;
+set_uinwater(int in_out)
 {
     u.uinwater = in_out ? 1 : 0;
 }
@@ -2160,8 +2152,7 @@ int in_out;
    leaving a pool of water/lava, and by moveloop to check for staying on one;
    returns true to skip rest of spoteffects */
 boolean
-pooleffects(newspot)
-boolean newspot;             /* true if called by spoteffects */
+pooleffects(boolean newspot)             /* true if called by spoteffects */
 {
     /* check for leaving water */
     if (u.uinwater) {
@@ -2241,8 +2232,7 @@ boolean newspot;             /* true if called by spoteffects */
 }
 
 void
-spoteffects(pick)
-boolean pick;
+spoteffects(boolean pick)
 {
     static int inspoteffects = 0;
     static coord spotloc;
@@ -2389,9 +2379,7 @@ boolean pick;
 
 /* returns first matching monster */
 static struct monst *
-monstinroom(mdat, roomno)
-struct permonst *mdat;
-int roomno;
+monstinroom(struct permonst *mdat, int roomno)
 {
     register struct monst *mtmp;
 
@@ -2406,9 +2394,7 @@ int roomno;
 }
 
 char *
-in_rooms(x, y, typewanted)
-register xchar x, y;
-register int typewanted;
+in_rooms(register xchar x, register xchar y, register int typewanted)
 {
     static char buf[5];
     char rno, *ptr = &buf[4];
@@ -2474,8 +2460,7 @@ register int typewanted;
 
 /* is (x,y) in a town? */
 boolean
-in_town(x, y)
-register int x, y;
+in_town(register int x, register int y)
 {
     s_level *slev = Is_special(&u.uz);
     register struct mkroom *sroom;
@@ -2500,8 +2485,7 @@ register int x, y;
 }
 
 static void
-move_update(newlev)
-register boolean newlev;
+move_update(register boolean newlev)
 {
     char *ptr1, *ptr2, *ptr3, *ptr4;
 
@@ -2541,8 +2525,7 @@ register boolean newlev;
 
 /* possibly deliver a one-time room entry message */
 void
-check_special_room(newlev)
-boolean newlev;
+check_special_room(boolean newlev)
 {
     register struct monst *mtmp;
     char *ptr;
@@ -2669,6 +2652,9 @@ boolean newlev;
                 for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
                     if (DEADMONSTER(mtmp))
                         continue;
+                    if (!isok(mtmp->mx,mtmp->my)
+                        || roomno != (int) levl[mtmp->mx][mtmp->my].roomno)
+                        continue;
                     if (!Stealth && !rn2(3))
                         mtmp->msleeping = 0;
                 }
@@ -2683,8 +2669,10 @@ boolean newlev;
   -1 = do normal pickup
   -2 = loot the monster */
 static int
-pickup_checks()
+pickup_checks(void)
 {
+    struct trap *traphere;
+
     /* uswallow case added by GAN 01/29/87 */
     if (u.uswallow) {
         if (!u.ustuck->minvent) {
@@ -2700,8 +2688,8 @@ pickup_checks()
         }
     }
     if (is_pool(u.ux, u.uy)) {
-        if (Wwalking || is_floater(g.youmonst.data) || is_clinger(g.youmonst.data)
-            || (Flying && !Breathless)) {
+        if (Wwalking || is_floater(g.youmonst.data)
+            || is_clinger(g.youmonst.data) || (Flying && !Breathless)) {
             You("cannot dive into the %s to pick things up.",
                 hliquid("water"));
             return 0;
@@ -2711,8 +2699,8 @@ pickup_checks()
         }
     }
     if (is_lava(u.ux, u.uy)) {
-        if (Wwalking || is_floater(g.youmonst.data) || is_clinger(g.youmonst.data)
-            || (Flying && !Breathless)) {
+        if (Wwalking || is_floater(g.youmonst.data)
+            || is_clinger(g.youmonst.data) || (Flying && !Breathless)) {
             You_cant("reach the bottom to pick things up.");
             return 0;
         } else if (!likes_lava(g.youmonst.data)) {
@@ -2742,18 +2730,27 @@ pickup_checks()
             There("is nothing here to pick up.");
         return 0;
     }
-    if (!can_reach_floor(TRUE)) {
-        struct trap *traphere = t_at(u.ux, u.uy);
-        if (traphere
-            && (uteetering_at_seen_pit(traphere) || uescaped_shaft(traphere)))
-            You("cannot reach the bottom of the %s.",
-                is_pit(traphere->ttyp) ? "pit" : "abyss");
-        else if (u.usteed && P_SKILL(P_RIDING) < P_BASIC)
+    traphere = t_at(u.ux, u.uy);
+    if (!can_reach_floor(traphere && is_pit(traphere->ttyp))) {
+        /* it here's a hole here, any objects here clearly aren't at
+           the bottom so only check for pits */
+        if (traphere && uteetering_at_seen_pit(traphere)) {
+            You("cannot reach the bottom of the pit.");
+        } else if (u.usteed && P_SKILL(P_RIDING) < P_BASIC) {
             rider_cant_reach();
-        else if (Blind && !can_reach_floor(TRUE))
+        } else if (Blind) {
             You("cannot reach anything here.");
-        else
-            You("cannot reach the %s.", surface(u.ux, u.uy));
+        } else {
+            const char *surf = surface(u.ux, u.uy);
+
+            if (traphere) {
+                if (traphere->ttyp == HOLE)
+                    surf = "edge of the hole";
+                else if (traphere->ttyp == TRAPDOOR)
+                    surf = "trap door";
+            }
+            You("cannot reach the %s.", surf);
+        }
         return 0;
     }
     return -1; /* can do normal pickup */
@@ -2761,13 +2758,11 @@ pickup_checks()
 
 /* the ',' command */
 int
-dopickup(VOID_ARGS)
+dopickup(void)
 {
     int count, tmpcount, ret;
 
-    /* awful kludge to work around parse()'s pre-decrement */
-    count = (g.multi || (g.save_cm && *g.save_cm == cmd_from_func(dopickup)))
-              ? g.multi + 1 : 0;
+    count = g.command_count;
     g.multi = 0; /* always reset */
 
     if ((ret = pickup_checks()) >= 0) {
@@ -2784,7 +2779,7 @@ dopickup(VOID_ARGS)
 /* turn around a corner if that is the only way we can proceed */
 /* do not turn left or right twice */
 void
-lookaround()
+lookaround(void)
 {
     register int x, y;
     int i, x0 = 0, y0 = 0, m0 = 1, i0 = 9;
@@ -2938,8 +2933,7 @@ lookaround()
 
 /* check for a doorway which lacks its door (NODOOR or BROKEN) */
 static boolean
-doorless_door(x, y)
-int x, y;
+doorless_door(int x, int y)
 {
     struct rm *lev_p = &levl[x][y];
 
@@ -2952,10 +2946,10 @@ int x, y;
     return !(lev_p->doormask & ~(D_NODOOR | D_BROKEN));
 }
 
-/* used by drown() to check whether hero can crawl from water to <x,y> */
+/* used by drown() to check whether hero can crawl from water to <x,y>;
+   also used by findtravelpath() when destination is one step away */
 boolean
-crawl_destination(x, y)
-int x, y;
+crawl_destination(int x, int y)
 {
     /* is location ok in general? */
     if (!goodpos(x, y, &g.youmonst, 0))
@@ -2981,7 +2975,7 @@ int x, y;
 /* something like lookaround, but we are not running */
 /* react only to monsters that might hit us */
 int
-monster_nearby()
+monster_nearby(void)
 {
     register int x, y;
     register struct monst *mtmp;
@@ -2991,12 +2985,13 @@ monster_nearby()
         for (y = u.uy - 1; y <= u.uy + 1; y++) {
             if (!isok(x, y) || (x == u.ux && y == u.uy))
                 continue;
-            if ((mtmp = m_at(x, y)) && M_AP_TYPE(mtmp) != M_AP_FURNITURE
+            if ((mtmp = m_at(x, y)) != 0
+                && M_AP_TYPE(mtmp) != M_AP_FURNITURE
                 && M_AP_TYPE(mtmp) != M_AP_OBJECT
                 && (Hallucination
                     || (!mtmp->mpeaceful && !noattacks(mtmp->data)))
                 && (!is_hider(mtmp->data) || !mtmp->mundetected)
-                && mtmp->mcanmove && !mtmp->msleeping  /* aplvax!jcn */
+                && mtmp->mcanmove && !mtmp->msleeping
                 && !onscary(u.ux, u.uy, mtmp) && canspotmon(mtmp))
                 return 1;
         }
@@ -3004,8 +2999,7 @@ monster_nearby()
 }
 
 void
-end_running(and_travel)
-boolean and_travel;
+end_running(boolean and_travel)
 {
     /* moveloop() suppresses time_botl when context.run is non-zero; when
        running stops, update 'time' even if other botl status is unchanged */
@@ -3016,11 +3010,13 @@ boolean and_travel;
        all clear it too */
     if (and_travel)
         g.context.travel = g.context.travel1 = g.context.mv = 0;
+    /* cancel mutli */
+    if (g.multi > 0)
+        g.multi = 0;
 }
 
 void
-nomul(nval)
-int nval;
+nomul(int nval)
 {
     if (g.multi < nval)
         return;              /* This is a bug fix by ab@unido */
@@ -3029,14 +3025,14 @@ int nval;
     u.usleep = 0;
     g.multi = nval;
     if (nval == 0)
-        g.multi_reason = NULL;
+        g.multi_reason = NULL, g.multireasonbuf[0] = '\0';
     end_running(TRUE);
+    cmdq_clear();
 }
 
 /* called when a non-movement, multi-turn action has completed */
 void
-unmul(msg_override)
-const char *msg_override;
+unmul(const char *msg_override)
 {
     g.context.botl = TRUE;
     g.multi = 0; /* caller will usually have done this already */
@@ -3052,17 +3048,18 @@ const char *msg_override;
            if life-saved while poly'd and Unchanging (explore or wizard mode
            declining to die since can't be both Unchanging and Lifesaved) */
         if (Upolyd && !strncmpi(g.nomovemsg, "You survived that ", 18))
-            You("are %s.", an(mons[u.umonnum].mname)); /* (ignore Hallu) */
+            You("are %s.",
+                an(pmname(&mons[u.umonnum], Ugender))); /* (ignore Hallu) */
     }
     g.nomovemsg = 0;
     u.usleep = 0;
-    g.multi_reason = NULL;
+    g.multi_reason = NULL, g.multireasonbuf[0] = '\0';
     if (g.afternmv) {
-        int NDECL((*f)) = g.afternmv;
+        int (*f)(void) = g.afternmv;
 
         /* clear afternmv before calling it (to override the
            encumbrance hack for levitation--see weight_cap()) */
-        g.afternmv = (int NDECL((*))) 0;
+        g.afternmv = (int (*)(void)) 0;
         (void) (*f)();
         /* for finishing Armor/Boots/&c_on() */
         update_inventory();
@@ -3070,7 +3067,7 @@ const char *msg_override;
 }
 
 static void
-maybe_wail()
+maybe_wail(void)
 {
     static short powers[] = { TELEPORT, SEE_INVIS, POISON_RES, COLD_RES,
                               SHOCK_RES, FIRE_RES, SLEEP_RES, DISINT_RES,
@@ -3104,10 +3101,7 @@ maybe_wail()
 }
 
 void
-losehp(n, knam, k_format)
-register int n;
-register const char *knam;
-boolean k_format;
+losehp(register int n, register const char *knam, boolean k_format)
 {
 #if 0   /* code below is prepared to handle negative 'loss' so don't add this
          * until we've verified that no callers intentionally rely on that */
@@ -3144,7 +3138,7 @@ boolean k_format;
 }
 
 int
-weight_cap()
+weight_cap(void)
 {
     long carrcap, save_ELev = ELevitation, save_BLev = BLevitation;
 
@@ -3201,7 +3195,7 @@ weight_cap()
 /* returns how far beyond the normal capacity the player is currently. */
 /* inv_weight() is negative if the player is below normal capacity. */
 int
-inv_weight()
+inv_weight(void)
 {
     register struct obj *otmp = g.invent;
     register int wt = 0;
@@ -3222,8 +3216,7 @@ inv_weight()
  * over the normal capacity the player is loaded.  Max is 5.
  */
 int
-calc_capacity(xtra_wt)
-int xtra_wt;
+calc_capacity(int xtra_wt)
 {
     int cap, wt = inv_weight() + xtra_wt;
 
@@ -3236,13 +3229,13 @@ int xtra_wt;
 }
 
 int
-near_capacity()
+near_capacity(void)
 {
     return calc_capacity(0);
 }
 
 int
-max_capacity()
+max_capacity(void)
 {
     int wt = inv_weight();
 
@@ -3250,8 +3243,7 @@ max_capacity()
 }
 
 boolean
-check_capacity(str)
-const char *str;
+check_capacity(const char *str)
 {
     if (near_capacity() >= EXT_ENCUMBER) {
         if (str)
@@ -3264,8 +3256,7 @@ const char *str;
 }
 
 int
-inv_cnt(incl_gold)
-boolean incl_gold;
+inv_cnt(boolean incl_gold)
 {
     register struct obj *otmp = g.invent;
     register int ct = 0;
@@ -3283,8 +3274,7 @@ boolean incl_gold;
 /* now that u.gold/m.gold is gone.*/
 /* Counting money in a container might be possible too. */
 long
-money_cnt(otmp)
-struct obj *otmp;
+money_cnt(struct obj *otmp)
 {
     while (otmp) {
         if (otmp->oclass == COIN_CLASS)

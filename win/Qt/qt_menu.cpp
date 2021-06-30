@@ -37,6 +37,7 @@ extern "C" {
 #include "qt_post.h"
 #include "qt_menu.h"
 #include "qt_menu.moc"
+#include "qt_key.h" // for keyValue()
 #include "qt_glyph.h"
 #include "qt_set.h"
 #include "qt_streq.h"
@@ -558,7 +559,7 @@ void NetHackQtMenuWindow::AddRow(int row, const MenuItem& mi)
 
         // Check box, set if pre-selected
 	QCheckBox *cb = new QCheckBox();
-        cb->setChecked(mi.preselected ? Qt::Checked : Qt::Unchecked);
+        cb->setChecked(mi.preselected);
 	cb->setFocusPolicy(Qt::NoFocus);
         // CheckboxClicked() will call ToggleSelect() for item whose checkbox
         // gets clicked upon
@@ -697,18 +698,9 @@ void NetHackQtMenuWindow::ClearCount(void)
 
 void NetHackQtMenuWindow::keyPressEvent(QKeyEvent *key_event)
 {
-    // key_event manipulation derived from NetHackQtBind::notify()
-    const int k = key_event->key();
-    Qt::KeyboardModifiers mod = key_event->modifiers();
-    QChar ch = !key_event->text().isEmpty() ? key_event->text().at(0) : 0;
-    if (ch > 128)
-        ch = 0;
-    // on OSX, ascii control codes are not sent, force them
-    if (ch == 0 && (mod & Qt::ControlModifier) != 0) {
-        if (k >= Qt::Key_A && k <= Qt::Key_Underscore)
-            ch = (QChar) (k - (Qt::Key_A - 1));
-    }
-    uchar key = (char) ch.cell();
+    uchar key = keyValue(key_event);
+    if (!key)
+        return;
 
     // only one possible match for key==ch, and if one occurs it takes
     // precedence over any other match (for instance, some menus might
@@ -768,7 +760,7 @@ void NetHackQtMenuWindow::All()
         }
         QCheckBox *cb = dynamic_cast<QCheckBox *> (table->cellWidget(row, 1));
         if (cb != NULL) {
-            cb->setChecked(Qt::Checked);
+            cb->setChecked(true);
         }
     }
     if (biggestcount > 0L) { // had one or more counts
@@ -837,7 +829,7 @@ void NetHackQtMenuWindow::Search()
     line[0] = '\0'; /* for EDIT_GETLIN */
     if (requestor.Get(line)) {
 	for (int i=0; i<itemcount; i++) {
-	    if (itemlist[i].str.contains(line))
+	    if (itemlist[i].str.contains(line, Qt::CaseInsensitive))
 		ToggleSelect(i, false);
 	}
     }
@@ -872,8 +864,7 @@ void NetHackQtMenuWindow::ToggleSelect(int row, bool already_toggled)
         QTableWidgetItem *countfield = table->item(row, 0);
         if (!counting) {
             if (!already_toggled)
-                cb->setChecked((cb->checkState() == Qt::Unchecked) // toggle
-                               ? Qt::Checked : Qt::Unchecked);
+                cb->setChecked((cb->checkState() == Qt::Unchecked)); // toggle
             itemlist[row].selected = (cb->checkState() != Qt::Unchecked);
             if (countfield != NULL)
                 countfield->setText("");
@@ -893,7 +884,7 @@ void NetHackQtMenuWindow::ToggleSelect(int row, bool already_toggled)
             // [maybe not necessary since unlike tty menus, count is visible]
 
             // uncheck if count is explicitly 0, otherwise check
-            cb->setChecked((amt > 0L) ? Qt::Checked : Qt::Unchecked);
+            cb->setChecked((amt > 0L));
             itemlist[row].selected = (cb->checkState() != Qt::Unchecked);
 
             // if this count is larger than the biggest we've seen
@@ -953,19 +944,31 @@ long NetHackQtMenuWindow::count(int row)
     return cstr.isEmpty() ? -1L : cstr.toLong();
 }
 
+// initialize a text window
 NetHackQtTextWindow::NetHackQtTextWindow(QWidget *parent) :
     QDialog(parent),
     use_rip(false),
     str_fixed(false),
-    ok("Dismiss",this),
-    search("Search",this),
+    textsearching(false),
+    ok("&Dismiss", this),
+    search("&Search", this),
     lines(new NetHackQtTextListBox(this)),
+    target(""),
     rip(this)
 {
+    //
+    // TODO?
+    //  Searching would be far more convenient if the window contained
+    //  the search string requestor widget instead of just a [Search]
+    //  button to request a popup for that.
+    //  Also, searching should probably be disabled if the entire text
+    //  fits within the window so there's nothing to scroll through.
+    //
+
     ok.setDefault(true);
-    connect(&ok,SIGNAL(clicked()),this,SLOT(accept()));
-    connect(&search,SIGNAL(clicked()),this,SLOT(Search()));
-    connect(qt_settings,SIGNAL(fontChanged()),this,SLOT(doUpdate()));
+    connect(&ok,SIGNAL(clicked()), this, SLOT(doDismiss()));
+    connect(&search, SIGNAL(clicked()), this, SLOT(Search()));
+    connect(qt_settings, SIGNAL(fontChanged()), this, SLOT(doUpdate()));
 
     QVBoxLayout* vb = new QVBoxLayout(this);
     vb->addWidget(&rip);
@@ -974,6 +977,12 @@ NetHackQtTextWindow::NetHackQtTextWindow(QWidget *parent) :
     hb->addWidget(&ok);
     hb->addWidget(&search);
     vb->addWidget(lines);
+
+    // we don't want keystrokes being sent to the main window for use as
+    // commands while this text window is popped up
+    setFocusPolicy(Qt::StrongFocus);
+    // needed so that keystrokes get sent to our keyPressEvent()
+    lines->setFocusPolicy(Qt::NoFocus);
 }
 
 void NetHackQtTextWindow::doUpdate()
@@ -984,7 +993,6 @@ void NetHackQtTextWindow::doUpdate()
 
 NetHackQtTextWindow::~NetHackQtTextWindow()
 {
-
 }
 
 QWidget* NetHackQtTextWindow::Widget()
@@ -994,7 +1002,16 @@ QWidget* NetHackQtTextWindow::Widget()
 
 bool NetHackQtTextWindow::Destroy()
 {
-    return !isVisible();
+    return true; /*!isVisible();*/
+}
+
+void NetHackQtTextWindow::doDismiss()
+{
+    // [Clear() was needed when the search target string was kept in
+    //  a static buffer but is superfluous now that that's part of
+    //  the TextWindow class and initialized in the constructor.]
+    Clear();
+    accept();
 }
 
 void NetHackQtTextWindow::UseRIP(int how, time_t when)
@@ -1083,12 +1100,18 @@ void NetHackQtTextWindow::UseRIP(int how, time_t when)
 void NetHackQtTextWindow::Clear()
 {
     lines->clear();
-    use_rip=false;
-    str_fixed=false;
+    target[0] = '\0'; // discard search target string
+    use_rip = false;
+    str_fixed = false;
+    textsearching = false;
 }
 
 void NetHackQtTextWindow::Display(bool block UNUSED)
 {
+    // make sure window isn't completely empty
+    if (!lines->count())
+        PutStr(ATR_NONE, "");
+
     if (str_fixed) {
 	lines->setFont(qt_settings->normalFixedFont());
     } else {
@@ -1117,31 +1140,105 @@ void NetHackQtTextWindow::Display(bool block UNUSED)
 	centerOnMain(this);
 	show();
     }
+
+    lines->clearSelection(); // affects [Search]
+
     exec();
+    textsearching = false;
 }
 
+// handle a line of text for a text window
 void NetHackQtTextWindow::PutStr(int attr UNUSED, const QString& text)
 {
-    str_fixed=str_fixed || text.contains("    ");
+#if 1
+    // 3.7:  Always render text windows with fixed-width font.  The majority
+    // of text files we'll ever display including ('license' and 'history')
+    // happen to have some lines with four spaces anyway and/or they have
+    // been pre-formatted to fit within less than 80 columns.  For data.base
+    // entries, some do have four spaces (usually the final attribution)
+    // and some don't, resulting in inconsistent display from one entry to
+    // another if the default proportional font is ever used.
+    str_fixed = true;
+#else
+    // if any line contains four consecutive spaces, render this text window
+    // using fixed-width font; skip substring lookup if flag is already set
+    str_fixed = str_fixed || text.contains("    ");
+#endif
+    // instead of outputting the line directly, save it for future rendering
     lines->addItem(text);
 }
 
+// prompt for a target string and search current text window for it;
+// if found, highlight the next line target occurs on;
+// multiple searches with same or different search string are supported
 void NetHackQtTextWindow::Search()
 {
-    NetHackQtStringRequestor requestor(this, "Search for:");
-    static char line[256]="";
-    requestor.SetDefault(line);
-    if (requestor.Get(line)) {
-	int current=lines->currentRow();
-	for (int i=1; i<lines->count(); i++) {
-	    int lnum=(i+current)%lines->count();
-	    QString str=lines->item(lnum)->text();
-	    if (str.contains(line)) {
-		lines->setCurrentRow(lnum);
-		return;
-	    }
-	}
-	lines->setCurrentItem(NULL);
+    textsearching = true;
+    NetHackQtStringRequestor requestor(this, "Search for:", "Done", "Find");
+    requestor.SetDefault(target);
+    boolean get_a_line = requestor.Get(target, (int) sizeof target);
+
+    // FIXME:
+    //  Force text window to be on top.  Without this, it moves behind
+    //  the map after the string requestor completes.  Then it can't
+    //  be seen or accessed (unless the game window is minimized or
+    //  dragged out of the way).  Unfortunately the window noticeably
+    //  vanishes and then immediately gets redrawn.
+    if (!this->isActiveWindow()) {
+        this->activateWindow();
+        this->raise();
+    }
+
+    if (get_a_line && target[0]) {
+        int linecount = lines->count();
+        int current = lines->currentRow();
+        if (current == -1)
+            current = 0;
+        // when no row is highlighted (selected), start the search
+        // on the current row, otherwise start on the row after it
+        // [normally means that the very first row is a candidate
+        // for containing the target during the very first search]
+        int startln = lines->selectedItems().count();
+        for (int i = startln; i < linecount; ++i) {
+            int lnum = (i + current) % linecount;
+            const QString &str = lines->item(lnum)->text();
+            // Check whether target occurs on this line.  If it does,
+            // the line is highlighted and this search finishes.
+            // When not currently within view, highlighting also
+            // scrolls the view to make it become the bottom line.
+            // A subsequent search will remember the target string
+            // and start searching on the line past the highlighted
+            // one (even if a new target is specified).
+            if (str.contains(target, Qt::CaseInsensitive)) {
+                lines->setCurrentRow(lnum);
+                return;
+            }
+        }
+        lines->setCurrentItem(NULL);
+    } else {
+        target[0] = '\0';
+    }
+    textsearching = false;
+    return;
+}
+
+void NetHackQtTextWindow::keyPressEvent(QKeyEvent *key_event)
+{
+    uchar key = keyValue(key_event);
+
+    if (key == MENU_SEARCH) {
+        if (!use_rip)
+            Search();
+    } else if (key == '\n' || key == '\r' || key == ' ') {
+        if (!textsearching)
+            accept();
+        else
+            textsearching = FALSE;
+    } else if (key == '\033') {
+        reject();
+    } else {
+        // ignore the current key instead of passing it along
+        //- QDialog::keyPressEvent(key_event);
     }
 }
 

@@ -21,24 +21,11 @@ static int curs_y = -1;
 
 static int parse_escape_sequence(void);
 
-/* Macros for Control and Alt keys */
-
-#ifndef M
-# ifndef NHSTDC
-#  define M(c)          (0x80 | (c))
-# else
-#  define M(c)          ((c) - 128)
-# endif/* NHSTDC */
-#endif
-#ifndef C
-# define C(c)           (0x1f & (c))
-#endif
-
 
 /* Read a character of input from the user */
 
 int
-curses_read_char()
+curses_read_char(void)
 {
     int ch;
 #if defined(ALT_0) || defined(ALT_9) || defined(ALT_A) || defined(ALT_Z)
@@ -78,7 +65,7 @@ curses_read_char()
     }
 #endif
 
-    if (counting && !isdigit(ch)) { /* Dismiss count window if necissary */
+    if (counting && !isdigit(ch)) { /* dismiss count window if necessary */
         curses_count_window(NULL);
         curses_refresh_nethack_windows();
     }
@@ -113,7 +100,7 @@ curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff)
     if (color == 0) {           /* make black fg visible */
 # ifdef USE_DARKGRAY
         if (iflags.wc2_darkgray) {
-            if (can_change_color() && (COLORS > 16)) {
+            if (COLORS > 16) {
                 /* colorpair for black is already darkgray */
             } else {            /* Use bold for a bright black */
                 wattron(win, A_BOLD);
@@ -148,7 +135,7 @@ curses_toggle_color_attr(WINDOW *win, int color, int attr, int onoff)
                 wattroff(win, A_BOLD);
             }
 # ifdef USE_DARKGRAY
-            if ((color == 0) && (!can_change_color() || (COLORS <= 16))) {
+            if ((color == 0) && (COLORS <= 16)) {
                 wattroff(win, A_BOLD);
             }
 # else
@@ -624,7 +611,7 @@ curses_move_cursor(winid wid, int x, int y)
 /* Perform actions that should be done every turn before nhgetch() */
 
 void
-curses_prehousekeeping()
+curses_prehousekeeping(void)
 {
 #ifndef PDCURSES
     WINDOW *win = curses_get_nhwin(MAP_WIN);
@@ -647,7 +634,7 @@ curses_prehousekeeping()
 /* Perform actions that should be done every turn after nhgetch() */
 
 void
-curses_posthousekeeping()
+curses_posthousekeeping(void)
 {
     curs_set(0);
     /* curses_decrement_highlights(FALSE); */
@@ -675,7 +662,8 @@ curses_view_file(const char *filename, boolean must_exist)
     Id = cg.zeroany;
 
     while (dlb_fgets(buf, BUFSZ, fp) != NULL) {
-        curses_add_menu(wid, NO_GLYPH, &Id, 0, 0, A_NORMAL, buf, FALSE);
+        curses_add_menu(wid, &nul_glyphinfo, &Id, 0, 0,
+                        A_NORMAL, buf, FALSE);
     }
 
     dlb_fclose(fp);
@@ -691,7 +679,8 @@ curses_rtrim(char *str)
     char *s;
 
     for (s = str; *s != '\0'; ++s);
-    for (--s; isspace(*s) && s > str; --s);
+    if (s > str)
+        for (--s; isspace(*s) && s > str; --s);
     if (s == str)
         *s = '\0';
     else
@@ -702,30 +691,25 @@ curses_rtrim(char *str)
 /* Read numbers until non-digit is encountered, and return number
 in int form. */
 
-int
+long
 curses_get_count(int first_digit)
 {
-    long current_count = first_digit;
     int current_char;
+    long current_count = 0L;
 
-    current_char = curses_read_char();
-
-    while (isdigit(current_char)) {
-        current_count = (current_count * 10) + (current_char - '0');
-        if (current_count > LARGEST_INT) {
-            current_count = LARGEST_INT;
-        }
-
-        custompline(SUPPRESS_HISTORY, "Count: %ld", current_count);
-        current_char = curses_read_char();
-    }
+    /* use core's count routine; we have the first digit; if any more
+       are typed, get_count() will send "Count:123" to the message window;
+       curses's message window will display that in count window instead */
+    current_char = get_count(NULL, (char) first_digit,
+                             /* 0L => no limit on value unless it wraps
+                              * to negative;
+                              * FALSE => suppress from message history */
+                             0L, &current_count, FALSE);
 
     ungetch(current_char);
-
     if (current_char == '\033') {     /* Cancelled with escape */
         current_count = -1;
     }
-
     return current_count;
 }
 
@@ -815,8 +799,7 @@ curses_read_attrs(const char *attrs)
 /* format iflags.wc2_petattr into "+a+b..." for set bits a, b, ...
    (used by core's 'O' command; return value points past leading '+') */
 char *
-curses_fmt_attrs(outbuf)
-char *outbuf;
+curses_fmt_attrs(char *outbuf)
 {
     int attr = iflags.wc2_petattr;
 
@@ -1022,14 +1005,17 @@ curses_get_mouse(int *mousex, int *mousey, int *mod)
             }
         }
     }
+#else
+    nhUse(mousex);
+    nhUse(mousey);
+    nhUse(mod);
 #endif /* NCURSES_MOUSE_VERSION */
 
     return key;
 }
 
 void
-curses_mouse_support(mode)
-int mode; /* 0: off, 1: on, 2: alternate on */
+curses_mouse_support(int mode) /* 0: off, 1: on, 2: alternate on */
 {
 #ifdef NCURSES_MOUSE_VERSION
     mmask_t result, oldmask, newmask;

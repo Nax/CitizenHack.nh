@@ -5,14 +5,14 @@
 
 #include "hack.h"
 
-static boolean NDECL(rm_waslit);
-static void FDECL(mkcavepos,
-                      (XCHAR_P, XCHAR_P, int, BOOLEAN_P, BOOLEAN_P));
-static void FDECL(mkcavearea, (BOOLEAN_P));
-static int NDECL(dig);
-static void FDECL(dig_up_grave, (coord *));
-static int FDECL(adj_pit_checks, (coord *, char *));
-static void FDECL(pit_flow, (struct trap *, SCHAR_P));
+static boolean rm_waslit(void);
+static void mkcavepos(xchar, xchar, int, boolean, boolean);
+static void mkcavearea(boolean);
+static int dig(void);
+static void dig_up_grave(coord *);
+static int adj_pit_checks(coord *, char *);
+static void pit_flow(struct trap *, schar);
+static boolean furniture_handled(int, int, boolean);
 
 /* Indices returned by dig_typ() */
 enum dig_types {
@@ -25,7 +25,7 @@ enum dig_types {
 };
 
 static boolean
-rm_waslit()
+rm_waslit(void)
 {
     register xchar x, y;
 
@@ -43,10 +43,7 @@ rm_waslit()
  * immediately after the effect is complete.
  */
 static void
-mkcavepos(x, y, dist, waslit, rockit)
-xchar x, y;
-int dist;
-boolean waslit, rockit;
+mkcavepos(xchar x, xchar y, int dist, boolean waslit, boolean rockit)
 {
     register struct rm *lev;
 
@@ -86,8 +83,7 @@ boolean waslit, rockit;
 }
 
 static void
-mkcavearea(rockit)
-register boolean rockit;
+mkcavearea(boolean rockit)
 {
     int dist;
     xchar xmin = u.ux, xmax = u.ux;
@@ -138,9 +134,7 @@ register boolean rockit;
 
 /* When digging into location <x,y>, what are you actually digging into? */
 int
-dig_typ(otmp, x, y)
-struct obj *otmp;
-xchar x, y;
+dig_typ(struct obj *otmp, xchar x, xchar y)
 {
     boolean ispick;
 
@@ -166,7 +160,7 @@ xchar x, y;
 }
 
 boolean
-is_digging()
+is_digging(void)
 {
     if (g.occupation == dig) {
         return TRUE;
@@ -178,17 +172,15 @@ is_digging()
 #define BY_OBJECT ((struct monst *) 0)
 
 boolean
-dig_check(madeby, verbose, x, y)
-struct monst *madeby;
-boolean verbose;
-int x, y;
+dig_check(struct monst *madeby, boolean verbose, int x, int y)
 {
     struct trap *ttmp = t_at(x, y);
     const char *verb =
         (madeby == BY_YOU && uwep && is_axe(uwep)) ? "chop" : "dig in";
 
     if (On_stairs(x, y)) {
-        if (x == xdnladder || x == xupladder) {
+        stairway *stway = stairway_at(x, y);
+        if (stway->isladder) {
             if (verbose)
                 pline_The("ladder resists your effort.");
         } else if (verbose)
@@ -236,7 +228,7 @@ int x, y;
 }
 
 static int
-dig(VOID_ARGS)
+dig(void)
 {
     register struct rm *lev;
     register xchar dpx = g.context.digging.pos.x, dpy = g.context.digging.pos.y;
@@ -488,9 +480,34 @@ dig(VOID_ARGS)
     return 1;
 }
 
+static boolean
+furniture_handled(int x, int y, boolean madeby_u)
+{
+    struct rm *lev = &levl[x][y];
+
+    if (IS_FOUNTAIN(lev->typ)) {
+        dogushforth(FALSE);
+        SET_FOUNTAIN_WARNED(x, y); /* force dryup */
+        dryup(x, y, madeby_u);
+    } else if (IS_SINK(lev->typ)) {
+        breaksink(x, y);
+    } else if (lev->typ == DRAWBRIDGE_DOWN
+               || (is_drawbridge_wall(x, y) >= 0)) {
+        int bx = x, by = y;
+
+        /* if under the portcullis, the bridge is adjacent */
+        (void) find_drawbridge(&bx, &by);
+        destroy_drawbridge(bx, by);
+    } else {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+
 /* When will hole be finished? Very rough indication used by shopkeeper. */
 int
-holetime()
+holetime(void)
 {
     if (g.occupation != dig || !*u.ushops)
         return -1;
@@ -499,9 +516,8 @@ holetime()
 
 /* Return typ of liquid to fill a hole with, or ROOM, if no liquid nearby */
 schar
-fillholetyp(x, y, fill_if_any)
-int x, y;
-boolean fill_if_any; /* force filling if it exists at all */
+fillholetyp(int x, int y,
+            boolean fill_if_any) /* force filling if it exists at all */
 {
     register int x1, y1;
     int lo_x = max(1, x - 1), hi_x = min(x + 1, COLNO - 1),
@@ -534,10 +550,7 @@ boolean fill_if_any; /* force filling if it exists at all */
 }
 
 void
-digactualhole(x, y, madeby, ttyp)
-register int x, y;
-struct monst *madeby;
-int ttyp;
+digactualhole(int x, int y, struct monst *madeby, int ttyp)
 {
     struct obj *oldobjs, *newobjs;
     register struct trap *ttmp;
@@ -557,25 +570,8 @@ int ttyp;
             reset_utrap(FALSE);
     }
 
-    /* these furniture checks were in dighole(), but wand
-       breaking bypasses that routine and calls us directly */
-    if (IS_FOUNTAIN(lev->typ)) {
-        dogushforth(FALSE);
-        SET_FOUNTAIN_WARNED(x, y); /* force dryup */
-        dryup(x, y, madeby_u);
+    if (furniture_handled(x, y, madeby_u))
         return;
-    } else if (IS_SINK(lev->typ)) {
-        breaksink(x, y);
-        return;
-    } else if (lev->typ == DRAWBRIDGE_DOWN
-               || (is_drawbridge_wall(x, y) >= 0)) {
-        int bx = x, by = y;
-
-        /* if under the portcullis, the bridge is adjacent */
-        (void) find_drawbridge(&bx, &by);
-        destroy_drawbridge(bx, by);
-        return;
-    }
 
     if (ttyp != PIT && (!Can_dig_down(&u.uz) && !lev->candig)) {
         impossible("digactualhole: can't dig %s on this level.",
@@ -610,6 +606,8 @@ int ttyp;
                 You("dig a pit in the %s.", surface_type);
             if (shopdoor)
                 pay_for_damage("ruin", FALSE);
+            else
+                add_damage(x, y, madeby_u ? SHOP_PIT_COST : 0L);
         } else if (!madeby_obj && canseemon(madeby)) {
             pline("%s digs a pit in the %s.", Monnam(madeby), surface_type);
         } else if (cansee(x, y) && flags.verbose) {
@@ -733,11 +731,8 @@ int ttyp;
  * in apply.c.
  */
 void
-liquid_flow(x, y, typ, ttmp, fillmsg)
-xchar x, y;
-schar typ;
-struct trap *ttmp;
-const char *fillmsg;
+liquid_flow(xchar x, xchar y, schar typ, struct trap *ttmp,
+            const char *fillmsg)
 {
     struct obj *objchain;
     struct monst *mon;
@@ -767,9 +762,7 @@ const char *fillmsg;
 
 /* return TRUE if digging succeeded, FALSE otherwise */
 boolean
-dighole(pit_only, by_magic, cc)
-boolean pit_only, by_magic;
-coord *cc;
+dighole(boolean pit_only, boolean by_magic, coord *cc)
 {
     register struct trap *ttmp;
     struct rm *lev;
@@ -875,9 +868,11 @@ coord *cc;
 
         lev->flags = 0;
         if (typ != ROOM) {
-            lev->typ = typ;
-            liquid_flow(dig_x, dig_y, typ, ttmp,
-                        "As you dig, the hole fills with %s!");
+            if (!furniture_handled((int) dig_x, (int) dig_y, TRUE)) {
+                lev->typ = typ;
+                liquid_flow(dig_x, dig_y, typ, ttmp,
+                            "As you dig, the hole fills with %s!");
+            }
             return TRUE;
         }
 
@@ -903,8 +898,7 @@ coord *cc;
 }
 
 static void
-dig_up_grave(cc)
-coord *cc;
+dig_up_grave(coord *cc)
 {
     struct obj *otmp;
     xchar dig_x, dig_y;
@@ -963,8 +957,7 @@ coord *cc;
 }
 
 int
-use_pick_axe(obj)
-struct obj *obj;
+use_pick_axe(struct obj *obj)
 {
     const char *sdp, *verb;
     char *dsp, dirsyms[12], qbuf[BUFSZ];
@@ -1029,8 +1022,7 @@ struct obj *obj;
 /*       the "In what direction do you want to dig?" query.        */
 /*       use_pick_axe2() uses the existing u.dx, u.dy and u.dz    */
 int
-use_pick_axe2(obj)
-struct obj *obj;
+use_pick_axe2(struct obj *obj)
 {
     register int rx, ry;
     register struct rm *lev;
@@ -1039,7 +1031,7 @@ struct obj *obj;
     boolean ispick = is_pick(obj);
     const char *verbing = ispick ? "digging" : "chopping";
 
-    if (u.uswallow && attack(u.ustuck)) {
+    if (u.uswallow && do_attack(u.ustuck)) {
         ; /* return 1 */
     } else if (Underwater) {
         pline("Turbulence torpedoes your %s attempts.", verbing);
@@ -1070,7 +1062,7 @@ struct obj *obj;
             return 1;
         }
         lev = &levl[rx][ry];
-        if (MON_AT(rx, ry) && attack(m_at(rx, ry)))
+        if (MON_AT(rx, ry) && do_attack(m_at(rx, ry)))
             return 1;
         dig_target = dig_typ(obj, rx, ry);
         if (dig_target == DIGTYP_UNDIGGABLE) {
@@ -1108,15 +1100,10 @@ struct obj *obj;
                        && (trap_with_u = t_at(u.ux, u.uy))
                        && is_pit(trap->ttyp)
                        && !conjoined_pits(trap, trap_with_u, FALSE)) {
-                int idx;
+                int idx = xytod(u.dx, u.dy);
 
-                for (idx = 0; idx < 8; idx++) {
-                    if (xdir[idx] == u.dx && ydir[idx] == u.dy)
-                        break;
-                }
-                /* idx is valid if < 8 */
-                if (idx < 8) {
-                    int adjidx = (idx + 4) % 8;
+                if (idx != DIR_ERR) {
+                    int adjidx = DIR_180(idx);
 
                     trap_with_u->conjoined |= (1 << idx);
                     trap->conjoined |= (1 << adjidx);
@@ -1201,8 +1188,10 @@ struct obj *obj;
             assign_level(&g.context.digging.level, &u.uz);
             g.context.digging.effort = 0;
             You("start %s downward.", verbing);
-            if (*u.ushops)
+            if (*u.ushops) {
                 shopdig(0);
+                add_damage(u.ux, u.uy, SHOP_PIT_COST);
+            }
         } else
             You("continue %s downward.", verbing);
         g.did_dig_msg = FALSE;
@@ -1218,10 +1207,7 @@ struct obj *obj;
  * zap == TRUE if wand/spell of digging, FALSE otherwise (chewing)
  */
 void
-watch_dig(mtmp, x, y, zap)
-struct monst *mtmp;
-xchar x, y;
-boolean zap;
+watch_dig(struct monst *mtmp, xchar x, xchar y, boolean zap)
 {
     struct rm *lev = &levl[x][y];
 
@@ -1264,10 +1250,10 @@ boolean zap;
 
 /* Return TRUE if monster died, FALSE otherwise.  Called from m_move(). */
 boolean
-mdig_tunnel(mtmp)
-register struct monst *mtmp;
+mdig_tunnel(struct monst *mtmp)
 {
     register struct rm *here;
+    boolean sawit, seeit, trapped;
     int pile = rnd(12);
 
     here = &levl[mtmp->mx][mtmp->my];
@@ -1278,19 +1264,24 @@ register struct monst *mtmp;
     if (closed_door(mtmp->mx, mtmp->my)) {
         if (*in_rooms(mtmp->mx, mtmp->my, SHOPBASE))
             add_damage(mtmp->mx, mtmp->my, 0L);
+        /* sawit: closed door location is more visible than an open one */
+        sawit = canseemon(mtmp); /* before door state change and unblock_pt */
+        trapped = (here->doormask & D_TRAPPED) ? TRUE : FALSE;
+        here->doormask = trapped ? D_NODOOR : D_BROKEN;
         unblock_point(mtmp->mx, mtmp->my); /* vision */
-        if (here->doormask & D_TRAPPED) {
-            here->doormask = D_NODOOR;
-            if (mb_trapped(mtmp)) { /* mtmp is killed */
+        newsym(mtmp->mx, mtmp->my);
+        if (trapped) {
+            seeit = canseemon(mtmp);
+            if (mb_trapped(mtmp, sawit || seeit)) { /* mtmp is killed */
                 newsym(mtmp->mx, mtmp->my);
                 return TRUE;
             }
         } else {
-            if (!rn2(3) && flags.verbose) /* not too often.. */
-                draft_message(TRUE); /* "You feel an unexpected draft." */
-            here->doormask = D_BROKEN;
+            if (flags.verbose) {
+                if (!Unaware && !rn2(3)) /* not too often.. */
+                    draft_message(TRUE); /* "You feel an unexpected draft." */
+            }
         }
-        newsym(mtmp->mx, mtmp->my);
         return FALSE;
     } else if (here->typ == SCORR) {
         here->typ = CORR, here->flags = 0;
@@ -1347,8 +1338,7 @@ register struct monst *mtmp;
 /* draft refers to air currents, but can be a pun on "draft" as conscription
    for military service (probably not a good pun if it has to be explained) */
 void
-draft_message(unexpected)
-boolean unexpected;
+draft_message(boolean unexpected)
 {
     /*
      * [Bug or TODO?  Have caller pass coordinates and use the travel
@@ -1392,7 +1382,7 @@ boolean unexpected;
 
 /* digging via wand zap or spell cast */
 void
-zap_dig()
+zap_dig(void)
 {
     struct rm *room;
     struct monst *mtmp;
@@ -1431,12 +1421,12 @@ zap_dig()
         if (!Is_airlevel(&u.uz) && !Is_waterlevel(&u.uz) && !Underwater) {
             if (u.dz < 0 || On_stairs(u.ux, u.uy)) {
                 int dmg;
-                if (On_stairs(u.ux, u.uy))
+                if (On_stairs(u.ux, u.uy)) {
+                    stairway *stway = stairway_at(u.ux, u.uy);
                     pline_The("beam bounces off the %s and hits the %s.",
-                              (u.ux == xdnladder || u.ux == xupladder)
-                                  ? "ladder"
-                                  : "stairs",
+                              stway->isladder ? "ladder" : "stairs",
                               ceiling(u.ux, u.uy));
+                }
                 You("loosen a rock from the %s.", ceiling(u.ux, u.uy));
                 pline("It falls on your %s!", body_part(HEAD));
                 dmg = rnd((uarmh && is_metallic(uarmh)) ? 2 : 6);
@@ -1463,11 +1453,7 @@ zap_dig()
     if (u.utrap && u.utraptype == TT_PIT
         && (trap_with_u = t_at(u.ux, u.uy))) {
         pitdig = TRUE;
-        for (diridx = 0; diridx < 8; diridx++) {
-            if (xdir[diridx] == u.dx && ydir[diridx] == u.dy)
-                break;
-            /* diridx is valid if < 8 */
-        }
+        diridx = xytod(u.dx, u.dy);
     }
     digdepth = rn1(18, 8);
     tmp_at(DISP_BEAM, cmap_to_glyph(S_digbeam));
@@ -1481,10 +1467,12 @@ zap_dig()
         if (pitdig) { /* we are already in a pit if this is true */
             coord cc;
             struct trap *adjpit = t_at(zx, zy);
-            if ((diridx < 8) && !conjoined_pits(adjpit, trap_with_u, FALSE)) {
+
+            if ((diridx != DIR_ERR) && !conjoined_pits(adjpit, trap_with_u, FALSE)) {
                 digdepth = 0; /* limited to the adjacent location only */
                 if (!(adjpit && is_pit(adjpit->ttyp))) {
                     char buf[BUFSZ];
+
                     cc.x = zx;
                     cc.y = zy;
                     if (!adj_pit_checks(&cc, buf)) {
@@ -1496,9 +1484,9 @@ zap_dig()
                         adjpit = t_at(zx, zy);
                     }
                 }
-                if (adjpit
-                    && is_pit(adjpit->ttyp)) {
-                    int adjidx = (diridx + 4) % 8;
+                if (adjpit && is_pit(adjpit->ttyp)) {
+                    int adjidx = DIR_180(diridx);
+
                     trap_with_u->conjoined |= (1 << diridx);
                     adjpit->conjoined |= (1 << adjidx);
                     flow_x = zx;
@@ -1606,9 +1594,7 @@ zap_dig()
  * down in the pit.
  */
 static int
-adj_pit_checks(cc, msg)
-coord *cc;
-char *msg;
+adj_pit_checks(coord *cc, char *msg)
 {
     int ltyp;
     struct rm *room;
@@ -1690,9 +1676,7 @@ char *msg;
  * Ensure that all conjoined pits fill up.
  */
 static void
-pit_flow(trap, filltyp)
-struct trap *trap;
-schar filltyp;
+pit_flow(struct trap *trap, schar filltyp)
 {
     /*
      * FIXME?
@@ -1710,7 +1694,7 @@ schar filltyp;
                     (t.tx == u.ux && t.ty == u.uy)
                         ? "Suddenly %s flows in from the adjacent pit!"
                         : (char *) 0);
-        for (idx = 0; idx < 8; ++idx) {
+        for (idx = 0; idx < N_DIRS; ++idx) {
             if (t.conjoined & (1 << idx)) {
                 int x, y;
                 struct trap *t2;
@@ -1723,7 +1707,7 @@ schar filltyp;
                  * called deltrap() which cleaned up the
                  * conjoined fields on both pits.
                  */
-                if (t2 && (t2->conjoined & (1 << ((idx + 4) % 8))))
+                if (t2 && (t2->conjoined & (1 << DIR_180(idx))))
 #endif
                 /* recursion */
                 pit_flow(t2, filltyp);
@@ -1733,8 +1717,7 @@ schar filltyp;
 }
 
 struct obj *
-buried_ball(cc)
-coord *cc;
+buried_ball(coord *cc)
 {
     int odist, bdist = COLNO;
     struct obj *otmp, *ball = 0;
@@ -1784,7 +1767,7 @@ coord *cc;
 }
 
 void
-buried_ball_to_punishment()
+buried_ball_to_punishment(void)
 {
     coord cc;
     struct obj *ball;
@@ -1807,7 +1790,7 @@ buried_ball_to_punishment()
 }
 
 void
-buried_ball_to_freedom()
+buried_ball_to_freedom(void)
 {
     coord cc;
     struct obj *ball;
@@ -1833,9 +1816,7 @@ buried_ball_to_freedom()
 /* move objects from fobj/nexthere lists to buriedobjlist, keeping position
    information */
 struct obj *
-bury_an_obj(otmp, dealloced)
-struct obj *otmp;
-boolean *dealloced;
+bury_an_obj(struct obj *otmp, boolean *dealloced)
 {
     struct obj *otmp2;
     boolean under_ice;
@@ -1901,8 +1882,7 @@ boolean *dealloced;
 }
 
 void
-bury_objs(x, y)
-int x, y;
+bury_objs(int x, int y)
 {
     struct obj *otmp, *otmp2;
     struct monst *shkp;
@@ -1936,8 +1916,7 @@ int x, y;
 
 /* move objects from buriedobjlist to fobj/nexthere lists */
 void
-unearth_objs(x, y)
-int x, y;
+unearth_objs(int x, int y)
 {
     struct obj *otmp, *otmp2, *bball;
     coord cc;
@@ -1976,9 +1955,7 @@ int x, y;
  */
 /* ARGSUSED */
 void
-rot_organic(arg, timeout)
-anything *arg;
-long timeout UNUSED;
+rot_organic(anything *arg, long timeout UNUSED)
 {
     struct obj *obj = arg->a_obj;
 
@@ -1999,9 +1976,7 @@ long timeout UNUSED;
  * Called when a corpse has rotted completely away.
  */
 void
-rot_corpse(arg, timeout)
-anything *arg;
-long timeout;
+rot_corpse(anything *arg, long timeout)
 {
     xchar x = 0, y = 0;
     struct obj *obj = arg->a_obj;
@@ -2044,7 +2019,8 @@ long timeout;
         if (mtmp && !OBJ_AT(x, y) && mtmp->mundetected
             && hides_under(mtmp->data)) {
             mtmp->mundetected = 0;
-        } else if (x == u.ux && y == u.uy && u.uundetected && hides_under(g.youmonst.data))
+        } else if (x == u.ux && y == u.uy
+                   && u.uundetected && hides_under(g.youmonst.data))
             (void) hideunder(&g.youmonst);
         newsym(x, y);
     } else if (in_invent)
@@ -2053,8 +2029,7 @@ long timeout;
 
 #if 0
 void
-bury_monst(mtmp)
-struct monst *mtmp;
+bury_monst(struct monst *mtmp)
 {
     debugpline1("bury_monst: %s", mon_nam(mtmp));
     if (canseemon(mtmp)) {
@@ -2073,7 +2048,7 @@ struct monst *mtmp;
 }
 
 void
-bury_you()
+bury_you(void)
 {
     debugpline0("bury_you");
     if (!Levitation && !Flying) {
@@ -2091,7 +2066,7 @@ bury_you()
 }
 
 void
-unearth_you()
+unearth_you(void)
 {
     debugpline0("unearth_you");
     u.uburied = FALSE;
@@ -2102,7 +2077,7 @@ unearth_you()
 }
 
 void
-escape_tomb()
+escape_tomb(void)
 {
     debugpline0("escape_tomb");
     if ((Teleportation || can_teleport(g.youmonst.data))
@@ -2149,7 +2124,7 @@ struct obj *otmp;
 #ifdef DEBUG
 /* bury everything at your loc and around */
 int
-wiz_debug_cmd_bury()
+wiz_debug_cmd_bury(void)
 {
     int x, y;
 

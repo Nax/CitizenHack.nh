@@ -68,6 +68,23 @@ enum m_ap_types {
 #define M_AP_TYPE(m) ((m)->m_ap_type & M_AP_TYPMASK)
 #define M_AP_FLAG(m) ((m)->m_ap_type & ~M_AP_TYPMASK)
 
+enum m_seen_resistance {
+    M_SEEN_NOTHING = 0x0000,
+    M_SEEN_MAGR    = 0x0001, /* Antimagic, AD_MAGM */
+    M_SEEN_FIRE    = 0x0002, /* Fire_resistance, AD_FIRE */
+    M_SEEN_COLD    = 0x0004, /* Cold_resistance, AD_COLD */
+    M_SEEN_SLEEP   = 0x0008, /* Sleep_resistance, AD_SLEE */
+    M_SEEN_DISINT  = 0x0010, /* Disint_resistance, AD_DISN */
+    M_SEEN_ELEC    = 0x0020, /* Shock_resistance, AD_ELEC */
+    M_SEEN_POISON  = 0x0040, /* AD_DRST */
+    M_SEEN_ACID    = 0x0080, /* Acid_resistance, AD_ACID */
+    M_SEEN_REFL    = 0x0100, /* reflection, no corresponding AD_foo */
+};
+
+#define m_seenres(mon, mask) ((mon)->seen_resistance & (mask))
+#define m_setseenres(mon, mask) ((mon)->seen_resistance |= (mask))
+#define monstseesu_ad(adtyp) monstseesu(cvt_adtyp_to_mseenres(adtyp))
+
 struct monst {
     struct monst *nmon;
     struct permonst *data;
@@ -82,13 +99,16 @@ struct monst {
     xchar mx, my;
     xchar mux, muy;       /* where the monster thinks you are */
 #define MTSZ 4
+    /* mtrack[0..2] is used to keep extra data when migrating the monster */
     coord mtrack[MTSZ];   /* monster track */
     int mhp, mhpmax;
     unsigned mappearance; /* for undetected mimics and the wiz */
     uchar m_ap_type;      /* what mappearance is describing, m_ap_types */
 
     schar mtame;                /* level of tameness, implies peaceful */
+    unsigned short mintrinsics; /* low 8 correspond to mresists */
     unsigned short mextrinsics; /* low 8 correspond to mresists */
+    unsigned long seen_resistance; /* M_SEEN_x; saw you resist an effect */
     int mspec_used;             /* monster's special ability attack timeout */
 
     Bitfield(female, 1);      /* is female */
@@ -183,7 +203,7 @@ struct monst {
 #define DEADMONSTER(mon) ((mon)->mhp < 1)
 #define is_starting_pet(mon) ((mon)->m_id == g.context.startingpet_mid)
 #define is_vampshifter(mon)                                      \
-    ((mon)->cham == PM_VAMPIRE || (mon)->cham == PM_VAMPIRE_LORD \
+    ((mon)->cham == PM_VAMPIRE || (mon)->cham == PM_VAMPIRE_LEADER \
      || (mon)->cham == PM_VLAD_THE_IMPALER)
 #define vampshifted(mon) (is_vampshifter((mon)) && !is_vampire((mon)->data))
 
@@ -209,6 +229,10 @@ struct monst {
 #define is_obj_mappear(mon,otyp) (M_AP_TYPE(mon) == M_AP_OBJECT \
                                   && (mon)->mappearance == (otyp))
 
+/* is mon m (presumably just killed) a troll and obj o Trollsbane? */
+#define troll_baned(m,o) \
+    ((m)->data->mlet == S_TROLL && (o) && (o)->oartifact == ART_TROLLSBANE)
+
 /* Get the maximum difficulty monsters that can currently be generated,
    given the current level difficulty and the hero's level. */
 #define monmax_difficulty(levdif) (((levdif) + u.ulevel) / 2)
@@ -218,5 +242,9 @@ struct monst {
 /* Macros for whether a type of monster is too strong for a specific level. */
 #define montoostrong(monindx, lev) (mons[monindx].difficulty > lev)
 #define montooweak(monindx, lev) (mons[monindx].difficulty < lev)
+
+#ifdef PMNAME_MACROS
+#define Mgender(mon) ((mon)->female ? FEMALE : MALE)
+#endif
 
 #endif /* MONST_H */

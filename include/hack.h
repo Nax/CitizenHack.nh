@@ -50,6 +50,8 @@ enum encumbrance_types {
 #define SHOP_HOLE_COST 200L /* cost of making hole/trapdoor */
 #define SHOP_WALL_COST 200L /* cost of destroying a wall */
 #define SHOP_WALL_DMG  (10L * ACURRSTR) /* damaging a wall */
+#define SHOP_PIT_COST  100L /* cost of making a pit */
+#define SHOP_WEB_COST   30L /* cost of removing a web */
 
 /* hunger states - see hu_stat in eat.c */
 enum hunger_state_types {
@@ -78,24 +80,6 @@ enum dismount_types {
     DISMOUNT_BONES    = 5,
     DISMOUNT_BYCHOICE = 6
 };
-
-/* mgflags for mapglyph() */
-#define MG_FLAG_NORMAL     0x00
-#define MG_FLAG_NOOVERRIDE 0x01
-
-/* Special returns from mapglyph() */
-#define MG_CORPSE  0x0001
-#define MG_INVIS   0x0002
-#define MG_DETECT  0x0004
-#define MG_PET     0x0008
-#define MG_RIDDEN  0x0010
-#define MG_STATUE  0x0020
-#define MG_OBJPILE 0x0040  /* more than one stack of objects */
-#define MG_BW_LAVA 0x0080  /* 'black & white lava': highlight lava if it
-                              can't be distringuished from water by color */
-#define MG_BW_ICE  0x0100  /* similar for ice vs floor */
-#define MG_NOTHING 0x0200  /* char represents GLYPH_NOTHING */
-#define MG_UNEXPL  0x0400  /* char represents GLYPH_UNEXPLORED */
 
 /* sellobj_state() states */
 #define SELL_NORMAL (0)
@@ -216,6 +200,9 @@ typedef struct {
 #define SYM_OFF_X (SYM_OFF_W + WARNCOUNT)
 #define SYM_MAX (SYM_OFF_X + MAXOTHER)
 
+/* glyphmod entries */
+enum { GM_FLAGS, GM_TTYCHAR, GM_COLOR, NUM_GLYPHMOD };
+
 #include "rect.h"
 #include "region.h"
 #include "decl.h"
@@ -272,22 +259,9 @@ typedef struct sortloot_item Loot;
 #include "display.h"
 #include "engrave.h"
 
-#ifdef USE_TRAMPOLI /* this doesn't belong here, but we have little choice */
-#undef NDECL
-#define NDECL(f) f()
-#endif
-
 #include "extern.h"
 #include "winprocs.h"
 #include "sys.h"
-
-#ifdef USE_TRAMPOLI
-#include "wintty.h"
-#undef WINTTY_H
-#include "trampoli.h"
-#undef EXTERN_H
-#include "extern.h"
-#endif /* USE_TRAMPOLI */
 
 /* flags to control makemon(); goodpos() uses some plus has some of its own*/
 #define NO_MM_FLAGS 0x000000L /* use this rather than plain 0 */
@@ -306,15 +280,26 @@ typedef struct sortloot_item Loot;
 #define MM_ASLEEP   0x002000L /* monsters should be generated asleep */
 #define MM_NOGRP    0x004000L /* suppress creation of monster groups */
 #define MM_NOTAIL   0x008000L /* if a long worm, don't give it a tail */
+#define MM_MALE     0x010000L /* male variation */
+#define MM_FEMALE   0x020000L /* female variation */
 /* if more MM_ flag masks are added, skip or renumber the GP_ one(s) */
-#define GP_ALLOW_XY 0x010000L /* [actually used by enexto() to decide whether
+#define GP_ALLOW_XY 0x040000L /* [actually used by enexto() to decide whether
                                * to make an extra call to goodpos()]        */
-#define GP_ALLOW_U  0x020000L /* don't reject hero's location */
+#define GP_ALLOW_U  0x080000L /* don't reject hero's location */
 
-/* flags for make_corpse() and mkcorpstat() */
-#define CORPSTAT_NONE 0x00
-#define CORPSTAT_INIT 0x01   /* pass init flag to mkcorpstat */
-#define CORPSTAT_BURIED 0x02 /* bury the corpse or statue */
+/* flags for make_corpse() and mkcorpstat(); 0..7 are recorded in obj->spe */
+#define CORPSTAT_NONE     0x00
+#define CORPSTAT_GENDER   0x03 /* 0x01 | 0x02 */
+#define CORPSTAT_HISTORIC 0x04 /* historic statue; not used for corpse */
+#define CORPSTAT_SPE_VAL  0x07 /* 0x03 | 0x04 */
+#define CORPSTAT_INIT     0x08 /* pass init flag to mkcorpstat */
+#define CORPSTAT_BURIED   0x10 /* bury the corpse or statue */
+/* note: gender flags have different values from those used for monsters
+   so that 0 can be unspecified/random instead of male */
+#define CORPSTAT_RANDOM 0
+#define CORPSTAT_FEMALE 1
+#define CORPSTAT_MALE   2
+#define CORPSTAT_NEUTER 3
 
 /* flags for decide_to_shift() */
 #define SHIFT_SEENMSG 0x01 /* put out a message if in sight */
@@ -447,6 +432,16 @@ typedef struct sortloot_item Loot;
 #define SUPPRESS_HISTORY 4
 #define URGENT_MESSAGE   8
 
+/* Lua callback functions */
+enum nhcore_calls {
+    NHCORE_START_NEW_GAME = 0,
+    NHCORE_RESTORE_OLD_GAME,
+    NHCORE_MOVELOOP_TURN,
+    NHCORE_GAME_EXIT,
+
+    NUM_NHCORE_CALLS
+};
+
 /* Macros for messages referring to hands, eyes, feet, etc... */
 enum bodypart_types {
     ARM       =  0,
@@ -500,6 +495,55 @@ enum bodypart_types {
 #define TELEDS_NO_FLAGS   0
 #define TELEDS_ALLOW_DRAG 1
 #define TELEDS_TELEPORT   2
+
+/* flags for mktrap() */
+#define MKTRAP_NOFLAGS       0x0
+#define MKTRAP_MAZEFLAG      0x1 /* trap placed on coords as if in maze */
+#define MKTRAP_NOSPIDERONWEB 0x2 /* web will not generate a spider */
+
+#define MON_POLE_DIST 5 /* How far monsters can use pole-weapons */
+#define PET_MISSILE_RANGE2 36 /* Square of distance within which pets shoot */
+
+/* flags passed to getobj() to control how it responds to player input */
+#define GETOBJ_NOFLAGS  0x0
+#define GETOBJ_ALLOWCNT 0x1 /* is a count allowed with this command? */
+#define GETOBJ_PROMPT   0x2 /* should it force a prompt for input? (prevents it
+                               exiting early with "You don't have anything to
+                               foo" if nothing in inventory is valid) */
+
+/* values returned from getobj() callback functions */
+enum getobj_callback_returns {
+    /* generally invalid - can't be used for this purpose. will give a "silly
+     * thing" message if the player tries to pick it, unless a more specific
+     * failure message is in getobj itself - e.g. "You cannot foo gold". */
+    GETOBJ_EXCLUDE = -2,
+    /* invalid because it is an inaccessible or unwanted piece of gear, but
+     * psuedo-valid for the purposes of allowing the player to select it and
+     * getobj to return it if there is a prompt instead of getting "silly
+     * thing", in order for the getobj caller to present a specific failure
+     * message. Other than that, the only thing this does differently from
+     * GETOBJ_EXCLUDE is that it inserts an "else" in "You don't have anything
+     * else to foo". */
+    GETOBJ_EXCLUDE_INACCESS = -1,
+    /* invalid for purposes of not showing a prompt if nothing is valid but
+     * psuedo-valid for selecting - identical to GETOBJ_EXCLUDE_INACCESS but
+     * without the "else" in "You don't have anything else to foo". */
+    GETOBJ_EXCLUDE_SELECTABLE = 0,
+    /* valid - invlet not presented in the summary or the ? menu as a
+     * recommendation, but is selectable if the player enters it anyway.
+     * Used for objects that are actually valid but unimportantly so, such
+     * as shirts for reading. */
+    GETOBJ_DOWNPLAY = 1,
+    /* valid - will be shown in summary and ? menu */
+    GETOBJ_SUGGEST  = 2,
+};
+
+/* constant passed to explode() for gas spores because gas spores are weird
+ * Specifically, this is an exception to the whole "explode() uses dobuzz types"
+ * system (the range -1 to -9 isn't used by it, for some reason), where this is
+ * effectively an extra dobuzz type, and some zap.c code needs to be aware of
+ * it.  */
+#define PHYS_EXPL_TYPE -1
 
 /*
  * option setting restrictions
@@ -557,9 +601,9 @@ enum optset_restrictions {
  * in that environment.
  */
 #if defined(WIN_CE)
-#define CFDECLSPEC __cdecl
+#define QSORTCALLBACK __cdecl
 #else
-#define CFDECLSPEC
+#define QSORTCALLBACK
 #endif
 
 #define DEVTEAM_EMAIL "devteam@nethack.org"

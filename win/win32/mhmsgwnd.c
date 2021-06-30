@@ -66,7 +66,7 @@ extern void play_sound_for_message(const char *str);
 #endif
 
 HWND
-mswin_init_message_window()
+mswin_init_message_window(void)
 {
     static int run_once = 0;
     HWND ret;
@@ -116,7 +116,7 @@ mswin_init_message_window()
 }
 
 void
-register_message_window_class()
+register_message_window_class(void)
 {
     WNDCLASS wcex;
     ZeroMemory(&wcex, sizeof(wcex));
@@ -664,7 +664,7 @@ onPaint(HWND hWnd)
             /* Find out the cursor (caret) position */
             if (i == MSG_LINES - 1) {
                 int nnum, numfit;
-                SIZE size;
+                SIZE size = {0};
                 TCHAR *nbuf;
                 int nlen;
 
@@ -769,7 +769,7 @@ mswin_message_window_size(HWND hWnd, LPSIZE sz)
     sz->cx = rt.right - rt.left;
     sz->cy = rt.bottom - rt.top;
 
-    /* set size to accomodate MSG_VISIBLE_LINES and
+    /* set size to accommodate MSG_VISIBLE_LINES and
        horizontal scroll bar (difference between window rect and client rect
        */
     GetClientRect(hWnd, &client_rt);

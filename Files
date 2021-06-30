@@ -7,8 +7,8 @@ from or not transferred to your system if you wish.
 
 .:
 (files in top directory)
-.clang-format    .travis.yml      Cross-compiling  Files
-Porting          README
+.clang-format        Cross-compiling      Files
+Porting              README               azure-pipelines.yml
 
 DEVEL:
 (files for people developing changes to NetHack)
@@ -53,13 +53,13 @@ fire.lua      help          hh            history       juiblex.lua
 keyhelp       knox.lua      license       medusa-1.lua  medusa-2.lua
 medusa-3.lua  medusa-4.lua  minefill.lua  minend-1.lua  minend-2.lua
 minend-3.lua  minetn-1.lua  minetn-2.lua  minetn-3.lua  minetn-4.lua
-minetn-5.lua  minetn-6.lua  minetn-7.lua  nhlib.lua     opthelp
-oracle.lua    oracles.txt   orcus.lua     quest.lua     rumors.fal
-rumors.tru    sanctum.lua   soko1-1.lua   soko1-2.lua   soko2-1.lua
-soko2-2.lua   soko3-1.lua   soko3-2.lua   soko4-1.lua   soko4-2.lua
-symbols       themerms.lua  tower1.lua    tower2.lua    tower3.lua
-tribute       valley.lua    water.lua     wizard1.lua   wizard2.lua
-wizard3.lua   wizhelp
+minetn-5.lua  minetn-6.lua  minetn-7.lua  nhcore.lua    nhlib.lua
+opthelp       oracle.lua    oracles.txt   orcus.lua     quest.lua
+rumors.fal    rumors.tru    sanctum.lua   soko1-1.lua   soko1-2.lua
+soko2-1.lua   soko2-2.lua   soko3-1.lua   soko3-2.lua   soko4-1.lua
+soko4-2.lua   symbols       themerms.lua  tower1.lua    tower2.lua
+tower3.lua    tribute       valley.lua    water.lua     wizard1.lua
+wizard2.lua   wizard3.lua   wizhelp
 
 doc:
 (files for all versions)
@@ -81,12 +81,6 @@ recover.6       recover.txt     tmac.n          tmac.nh
 window.doc
 
 include:
-(files for GEM versions)
-bitmfile.h  gem_rsc.h   load_img.h  wingem.h
-
-(file for GNOME versions)
-winGnome.h
-
 (files for X versions)
 tile2x11.h  winX.h      xwindow.h   xwindowp.h
 
@@ -98,22 +92,27 @@ engrave.h     extern.h      flag.h        fnamesiz.h    func_tab.h
 global.h      hack.h        integer.h     isaac64.h     lint.h
 mail.h        mextra.h      mfndpos.h     micro.h       mkroom.h
 monattk.h     mondata.h     monflag.h     monst.h       monsym.h
-ntconf.h      obj.h         objclass.h    optlist.h     patchlevel.h
-pcconf.h      permonst.h    prop.h        quest.h       rect.h
-region.h      rm.h          skills.h      sp_lev.h      spell.h
-sys.h         system.h      tcap.h        tileset.h     timeout.h
-tradstdc.h    trampoli.h    trap.h        unixconf.h    vision.h
-vmsconf.h     winami.h      wincurs.h     winprocs.h    wintype.h
+obj.h         objclass.h    optlist.h     patchlevel.h  pcconf.h
+permonst.h    prop.h        quest.h       rect.h        region.h
+rm.h          skills.h      sp_lev.h      spell.h       sys.h
+system.h      tcap.h        tileset.h     timeout.h     tradstdc.h
+trap.h        unixconf.h    vision.h      vmsconf.h     warnings.h
+winami.h      wincurs.h     windconf.h    winprocs.h    wintype.h
 you.h         youprop.h
 
 (file for tty versions)
 wintty.h
 
+outdated:
+(files that are no longer maintained for current game code)
+.travis.yml
+
 outdated/include:
 (files that are no longer maintained for current game code)
-amiconf.h     beconf.h      def_os2.h     mac-carbon.h  mac-qt.h
-mac-term.h    macconf.h     macpopup.h    mactty.h      macwin.h
-mttypriv.h    os2conf.h     tosconf.h     wceconf.h
+amiconf.h     beconf.h      bitmfile.h    def_os2.h     gem_rsc.h
+load_img.h    mac-carbon.h  mac-qt.h      mac-term.h    macconf.h
+macpopup.h    mactty.h      macwin.h      mttypriv.h    os2conf.h
+tosconf.h     trampoli.h    wceconf.h     winGnome.h    wingem.h
 
 outdated/sys/amiga:
 (files for Amiga versions - untested for 3.7)
@@ -150,6 +149,10 @@ schema1.BC    schema2.BC    schema3.MSC
 outdated/sys/os2:
 (files for OS/2 version - untested for 3.7)
 Install.os2   Makefile.os2  nhpmico.uu    os2.c
+
+outdated/sys/unix:
+(files that are no longer maintained for current game code)
+README.linux
 
 outdated/sys/wince:
 (files for Windows CE and PocketPC - untested for 3.7)
@@ -203,36 +206,27 @@ dig.c       display.c   dlb.c       do.c        do_name.c   do_wear.c
 dog.c       dogmove.c   dokick.c    dothrow.c   drawing.c   dungeon.c
 eat.c       end.c       engrave.c   exper.c     explode.c   extralev.c
 files.c     fountain.c  hack.c      hacklib.c   insight.c   invent.c
-isaac64.c   light.c     lock.c      mail.c      makemon.c   mapglyph.c
-mcastu.c    mdlib.c     mhitm.c     mhitu.c     minion.c    mklev.c
-mkmap.c     mkmaze.c    mkobj.c     mkroom.c    mon.c       mondata.c
-monmove.c   monst.c     mplayer.c   mthrowu.c   muse.c      music.c
-nhlobj.c    nhlsel.c    nhlua.c     o_init.c    objects.c   objnam.c
-options.c   pager.c     pickup.c    pline.c     polyself.c  potion.c
-pray.c      priest.c    quest.c     questpgr.c  read.c      rect.c
-region.c    restore.c   rip.c       rnd.c       role.c      rumors.c
-save.c      sfstruct.c  shk.c       shknam.c    sit.c       sounds.c
-sp_lev.c    spell.c     steal.c     steed.c     symbols.c   sys.c
-teleport.c  timeout.c   topten.c    track.c     trap.c      u_init.c
-uhitm.c     vault.c     version.c   vision.c    weapon.c    were.c
-wield.c     windows.c   wizard.c    worm.c      worn.c      write.c
-zap.c
+isaac64.c   light.c     lock.c      mail.c      makemon.c   mcastu.c
+mdlib.c     mhitm.c     mhitu.c     minion.c    mklev.c     mkmap.c
+mkmaze.c    mkobj.c     mkroom.c    mon.c       mondata.c   monmove.c
+monst.c     mplayer.c   mthrowu.c   muse.c      music.c     nhlobj.c
+nhlsel.c    nhlua.c     o_init.c    objects.c   objnam.c    options.c
+pager.c     pickup.c    pline.c     polyself.c  potion.c    pray.c
+priest.c    quest.c     questpgr.c  read.c      rect.c      region.c
+restore.c   rip.c       rnd.c       role.c      rumors.c    save.c
+sfstruct.c  shk.c       shknam.c    sit.c       sounds.c    sp_lev.c
+spell.c     steal.c     steed.c     symbols.c   sys.c       teleport.c
+timeout.c   topten.c    track.c     trap.c      u_init.c    uhitm.c
+vault.c     version.c   vision.c    weapon.c    were.c      wield.c
+windows.c   wizard.c    worm.c      worn.c      write.c     zap.c
+
+submodules:
+(files in top directory)
+lua       pdcurses
 
 sys/libnh:
 (files in top directory)
 README.md    libnhmain.c  sysconf
-
-sys/libnh/npm-package:
-(files in top directory)
-LICENSE.md         README.md          package-lock.json  package.json
-
-sys/libnh/npm-package/src:
-(file in top directory)
-nethackShim.js
-
-sys/libnh/npm-package/test:
-(file in top directory)
-test.js
 
 sys/libnh/test:
 (files in top directory)
@@ -294,10 +288,10 @@ pmatchregex.c
 sys/unix:
 (files for UNIX versions)
 Install.unx     Makefile.dat    Makefile.doc    Makefile.src
-Makefile.top    Makefile.utl    NewInstall.unx  README.linux
-README.xcode    XCode.xcconfig  depend.awk      gitinfo.sh
-mkmkfile.sh     nethack.sh      setup.sh        sysconf
-unixmain.c      unixres.c       unixunix.c
+Makefile.top    Makefile.utl    NewInstall.unx  README.xcode
+XCode.xcconfig  depend.awk      gitinfo.sh      mkmkfile.sh
+nethack.sh      setup.sh        sysconf         unixmain.c
+unixres.c       unixunix.c
 
 (files for replacement cpp, only needed by some ancient UNIX systems)
 cpp1.shr  cpp2.shr  cpp3.shr
@@ -330,7 +324,8 @@ unix
 
 sys/unix/hints/include:
 (files for configuring UNIX NetHack versions)
-cross-post.2020  cross-pre.2020   multiw-1.2020    multiw-2.2020
+compiler.2020    cross-post.2020  cross-pre.2020   multiw-1.2020
+multiw-2.2020
 
 sys/vms:
 (files for VMS version)
@@ -339,120 +334,30 @@ Makefile.utl  install.com   lev_lex.h     nethack.com   oldcrtl.c
 spec_lev.com  sysconf       vmsbuild.com  vmsfiles.c    vmsmail.c
 vmsmain.c     vmsmisc.c     vmstty.c      vmsunix.c
 
-sys/winnt:
+sys/windows:
 (files for Windows 7/8.x/10 version)
-.nethackrc.template  Install.nt           Makefile.gcc
-Makefile.msc         console.rc           nethack.def
-nh340key.c           nhdefkey.c           nhico.uu
-nhraykey.c           nhsetup.bat          ntsound.c
-nttty.c              porthelp             stub-pdcscrn.c
+.nethackrc.template  Install.windows      Makefile.gcc
+Makefile.msc         console.rc           consoletty.c
+nethack.def          nh340key.c           nhdefkey.c
+nhico.uu             nhraykey.c           nhsetup.bat
+ntsound.c            porthelp             stub-pdcscrn.c
 stubs.c              sysconf.template     travis-gcc.sh
 win10.c              win10.h              win32api.h
-windmain.c           winnt.c              winos.h
+windmain.c           windsys.c            winos.h
 
-test:
-(files in top directory)
-test_des.lua  test_lev.lua  test_obj.lua  test_sel.lua  test_src.lua
-testwish.lua
-
-util:
-(files for all versions)
-dlb_main.c  makedefs.c  mdgrep.h    mdgrep.pl   panic.c     recover.c
-
-win/Qt:
-(files for the Qt 4 or 5 widget library - X11, Windows, Mac OS X)
-Qt-issues.txt  qt_bind.cpp    qt_bind.h      qt_click.cpp   qt_click.h
-qt_clust.cpp   qt_clust.h     qt_delay.cpp   qt_delay.h     qt_glyph.cpp
-qt_glyph.h     qt_icon.cpp    qt_icon.h      qt_inv.cpp     qt_inv.h
-qt_kde0.h      qt_key.cpp     qt_key.h       qt_line.cpp    qt_line.h
-qt_main.cpp    qt_main.h      qt_map.cpp     qt_map.h       qt_menu.cpp
-qt_menu.h      qt_msg.cpp     qt_msg.h       qt_plsel.cpp   qt_plsel.h
-qt_post.h      qt_pre.h       qt_rip.cpp     qt_rip.h       qt_set.cpp
-qt_set.h       qt_stat.cpp    qt_stat.h      qt_str.cpp     qt_str.h
-qt_streq.cpp   qt_streq.h     qt_svsel.cpp   qt_svsel.h     qt_win.cpp
-qt_win.h       qt_xcmd.cpp    qt_xcmd.h      qt_xpms.h      qt_yndlg.cpp
-qt_yndlg.h
-
-win/X11:
-(files for X versions)
-Install.X11   NetHack.ad    Window.c      dialogs.c     ibm.bdf
-nethack.rc    nh10.bdf      nh32icon      nh56icon      nh72icon
-nh_icon.xpm   pet_mark.xbm  pilemark.xbm  rip.xpm       tile2x11.c
-winX.c        winmap.c      winmenu.c     winmesg.c     winmisc.c
-winstat.c     wintext.c     winval.c
-
-win/chain:
-(files for stacking window systems)
-wc_chainin.c   wc_chainout.c  wc_trace.c
-
-win/curses:
-(files in top directory)
-Bugs.txt    Readme.txt  Todo.txt    cursdial.c  cursdial.h  cursinit.c
-cursinit.h  cursinvt.c  cursinvt.h  cursmain.c  cursmesg.c  cursmesg.h
-cursmisc.c  cursmisc.h  cursstat.c  cursstat.h  curswins.c  curswins.h
-
-win/macosx:
-(files for macosx versions)
-NetHackGuidebook.applescript  NetHackRecover.applescript
-NetHackTerm.applescript       recover.pl
-
-win/share:
-(files for versions using optional tiles)
-bmptiles.c     gifread.c      giftiles.c     monsters.txt   nhicns.uu
-nhsplash.xpm   objects.txt    other.txt      ppmwrite.c     renumtiles.pl
-safeproc.c     thintile.c     tile.doc       tile.h         tile2bmp.c
-tilemap.c      tileset.c      tiletext.c
-
-win/shim:
-(file in top directory)
-winshim.c
-
-win/tty:
-(files for tty versions)
-getline.c  termcap.c  topl.c     wintty.c
-
-win/win32:
-(files for Windows versions - tested up to Windows 10)
-NetHackW.c             NetHackW.exe.manifest  NetHackW.rc
-mhaskyn.c              mhaskyn.h              mhdlg.c
-mhdlg.h                mhfont.c               mhfont.h
-mhinput.c              mhinput.h              mhmain.c
-mhmain.h               mhmap.c                mhmap.h
-mhmenu.c               mhmenu.h               mhmsg.h
-mhmsgwnd.c             mhmsgwnd.h             mhrip.c
-mhrip.h                mhsplash.c             mhsplash.h
-mhstatus.c             mhstatus.h             mhtext.c
-mhtext.h               mnsel.uu               mnselcnt.uu
-mnunsel.uu             mswproc.c              nethack.rc
-nhresource.h           petmark.uu             pilemark.uu
-record.uu              resource.h             rip.uu
-splash.uu              tiles-mingw32.mak      tiles.mak
-winMS.h
-
-win/win32/vs:
+sys/windows/vs:
 (files for Visual Studio 2017 or 2019 Community Edition builds)
-NetHack.sln                   NetHack.vcxproj
-NetHackPackage.appxmanifest   NetHackPackage.wapproj
-NetHackProperties.props       NetHackW.vcxproj
-PDCurses.vcxproj              Package.StoreAssociation.xml
-ScreenShot.PNG                afterdlb.proj
-aftermakedefs.proj            afternethack.proj
-afterrecover.proj             aftertile2bmp.proj
-aftertilemap.proj             afteruudecode.proj
+NetHack.sln                   NetHackPackage.appxmanifest
+NetHackPackage.wapproj        NetHackProperties.props
+Package.StoreAssociation.xml  ScreenShot.PNG
 build.bat                     common.props
 config.props                  console.props
-default.props                 default_dll.props
-default_lib.props             dirs.props
-dlb.vcxproj                   dll.props
-files.props                   makedefs.vcxproj
-nh340key.def                  nh340key.vcxproj
-nhdefkey.def                  nhdefkey.vcxproj
-nhraykey.def                  nhraykey.vcxproj
-recover.vcxproj               tile2bmp.vcxproj
-tilemap.vcxproj               tiles.vcxproj
-travisci.sh                   uudecode.vcxproj
+cpp.hint                      default.props
+default_dll.props             default_lib.props
+dirs.props                    dll.props
+files.props                   travisci.sh
 
-win/win32/vs/Images:
+sys/windows/vs/Images:
 (files for Visual Studio 2017 or 2019 Community Edition builds)
 BadgeLogo.scale-100.png
 BadgeLogo.scale-125.png
@@ -507,6 +412,138 @@ Wide310x150Logo.scale-150.png
 Wide310x150Logo.scale-200.png
 Wide310x150Logo.scale-400.png
 
+sys/windows/vs/NetHack:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+NetHack.vcxproj    afternethack.proj
+
+sys/windows/vs/NetHackW:
+(file for Visual Studio 2017 or 2019 Community Edition builds)
+NetHackW.vcxproj
+
+sys/windows/vs/PDCurses:
+(file for Visual Studio 2017 or 2019 Community Edition builds)
+PDCurses.vcxproj
+
+sys/windows/vs/dlb:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+afterdlb.proj  dlb.vcxproj
+
+sys/windows/vs/makedefs:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+aftermakedefs.proj  makedefs.vcxproj
+
+sys/windows/vs/nh340key:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+nh340key.def      nh340key.vcxproj
+
+sys/windows/vs/nhdefkey:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+nhdefkey.def      nhdefkey.vcxproj
+
+sys/windows/vs/nhraykey:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+nhraykey.def      nhraykey.vcxproj
+
+sys/windows/vs/recover:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+afterrecover.proj  recover.vcxproj
+
+sys/windows/vs/tile2bmp:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+aftertile2bmp.proj  tile2bmp.vcxproj
+
+sys/windows/vs/tilemap:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+aftertilemap.proj  tilemap.vcxproj
+
+sys/windows/vs/tiles:
+(file for Visual Studio 2017 or 2019 Community Edition builds)
+tiles.vcxproj
+
+sys/windows/vs/uudecode:
+(files for Visual Studio 2017 or 2019 Community Edition builds)
+afteruudecode.proj  uudecode.vcxproj
+
+test:
+(files in top directory)
+test_cnf.lua  test_des.lua  test_lev.lua  test_obj.lua  test_sel.lua
+test_src.lua  testwish.lua
+
+util:
+(files for all versions)
+dlb_main.c  makedefs.c  mdgrep.h    mdgrep.pl   panic.c     recover.c
+
+win/Qt:
+(files for the Qt 4 or 5 widget library - X11, Windows, Mac OS X)
+Qt-issues.txt  qt_bind.cpp    qt_bind.h      qt_click.cpp   qt_click.h
+qt_clust.cpp   qt_clust.h     qt_delay.cpp   qt_delay.h     qt_glyph.cpp
+qt_glyph.h     qt_icon.cpp    qt_icon.h      qt_inv.cpp     qt_inv.h
+qt_kde0.h      qt_key.cpp     qt_key.h       qt_line.cpp    qt_line.h
+qt_main.cpp    qt_main.h      qt_map.cpp     qt_map.h       qt_menu.cpp
+qt_menu.h      qt_msg.cpp     qt_msg.h       qt_plsel.cpp   qt_plsel.h
+qt_post.h      qt_pre.h       qt_rip.cpp     qt_rip.h       qt_set.cpp
+qt_set.h       qt_stat.cpp    qt_stat.h      qt_str.cpp     qt_str.h
+qt_streq.cpp   qt_streq.h     qt_svsel.cpp   qt_svsel.h     qt_win.cpp
+qt_win.h       qt_xcmd.cpp    qt_xcmd.h      qt_xpms.h      qt_yndlg.cpp
+qt_yndlg.h
+
+win/X11:
+(files for X versions)
+Install.X11     NetHack.ad      Window.c        X11-issues.txt
+dialogs.c       ibm.bdf         nethack.rc      nh10.bdf
+nh32icon        nh56icon        nh72icon        nh_icon.xpm
+pet_mark.xbm    pilemark.xbm    rip.xpm         tile2x11.c
+winX.c          winmap.c        winmenu.c       winmesg.c
+winmisc.c       winstat.c       wintext.c       winval.c
+
+win/chain:
+(files for stacking window systems)
+wc_chainin.c   wc_chainout.c  wc_trace.c
+
+win/curses:
+(files in top directory)
+Bugs.txt    Readme.txt  Todo.txt    cursdial.c  cursdial.h  cursinit.c
+cursinit.h  cursinvt.c  cursinvt.h  cursmain.c  cursmesg.c  cursmesg.h
+cursmisc.c  cursmisc.h  cursstat.c  cursstat.h  curswins.c  curswins.h
+
+win/macosx:
+(files for macosx versions)
+NetHackGuidebook.applescript  NetHackRecover.applescript
+NetHackTerm.applescript       recover.pl
+
+win/share:
+(files for versions using optional tiles)
+bmptiles.c     gifread.c      giftiles.c     monsters.txt   nhicns.uu
+nhsplash.xpm   objects.txt    other.txt      ppmwrite.c     renumtiles.pl
+safeproc.c     thintile.c     tile.doc       tile.h         tile2bmp.c
+tilemap.c      tileset.c      tiletext.c
+
+win/shim:
+(file in top directory)
+winshim.c
+
+win/tty:
+(files for tty versions)
+getline.c  termcap.c  topl.c     wintty.c
+
+win/win32:
+(files for Windows versions - tested up to Windows 10)
+NetHackW.c             NetHackW.exe.manifest  NetHackW.rc
+mhaskyn.c              mhaskyn.h              mhdlg.c
+mhdlg.h                mhfont.c               mhfont.h
+mhinput.c              mhinput.h              mhmain.c
+mhmain.h               mhmap.c                mhmap.h
+mhmenu.c               mhmenu.h               mhmsg.h
+mhmsgwnd.c             mhmsgwnd.h             mhrip.c
+mhrip.h                mhsplash.c             mhsplash.h
+mhstatus.c             mhstatus.h             mhtext.c
+mhtext.h               mnsel.uu               mnselcnt.uu
+mnunsel.uu             mswproc.c              nethack.rc
+nhresource.h           petmark.uu             pilemark.uu
+record.uu              resource.h             rip.uu
+splash.uu              tiles-mingw32.mak      tiles.mak
+winMS.h
+
 This is a list of files produced by auxiliary programs.  They can all be
 regenerated from the files in the distribution.
 
@@ -537,7 +574,7 @@ tile.h
 win32api.h
 
 (files generated by makedefs at compile time)
-date.h     onames.h   pm.h       vis_tab.h
+date.h    onames.h  pm.h
 
 (files generated by yacc (or copied from sys/share) at compile time)
 dgn_comp.h  lev_comp.h
@@ -552,13 +589,70 @@ qt_kde0.moc      qt_win.moc       qttableview.moc
 (file generated by makedefs at compile time by some ports)
 monstr.c
 
-(file generated by makedefs at compile time)
-vis_tab.c
-
 (file optionally generated by tilemap at compile time)
 tile.c
 
-sys/winnt:
+sys/windows:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/Images:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/NetHack:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/NetHackW:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/PDCurses:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/dlb:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/makedefs:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/nh340key:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/nhdefkey:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/nhraykey:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/recover:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/tile2bmp:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/tilemap:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/tiles:
+(file generated by uudecode at compile time)
+nethack.ico
+
+sys/windows/vs/uudecode:
 (file generated by uudecode at compile time)
 nethack.ico
 

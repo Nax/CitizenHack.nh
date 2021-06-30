@@ -1,4 +1,4 @@
-/* NetHack 3.7	dokick.c	$NHDT-Date: 1596498160 2020/08/03 23:42:40 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.155 $ */
+/* NetHack 3.7	dokick.c	$NHDT-Date: 1608673689 2020/12/22 21:48:09 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.162 $ */
 /* Copyright (c) Izchak Miller, Mike Stephenson, Steve Linhart, 1989. */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -11,23 +11,20 @@
 
 /* g.kickedobj (decl.c) tracks a kicked object until placed or destroyed */
 
-static void FDECL(kickdmg, (struct monst *, BOOLEAN_P));
-static boolean FDECL(maybe_kick_monster, (struct monst *,
-                                              XCHAR_P, XCHAR_P));
-static void FDECL(kick_monster, (struct monst *, XCHAR_P, XCHAR_P));
-static int FDECL(kick_object, (XCHAR_P, XCHAR_P, char *));
-static int FDECL(really_kick_object, (XCHAR_P, XCHAR_P));
-static char *FDECL(kickstr, (char *, const char *));
-static void FDECL(otransit_msg, (struct obj *, BOOLEAN_P, long));
-static void FDECL(drop_to, (coord *, SCHAR_P));
+static void kickdmg(struct monst *, boolean);
+static boolean maybe_kick_monster(struct monst *, xchar, xchar);
+static void kick_monster(struct monst *, xchar, xchar);
+static int kick_object(xchar, xchar, char *);
+static int really_kick_object(xchar, xchar);
+static char *kickstr(char *, const char *);
+static void otransit_msg(struct obj *, boolean, boolean, long);
+static void drop_to(coord *, schar, xchar, xchar);
 
 static const char kick_passes_thru[] = "kick passes harmlessly through";
 
 /* kicking damage when not poly'd into a form with a kick attack */
 static void
-kickdmg(mon, clumsy)
-struct monst *mon;
-boolean clumsy;
+kickdmg(struct monst *mon, boolean clumsy)
 {
     int mdx, mdy;
     int dmg = (ACURRSTR + ACURR(A_DEX) + ACURR(A_CON)) / 15;
@@ -118,9 +115,7 @@ boolean clumsy;
 }
 
 static boolean
-maybe_kick_monster(mon, x, y)
-struct monst *mon;
-xchar x, y;
+maybe_kick_monster(struct monst *mon, xchar x, xchar y)
 {
     if (mon) {
         boolean save_forcefight = g.context.forcefight;
@@ -140,9 +135,7 @@ xchar x, y;
 }
 
 static void
-kick_monster(mon, x, y)
-struct monst *mon;
-xchar x, y;
+kick_monster(struct monst *mon, xchar x, xchar y)
 {
     boolean clumsy = FALSE;
     int i, j;
@@ -281,9 +274,7 @@ xchar x, y;
  *  The gold object is *not* attached to the fobj chain!
  */
 boolean
-ghitm(mtmp, gold)
-register struct monst *mtmp;
-register struct obj *gold;
+ghitm(register struct monst *mtmp, register struct obj *gold)
 {
     boolean msg_given = FALSE;
 
@@ -341,14 +332,12 @@ register struct obj *gold;
                out of the vault.  If he did do that, player
                could try fighting, then weasle out of being
                killed by throwing his/her gold when losing. */
-            verbalize(
-                umoney
-                    ? "Drop the rest and follow me."
-                    : hidden_gold()
-                          ? "You still have hidden gold.  Drop it now."
-                          : mtmp->mpeaceful
-                                ? "I'll take care of that; please move along."
-                                : "I'll take that; now get moving.");
+            verbalize(umoney ? "Drop the rest and follow me."
+                      : hidden_gold(TRUE)
+                        ? "You still have hidden gold.  Drop it now."
+                        : mtmp->mpeaceful
+                          ? "I'll take care of that; please move along."
+                          : "I'll take that; now get moving.");
         } else if (is_mercenary(mtmp->data)) {
             long goldreqd = 0L;
 
@@ -386,9 +375,8 @@ register struct obj *gold;
 /* container is kicked, dropped, thrown or otherwise impacted by player.
  * Assumes container is on floor.  Checks contents for possible damage. */
 void
-container_impact_dmg(obj, x, y)
-struct obj *obj;
-xchar x, y; /* coordinates where object was before the impact, not after */
+container_impact_dmg(struct obj *obj, xchar x,
+                     xchar y) /* coordinates where object was before the impact, not after */
 {
     struct monst *shkp;
     struct obj *otmp, *otmp2;
@@ -454,9 +442,7 @@ xchar x, y; /* coordinates where object was before the impact, not after */
 
 /* jacket around really_kick_object */
 static int
-kick_object(x, y, kickobjnam)
-xchar x, y;
-char *kickobjnam;
+kick_object(xchar x, xchar y, char *kickobjnam)
 {
     int res = 0;
 
@@ -474,8 +460,7 @@ char *kickobjnam;
 
 /* guts of kick_object */
 static int
-really_kick_object(x, y)
-xchar x, y;
+really_kick_object(xchar x, xchar y)
 {
     int range;
     struct monst *mon, *shkp = 0;
@@ -510,7 +495,8 @@ xchar x, y;
     }
 
     if (!uarmf && g.kickedobj->otyp == CORPSE
-        && touch_petrifies(&mons[g.kickedobj->corpsenm]) && !Stone_resistance) {
+        && touch_petrifies(&mons[g.kickedobj->corpsenm])
+        && !Stone_resistance) {
         You("kick %s with your bare %s.",
             corpse_xname(g.kickedobj, (const char *) 0, CXN_PFX_THE),
             makeplural(body_part(FOOT)));
@@ -679,8 +665,8 @@ xchar x, y;
     (void) snuff_candle(g.kickedobj);
     newsym(x, y);
     mon = bhit(u.dx, u.dy, range, KICKED_WEAPON,
-               (int FDECL((*), (MONST_P, OBJ_P))) 0,
-               (int FDECL((*), (OBJ_P, OBJ_P))) 0, &g.kickedobj);
+               (int (*) (struct monst *, struct obj *)) 0,
+               (int (*) (struct obj *, struct obj *)) 0, &g.kickedobj);
     if (!g.kickedobj)
         return 1; /* object broken */
 
@@ -707,12 +693,23 @@ xchar x, y;
         else
             (void) stolen_value(g.kickedobj, x, y, (boolean) shkp->mpeaceful,
                                 FALSE);
+        costly = FALSE; /* already billed */
     }
 
     if (flooreffects(g.kickedobj, g.bhitpos.x, g.bhitpos.y, "fall"))
         return 1;
-    if (g.kickedobj->unpaid)
-        subfrombill(g.kickedobj, shkp);
+    if (costly) {
+        long gt = 0L;
+
+        /* costly + landed outside shop handled above; must be inside shop */
+        if (g.kickedobj->unpaid)
+            subfrombill(g.kickedobj, shkp);
+
+        /* if billed for contained gold during kick, get a refund now */
+        if (Has_contents(g.kickedobj)
+            && (gt = contained_gold(g.kickedobj, TRUE)) > 0L)
+            donate_gold(gt, shkp, FALSE);
+    }
     place_object(g.kickedobj, g.bhitpos.x, g.bhitpos.y);
     stackobj(g.kickedobj);
     newsym(g.kickedobj->ox, g.kickedobj->oy);
@@ -721,9 +718,7 @@ xchar x, y;
 
 /* cause of death if kicking kills kicker */
 static char *
-kickstr(buf, kickobjnam)
-char *buf;
-const char *kickobjnam;
+kickstr(char *buf, const char *kickobjnam)
 {
     const char *what;
 
@@ -763,7 +758,7 @@ const char *kickobjnam;
 }
 
 int
-dokick()
+dokick(void)
 {
     int x, y;
     int avrg_attrib;
@@ -1149,9 +1144,6 @@ dokick()
         }
         if (IS_SINK(g.maploc->typ)) {
             int gend = poly_gender();
-            short washerndx = (gend == 1 || (gend == 2 && rn2(2)))
-                                  ? PM_INCUBUS
-                                  : PM_SUCCUBUS;
 
             if (Levitation)
                 goto dumb;
@@ -1175,10 +1167,12 @@ dokick()
                 g.maploc->looted |= S_LPUDDING;
                 return 1;
             } else if (!(g.maploc->looted & S_LDWASHER) && !rn2(3)
-                       && !(g.mvitals[washerndx].mvflags & G_GONE)) {
+                       && !(g.mvitals[PM_AMOROUS_DEMON].mvflags & G_GONE)) {
                 /* can't resist... */
                 pline("%s returns!", (Blind ? Something : "The dish washer"));
-                if (makemon(&mons[washerndx], x, y, NO_MM_FLAGS))
+                if (makemon(&mons[PM_AMOROUS_DEMON], x, y,
+                            (gend == 1 || (gend == 2 && rn2(2)))
+                                  ? MM_MALE : MM_FEMALE))
                     newsym(x, y);
                 g.maploc->looted |= S_LDWASHER;
                 exercise(A_DEX, TRUE);
@@ -1322,10 +1316,10 @@ dokick()
 }
 
 static void
-drop_to(cc, loc)
-coord *cc;
-schar loc;
+drop_to(coord *cc, schar loc, xchar x, xchar y)
 {
+    stairway *stway = stairway_at(x, y);
+
     /* cover all the MIGR_xxx choices generated by down_gate() */
     switch (loc) {
     case MIGR_RANDOM: /* trap door or hole */
@@ -1340,12 +1334,14 @@ schar loc;
         /*FALLTHRU*/
     case MIGR_STAIRS_UP:
     case MIGR_LADDER_UP:
-        cc->x = u.uz.dnum;
-        cc->y = u.uz.dlevel + 1;
-        break;
     case MIGR_SSTAIRS:
-        cc->x = g.sstairs.tolev.dnum;
-        cc->y = g.sstairs.tolev.dlevel;
+        if (stway) {
+            cc->x = stway->tolev.dnum;
+            cc->y = stway->tolev.dlevel;
+        } else {
+            cc->x = u.uz.dnum;
+            cc->y = u.uz.dlevel + 1;
+        }
         break;
     default:
     case MIGR_NOWHERE:
@@ -1357,10 +1353,9 @@ schar loc;
 
 /* player or missile impacts location, causing objects to fall down */
 void
-impact_drop(missile, x, y, dlev)
-struct obj *missile; /* caused impact, won't drop itself */
-xchar x, y;          /* location affected */
-xchar dlev;          /* if !0 send to dlev near player */
+impact_drop(struct obj *missile, /* caused impact, won't drop itself */
+            xchar x, xchar y,    /* location affected */
+            xchar dlev)          /* if !0 send to dlev near player */
 {
     schar toloc;
     register struct obj *obj, *obj2;
@@ -1373,7 +1368,7 @@ xchar dlev;          /* if !0 send to dlev near player */
         return;
 
     toloc = down_gate(x, y);
-    drop_to(&cc, toloc);
+    drop_to(&cc, toloc, x, y);
     if (!cc.y)
         return;
 
@@ -1485,24 +1480,21 @@ xchar dlev;          /* if !0 send to dlev near player */
  * otmp is either a kicked, dropped, or thrown object.
  */
 boolean
-ship_object(otmp, x, y, shop_floor_obj)
-xchar x, y;
-struct obj *otmp;
-boolean shop_floor_obj;
+ship_object(struct obj *otmp, xchar x, xchar y, boolean shop_floor_obj)
 {
     schar toloc;
     xchar ox, oy;
     coord cc;
     struct obj *obj;
     struct trap *t;
-    boolean nodrop, unpaid, container, impact = FALSE;
+    boolean nodrop, unpaid, container, impact = FALSE, chainthere = FALSE;
     long n = 0L;
 
     if (!otmp)
         return FALSE;
     if ((toloc = down_gate(x, y)) == MIGR_NOWHERE)
         return FALSE;
-    drop_to(&cc, toloc);
+    drop_to(&cc, toloc, x, y);
     if (!cc.y)
         return FALSE;
 
@@ -1515,9 +1507,12 @@ boolean shop_floor_obj;
     unpaid = is_unpaid(otmp);
 
     if (OBJ_AT(x, y)) {
-        for (obj = g.level.objects[x][y]; obj; obj = obj->nexthere)
-            if (obj != otmp)
+        for (obj = g.level.objects[x][y]; obj; obj = obj->nexthere) {
+            if (obj == uchain)
+                chainthere = TRUE;
+            else if (obj != otmp)
                 n += obj->quan;
+        }
         if (n)
             impact = TRUE;
     }
@@ -1531,7 +1526,7 @@ boolean shop_floor_obj;
     }
 
     if (cansee(x, y))
-        otransit_msg(otmp, nodrop, n);
+        otransit_msg(otmp, nodrop, chainthere, n);
 
     if (nodrop) {
         if (impact)
@@ -1586,6 +1581,7 @@ boolean shop_floor_obj;
     otmp->ox = cc.x;
     otmp->oy = cc.y;
     otmp->owornmask = (long) toloc;
+
     /* boulder from rolling boulder trap, no longer part of the trap */
     if (otmp->otyp == BOULDER)
         otmp->otrapped = 0;
@@ -1607,13 +1603,15 @@ boolean shop_floor_obj;
 }
 
 void
-obj_delivery(near_hero)
-boolean near_hero;
+obj_delivery(boolean near_hero)
 {
     register struct obj *otmp, *otmp2;
-    register int nx, ny;
+    int nx = 0, ny = 0;
     int where;
     boolean nobreak, noscatter;
+    stairway *stway;
+    d_level fromdlev;
+    boolean isladder;
 
     for (otmp = g.migrating_objs; otmp; otmp = otmp2) {
         otmp2 = otmp->nobj;
@@ -1633,16 +1631,21 @@ boolean near_hero;
 
         obj_extract_self(otmp);
         otmp->owornmask = 0L;
+        fromdlev.dnum = otmp->omigr_from_dnum;
+        fromdlev.dlevel = otmp->omigr_from_dlevel;
+
+        isladder = FALSE;
 
         switch (where) {
-        case MIGR_STAIRS_UP:
-            nx = xupstair, ny = yupstair;
-            break;
         case MIGR_LADDER_UP:
-            nx = xupladder, ny = yupladder;
-            break;
+            isladder = TRUE;
+            /*FALLTHRU*/
+        case MIGR_STAIRS_UP:
         case MIGR_SSTAIRS:
-            nx = g.sstairs.sx, ny = g.sstairs.sy;
+            if ((stway = stairway_find_from(&fromdlev, isladder)) != 0) {
+                nx = stway->sx;
+                ny = stway->sy;
+            }
             break;
         case MIGR_WITH_HERO:
             nx = u.ux, ny = u.uy;
@@ -1652,6 +1655,8 @@ boolean near_hero;
             nx = ny = 0;
             break;
         }
+        otmp->omigr_from_dnum = 0;
+        otmp->omigr_from_dlevel = 0;
         if (nx > 0) {
             place_object(otmp, nx, ny);
             if (!nobreak && !IS_SOFT(levl[nx][ny].typ)) {
@@ -1682,10 +1687,7 @@ boolean near_hero;
 }
 
 void
-deliver_obj_to_mon(mtmp, cnt, deliverflags)
-int cnt;
-struct monst *mtmp;
-unsigned long deliverflags;
+deliver_obj_to_mon(struct monst *mtmp, int cnt, unsigned long deliverflags)
 {
     struct obj *otmp, *otmp2;
     int where, maxobj = 1;
@@ -1709,14 +1711,15 @@ unsigned long deliverflags;
             continue;
 
         if (otmp->migr_species != NON_PM
-            && (mtmp->data->mflags2 & DELIVER_PM) == (unsigned) otmp->migr_species) {
+            && ((mtmp->data->mflags2 & DELIVER_PM)
+                == (unsigned) otmp->migr_species)) {
             obj_extract_self(otmp);
             otmp->owornmask = 0L;
             otmp->ox = otmp->oy = 0;
 
             /* special treatment for orcs and their kind */
             if ((otmp->corpsenm & M2_ORC) != 0 && has_oname(otmp)) {
-                if (!has_mname(mtmp)) {
+                if (!has_mgivenname(mtmp)) {
                     if (at_crime_scene || !rn2(2))
                         mtmp = christen_orc(mtmp,
                                             at_crime_scene ? ONAME(otmp)
@@ -1727,6 +1730,8 @@ unsigned long deliverflags;
                 free_oname(otmp);
             }
             otmp->migr_species = NON_PM;
+            otmp->omigr_from_dnum = 0;
+            otmp->omigr_from_dlevel = 0;
             (void) add_to_minv(mtmp, otmp);
             cnt++;
             if (maxobj && cnt >= maxobj)
@@ -1737,10 +1742,7 @@ unsigned long deliverflags;
 }
 
 static void
-otransit_msg(otmp, nodrop, num)
-register struct obj *otmp;
-register boolean nodrop;
-long num;
+otransit_msg(register struct obj *otmp, boolean nodrop, boolean chainthere, long num)
 {
     char *optr = 0, obuf[BUFSZ], xbuf[BUFSZ];
 
@@ -1753,15 +1755,20 @@ long num;
     }
     Strcpy(obuf, optr);
 
-    if (num) { /* means: other objects are impacted */
+    if (num || chainthere) {
         /* As of 3.6.2: use a separate buffer for the suffix to avoid risk of
            overrunning obuf[] (let pline() handle truncation if necessary) */
-        Sprintf(xbuf, " %s %s object%s", otense(otmp, "hit"),
-                (num == 1L) ? "another" : "other", (num > 1L) ? "s" : "");
+        if (num) { /* means: other objects are impacted */
+            Sprintf(xbuf, " %s %s object%s", otense(otmp, "hit"),
+                    (num == 1L) ? "another" : "other", (num > 1L) ? "s" : "");
+        } else { /* chain-only msg */
+            Sprintf(xbuf, " %s your chain", otense(otmp, "rattle"));
+        }
         if (nodrop)
             Sprintf(eos(xbuf), ".");
         else
-            Sprintf(eos(xbuf), " and %s %s.", otense(otmp, "fall"), g.gate_str);
+            Sprintf(eos(xbuf), " and %s %s.",
+                    otense(otmp, "fall"), g.gate_str);
         pline("%s%s", obuf, xbuf);
     } else if (!nodrop)
         pline("%s %s %s.", obuf, otense(otmp, "fall"), g.gate_str);
@@ -1769,31 +1776,29 @@ long num;
 
 /* migration destination for objects which fall down to next level */
 schar
-down_gate(x, y)
-xchar x, y;
+down_gate(xchar x, xchar y)
 {
     struct trap *ttmp;
+    stairway *stway = stairway_at(x, y);
 
     g.gate_str = 0;
     /* this matches the player restriction in goto_level() */
-    if (on_level(&u.uz, &qstart_level) && !ok_to_quest())
+    if (on_level(&u.uz, &qstart_level) && !ok_to_quest()) {
         return MIGR_NOWHERE;
-
-    if ((xdnstair == x && ydnstair == y)
-        || (g.sstairs.sx == x && g.sstairs.sy == y && !g.sstairs.up)) {
+    }
+    if (stway && !stway->up && !stway->isladder) {
         g.gate_str = "down the stairs";
-        return (xdnstair == x && ydnstair == y) ? MIGR_STAIRS_UP
+        return (stway->tolev.dnum == u.uz.dnum) ? MIGR_STAIRS_UP
                                                 : MIGR_SSTAIRS;
     }
-    if (xdnladder == x && ydnladder == y) {
+    if (stway && !stway->up && stway->isladder) {
         g.gate_str = "down the ladder";
         return MIGR_LADDER_UP;
     }
-
-    if (((ttmp = t_at(x, y)) != 0 && ttmp->tseen)
-        && is_hole(ttmp->ttyp)) {
+    /* hole will always be flagged as seen; trap drop might or might not */
+    if ((ttmp = t_at(x, y)) != 0 && ttmp->tseen && is_hole(ttmp->ttyp)) {
         g.gate_str = (ttmp->ttyp == TRAPDOOR) ? "through the trap door"
-                                            : "through the hole";
+                                              : "through the hole";
         return MIGR_RANDOM;
     }
     return MIGR_NOWHERE;

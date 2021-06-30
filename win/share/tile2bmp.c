@@ -18,8 +18,8 @@
 
 #include "config.h"
 #include "tile.h"
-extern void NDECL(monst_globals_init);
-extern void NDECL(objects_globals_init);
+extern void monst_globals_init(void);
+extern void objects_globals_init(void);
 
 #include <stdint.h>
 #if defined(UINT32_MAX) && defined(INT32_MAX) && defined(UINT16_MAX)
@@ -36,6 +36,12 @@ extern void NDECL(objects_globals_init);
 # endif
 #endif
 
+#if defined(_MSC_VER) && defined(_WIN64)
+#define UNALIGNED_POINTER __unaligned
+#else
+#define UNALIGNED_POINTER
+#endif
+
 #if (TILE_X == 32)
 #define COLORS_IN_USE 256
 #else
@@ -45,7 +51,7 @@ extern void NDECL(objects_globals_init);
 
 #define BITCOUNT 8
 
-extern char *FDECL(tilename, (int, int));
+extern char *tilename(int, int);
 
 #define MAGICTILENO (340 + 440 + 231 + 340)
 
@@ -158,9 +164,9 @@ FILE *tibfile2;
 
 pixel tilepixels[TILE_Y][TILE_X];
 
-static void FDECL(build_bmfh, (BITMAPFILEHEADER *));
-static void FDECL(build_bmih, (BITMAPINFOHEADER *));
-static void FDECL(build_bmptile, (pixel(*) [TILE_X]));
+static void build_bmfh(BITMAPFILEHEADER *);
+static void build_bmih(UNALIGNED_POINTER BITMAPINFOHEADER *);
+static void build_bmptile(pixel(*) [TILE_X]);
 
 const char *tilefiles[] = {
 #if (TILE_X == 32)
@@ -183,10 +189,10 @@ int yoffset, xoffset;
 char bmpname[128];
 FILE *fp;
 
+DISABLE_WARNING_UNREACHABLE_CODE
+
 int
-main(argc, argv)
-int argc;
-char *argv[];
+main(int argc, char *argv[])
 {
     int i, j;
 
@@ -230,8 +236,11 @@ char *argv[];
             exit(EXIT_FAILURE);
         }
         if (!initflag) {
+            UNALIGNED_POINTER BITMAPINFOHEADER *bmih;
+
             build_bmfh(&bmp.bmfh);
-            build_bmih(&bmp.bmih);
+            bmih = &bmp.bmih;
+            build_bmih(bmih);
             for (i = 0; i < MAX_Y; ++i)
                 for (j = 0; j < MAX_X; ++j)
                     bmp.packtile[i][j] = (uchar) 0;
@@ -270,9 +279,10 @@ char *argv[];
     return 0;
 }
 
+RESTORE_WARNINGS
+
 static void
-build_bmfh(pbmfh)
-BITMAPFILEHEADER *pbmfh;
+build_bmfh(BITMAPFILEHEADER* pbmfh)
 {
     pbmfh->bfType = leshort(0x4D42);
     pbmfh->bfSize = lelong(BMPFILESIZE);
@@ -283,8 +293,7 @@ BITMAPFILEHEADER *pbmfh;
 }
 
 static void
-build_bmih(pbmih)
-BITMAPINFOHEADER *pbmih;
+build_bmih(UNALIGNED_POINTER BITMAPINFOHEADER* pbmih)
 {
     WORD cClrBits;
     int w, h;
@@ -335,8 +344,7 @@ BITMAPINFOHEADER *pbmih;
 }
 
 static void
-build_bmptile(pixels)
-pixel (*pixels)[TILE_X];
+build_bmptile(pixel(*pixels)[TILE_X])
 {
     int cur_x, cur_y, cur_color, apply_color;
     int x, y;

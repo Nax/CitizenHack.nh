@@ -35,24 +35,21 @@ enum mcast_cleric_spells {
     CLC_GEYSER
 };
 
-static void FDECL(cursetxt, (struct monst *, BOOLEAN_P));
-static int FDECL(choose_magic_spell, (int));
-static int FDECL(choose_clerical_spell, (int));
-static int FDECL(m_cure_self, (struct monst *, int));
-static void FDECL(cast_wizard_spell, (struct monst *, int, int));
-static void FDECL(cast_cleric_spell, (struct monst *, int, int));
-static boolean FDECL(is_undirected_spell, (unsigned int, int));
+static void cursetxt(struct monst *, boolean);
+static int choose_magic_spell(int);
+static int choose_clerical_spell(int);
+static int m_cure_self(struct monst *, int);
+static void cast_wizard_spell(struct monst *, int, int);
+static void cast_cleric_spell(struct monst *, int, int);
+static boolean is_undirected_spell(unsigned int, int);
 static boolean
-FDECL(spell_would_be_useless, (struct monst *, unsigned int, int));
+spell_would_be_useless(struct monst *, unsigned int, int);
 
 extern const char *const flash_types[]; /* from zap.c */
 
 /* feedback when frustrated monster couldn't cast a spell */
-static
-void
-cursetxt(mtmp, undirected)
-struct monst *mtmp;
-boolean undirected;
+static void
+cursetxt(struct monst *mtmp, boolean undirected)
 {
     if (canseemon(mtmp) && couldsee(mtmp->mx, mtmp->my)) {
         const char *point_msg; /* spellcasting monsters are impolite */
@@ -79,8 +76,7 @@ boolean undirected;
 /* convert a level based random selection into a specific mage spell;
    inappropriate choices will be screened out by spell_would_be_useless() */
 static int
-choose_magic_spell(spellval)
-int spellval;
+choose_magic_spell(int spellval)
 {
     /* for 3.4.3 and earlier, val greater than 22 selected default spell */
     while (spellval > 24 && rn2(25))
@@ -133,8 +129,7 @@ int spellval;
 
 /* convert a level based random selection into a specific cleric spell */
 static int
-choose_clerical_spell(spellnum)
-int spellnum;
+choose_clerical_spell(int spellnum)
 {
     /* for 3.4.3 and earlier, num greater than 13 selected the default spell
      */
@@ -180,11 +175,10 @@ int spellnum;
  * 0: unsuccessful spell
  */
 int
-castmu(mtmp, mattk, thinks_it_foundyou, foundyou)
-register struct monst *mtmp;
-register struct attack *mattk;
-boolean thinks_it_foundyou;
-boolean foundyou;
+castmu(register struct monst *mtmp,
+       register struct attack *mattk,
+       boolean thinks_it_foundyou,
+       boolean foundyou)
 {
     int dmg, ml = mtmp->m_lev;
     int ret;
@@ -298,6 +292,7 @@ boolean foundyou;
         if (Fire_resistance) {
             shieldeff(u.ux, u.uy);
             pline("But you resist the effects.");
+            monstseesu(M_SEEN_FIRE);
             dmg = 0;
         }
         burn_away_slime();
@@ -307,6 +302,7 @@ boolean foundyou;
         if (Cold_resistance) {
             shieldeff(u.ux, u.uy);
             pline("But you resist the effects.");
+            monstseesu(M_SEEN_COLD);
             dmg = 0;
         }
         break;
@@ -315,6 +311,7 @@ boolean foundyou;
         if (Antimagic) {
             shieldeff(u.ux, u.uy);
             pline_The("missiles bounce off!");
+            monstseesu(M_SEEN_MAGR);
             dmg = 0;
         } else
             dmg = d((int) mtmp->m_lev / 2 + 1, 6);
@@ -336,9 +333,7 @@ boolean foundyou;
 }
 
 static int
-m_cure_self(mtmp, dmg)
-struct monst *mtmp;
-int dmg;
+m_cure_self(struct monst *mtmp, int dmg)
 {
     if (mtmp->mhp < mtmp->mhpmax) {
         if (canseemon(mtmp))
@@ -349,6 +344,24 @@ int dmg;
         dmg = 0;
     }
     return dmg;
+}
+
+void
+touch_of_death(void)
+{
+    int dmg = 50 + d(8, 6);
+    int drain = dmg / 2;
+
+    You_feel("drained...");
+
+    if (drain >= u.uhpmax) {
+        g.killer.format = KILLED_BY_AN;
+        Strcpy(g.killer.name, "touch of death");
+        done(DIED);
+    } else {
+        u.uhpmax -= drain;
+        losehp(dmg, "touch of death", KILLED_BY_AN);
+    }
 }
 
 /* monster wizard and cleric spellcasting functions */
@@ -362,10 +375,7 @@ int dmg;
  */
 static
 void
-cast_wizard_spell(mtmp, dmg, spellnum)
-struct monst *mtmp;
-int dmg;
-int spellnum;
+cast_wizard_spell(struct monst *mtmp, int dmg, int spellnum)
 {
     if (dmg == 0 && !is_undirected_spell(AD_SPEL, spellnum)) {
         impossible("cast directed wizard spell (%d) with dmg=0?", spellnum);
@@ -381,13 +391,13 @@ int spellnum;
             if (Hallucination) {
                 You("have an out of body experience.");
             } else {
-                g.killer.format = KILLED_BY_AN;
-                Strcpy(g.killer.name, "touch of death");
-                done(DIED);
+                touch_of_death();
             }
         } else {
-            if (Antimagic)
+            if (Antimagic) {
                 shieldeff(u.ux, u.uy);
+                monstseesu(M_SEEN_MAGR);
+            }
             pline("Lucky for you, it didn't work!");
         }
         dmg = 0;
@@ -436,6 +446,7 @@ int spellnum;
     case MGC_DESTRY_ARMR:
         if (Antimagic) {
             shieldeff(u.ux, u.uy);
+            monstseesu(M_SEEN_MAGR);
             pline("A field of force surrounds you!");
         } else if (!destroy_arm(some_armor(&g.youmonst))) {
             Your("skin itches.");
@@ -445,6 +456,7 @@ int spellnum;
     case MGC_WEAKEN_YOU: /* drain strength */
         if (Antimagic) {
             shieldeff(u.ux, u.uy);
+            monstseesu(M_SEEN_MAGR);
             You_feel("momentarily weakened.");
         } else {
             You("suddenly feel weaker!");
@@ -472,6 +484,7 @@ int spellnum;
     case MGC_STUN_YOU:
         if (Antimagic || Free_action) {
             shieldeff(u.ux, u.uy);
+            monstseesu(M_SEEN_MAGR);
             if (!Stunned)
                 You_feel("momentarily disoriented.");
             make_stunned(1L, FALSE);
@@ -496,6 +509,7 @@ int spellnum;
            made the spell virtually harmless to players with magic res. */
         if (Antimagic) {
             shieldeff(u.ux, u.uy);
+            monstseesu(M_SEEN_MAGR);
             dmg = (dmg + 1) / 2;
         }
         if (dmg <= 5)
@@ -517,12 +531,8 @@ int spellnum;
         mdamageu(mtmp, dmg);
 }
 
-static
-void
-cast_cleric_spell(mtmp, dmg, spellnum)
-struct monst *mtmp;
-int dmg;
-int spellnum;
+static void
+cast_cleric_spell(struct monst *mtmp, int dmg, int spellnum)
 {
     if (dmg == 0 && !is_undirected_spell(AD_CLRC, spellnum)) {
         impossible("cast directed cleric spell (%d) with dmg=0?", spellnum);
@@ -543,6 +553,7 @@ int spellnum;
         pline("A pillar of fire strikes all around you!");
         if (Fire_resistance) {
             shieldeff(u.ux, u.uy);
+            monstseesu(M_SEEN_FIRE);
             dmg = 0;
         } else
             dmg = d(8, 6);
@@ -564,8 +575,11 @@ int spellnum;
         if (reflects || Shock_resistance) {
             shieldeff(u.ux, u.uy);
             dmg = 0;
-            if (reflects)
+            if (reflects) {
+                monstseesu(M_SEEN_REFL);
                 break;
+            }
+            monstseesu(M_SEEN_ELEC);
         } else
             dmg = d(8, 6);
         if (Half_spell_damage)
@@ -675,6 +689,7 @@ int spellnum;
     case CLC_PARALYZE:
         if (Antimagic || Free_action) {
             shieldeff(u.ux, u.uy);
+            monstseesu(M_SEEN_MAGR);
             if (g.multi >= 0)
                 You("stiffen briefly.");
             nomul(-1);
@@ -694,6 +709,7 @@ int spellnum;
     case CLC_CONFUSE_YOU:
         if (Antimagic) {
             shieldeff(u.ux, u.uy);
+            monstseesu(M_SEEN_MAGR);
             You_feel("momentarily dizzy.");
         } else {
             boolean oldprop = !!Confusion;
@@ -715,6 +731,7 @@ int spellnum;
     case CLC_OPEN_WOUNDS:
         if (Antimagic) {
             shieldeff(u.ux, u.uy);
+            monstseesu(M_SEEN_MAGR);
             dmg = (dmg + 1) / 2;
         }
         if (dmg <= 5)
@@ -736,11 +753,8 @@ int spellnum;
         mdamageu(mtmp, dmg);
 }
 
-static
-boolean
-is_undirected_spell(adtyp, spellnum)
-unsigned int adtyp;
-int spellnum;
+static boolean
+is_undirected_spell(unsigned int adtyp, int spellnum)
 {
     if (adtyp == AD_SPEL) {
         switch (spellnum) {
@@ -767,12 +781,8 @@ int spellnum;
 }
 
 /* Some spells are useless under some circumstances. */
-static
-boolean
-spell_would_be_useless(mtmp, adtyp, spellnum)
-struct monst *mtmp;
-unsigned int adtyp;
-int spellnum;
+static boolean
+spell_would_be_useless(struct monst *mtmp, unsigned int adtyp, int spellnum)
 {
     /* Some spells don't require the player to really be there and can be cast
      * by the monster when you're invisible, yet still shouldn't be cast when
@@ -843,9 +853,7 @@ int spellnum;
 
 /* monster uses spell (ranged) */
 int
-buzzmu(mtmp, mattk)
-register struct monst *mtmp;
-register struct attack *mattk;
+buzzmu(register struct monst *mtmp, register struct attack *mattk)
 {
     /* don't print constant stream of curse messages for 'normal'
        spellcasting monsters at range */

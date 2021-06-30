@@ -1,4 +1,4 @@
-/* NetHack 3.7	display.h	$NHDT-Date: 1597700875 2020/08/17 21:47:55 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.47 $ */
+/* NetHack 3.7	display.h	$NHDT-Date: 1605927391 2020/11/21 02:56:31 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.48 $ */
 /* Copyright (c) Dean Luick, with acknowledgements to Kevin Darcy */
 /* and Dave Cohrs, 1990.                                          */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -38,6 +38,11 @@ enum explosion_types {
  *
  * Returns true if the hero can sense the given monster.  This includes
  * monsters that are hiding or mimicing other monsters.
+ *
+ * [3.7] Note: the map doesn't display any monsters when hero is swallowed
+ * (or display non-adjacent, non-submerged ones when hero is underwater),
+ * so treat those situations as blocking telepathy, detection, and warning
+ * even though conceptually they shouldn't do so.
  */
 #define tp_sensemon(mon) \
     (/* The hero can always sense a monster IF:        */  \
@@ -49,15 +54,19 @@ enum explosion_types {
           /*        object and in range                */  \
           || (Unblind_telepat                              \
               && (distu(mon->mx, mon->my) <= (BOLT_LIM * BOLT_LIM)))))
-
+/* organized to perform cheaper tests first;
+   is_pool() vs is_pool_or_lava(): hero who is underwater can see adjacent
+   lava, but presumeably any monster there is on top so not sensed */
 #define sensemon(mon) \
-    (tp_sensemon(mon) || Detect_monsters || MATCH_WARN_OF_MON(mon))
+    (   (!u.uswallow || (mon) == u.ustuck)                                 \
+     && (!Underwater || (distu((mon)->mx, (mon)->my) <= 2                  \
+                         && is_pool((mon)->mx, (mon)->my)))                \
+     && (Detect_monsters || tp_sensemon(mon) || MATCH_WARN_OF_MON(mon))   )
 
 /*
  * mon_warning() is used to warn of any dangerous monsters in your
  * vicinity, and a glyph representing the warning level is displayed.
  */
-
 #define mon_warning(mon)                                                 \
     (Warning && !(mon)->mpeaceful && (distu((mon)->mx, (mon)->my) < 100) \
      && (((int) ((mon)->m_lev / 4)) >= g.context.warnlevel))
@@ -69,6 +78,15 @@ enum explosion_types {
  * hero can physically see the location of the monster.  The function
  * vobj_at() returns a pointer to an object that the hero can see there.
  * Infravision is not taken into account.
+ *
+ * Note:  not reliable for concealed mimics.  They don't have
+ * 'mon->mundetected' set even when mimicking objects or furniture.
+ * [Fixing this with a pair of mon->m_ap_type checks here (via either
+ * 'typ!=object && typ!=furniture' or 'typ==nothing || typ==monster')
+ * will require reviewing every instance of mon_visible(), canseemon(),
+ * canspotmon(), is_safemon() and perhaps others.  Fixing it by setting
+ * mon->mundetected when concealed would be better but also require
+ * reviewing all those instances and also existing mundetected instances.]
  */
 #if 0
 #define mon_visible(mon) \
@@ -465,5 +483,28 @@ enum explosion_types {
      && (glyph) < (GLYPH_WARNING_OFF + WARNCOUNT))
 #define glyph_is_unexplored(glyph) ((glyph) == GLYPH_UNEXPLORED)
 #define glyph_is_nothing(glyph) ((glyph) == GLYPH_NOTHING)
+
+/* glyphflags for map_glyphinfo */
+
+/* mgflags for altering map_glyphinfo() internal behaviour */
+#define MG_FLAG_NORMAL      0x00
+#define MG_FLAG_NOOVERRIDE  0x01
+#define MG_FLAG_RETURNIDX   0x02
+
+/* Special mapped glyphflags encoded by map_glyphinfo() */
+#define MG_CORPSE  0x0001
+#define MG_INVIS   0x0002
+#define MG_DETECT  0x0004
+#define MG_PET     0x0008
+#define MG_RIDDEN  0x0010
+#define MG_STATUE  0x0020
+#define MG_OBJPILE 0x0040  /* more than one stack of objects */
+#define MG_BW_LAVA 0x0080  /* 'black & white lava': highlight lava if it
+                              can't be distringuished from water by color */
+#define MG_BW_ICE  0x0100  /* similar for ice vs floor */
+#define MG_NOTHING 0x0200  /* char represents GLYPH_NOTHING */
+#define MG_UNEXPL  0x0400  /* char represents GLYPH_UNEXPLORED */
+#define MG_FEMALE  0x0800  /* represents a female mon,detected mon,pet,ridden */
+#define MG_BADXY   0x1000  /* bad coordinates were passed */
 
 #endif /* DISPLAY_H */

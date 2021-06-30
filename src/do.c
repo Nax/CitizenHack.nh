@@ -1,4 +1,4 @@
-/* NetHack 3.7	do.c	$NHDT-Date: 1601595709 2020/10/01 23:41:49 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.249 $ */
+/* NetHack 3.7	do.c	$NHDT-Date: 1619919402 2021/05/02 01:36:42 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.267 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -7,30 +7,29 @@
 
 #include "hack.h"
 
-static void FDECL(trycall, (struct obj *));
-static void NDECL(polymorph_sink);
-static boolean NDECL(teleport_sink);
-static void FDECL(dosinkring, (struct obj *));
-static int FDECL(drop, (struct obj *));
-static boolean FDECL(engulfer_digests_food, (struct obj *));
-static int NDECL(wipeoff);
-static int FDECL(menu_drop, (int));
-static NHFILE *NDECL(currentlevel_rewrite);
-static void NDECL(final_level);
-/* static boolean FDECL(badspot, (XCHAR_P,XCHAR_P)); */
+static void trycall(struct obj *);
+static void polymorph_sink(void);
+static boolean teleport_sink(void);
+static void dosinkring(struct obj *);
+static int drop(struct obj *);
+static boolean engulfer_digests_food(struct obj *);
+static int wipeoff(void);
+static int menu_drop(int);
+static NHFILE *currentlevel_rewrite(void);
+static void final_level(void);
 
-static NEARDATA const char drop_types[] = { ALLOW_COUNT, COIN_CLASS,
-                                            ALL_CLASSES, 0 };
+/* static boolean badspot(xchar,xchar); */
 
 /* 'd' command: drop one inventory item */
 int
-dodrop()
+dodrop(void)
 {
-    int result, i = (g.invent) ? 0 : (SIZE(drop_types) - 1);
+    int result;
 
     if (*u.ushops)
         sellobj_state(SELL_DELIBERATE);
-    result = drop(getobj(&drop_types[i], "drop"));
+    result = drop(getobj("drop", any_obj_ok,
+                         GETOBJ_PROMPT | GETOBJ_ALLOWCNT));
     if (*u.ushops)
         sellobj_state(SELL_NORMAL);
     if (result)
@@ -44,10 +43,7 @@ dodrop()
  * it's gone for good...  If the destination is not a pool, returns FALSE.
  */
 boolean
-boulder_hits_pool(otmp, rx, ry, pushing)
-struct obj *otmp;
-register int rx, ry;
-boolean pushing;
+boulder_hits_pool(struct obj *otmp, int rx, int ry, boolean pushing)
 {
     if (!otmp || otmp->otyp != BOULDER) {
         impossible("Not a boulder?");
@@ -129,10 +125,7 @@ boolean pushing;
  * away.
  */
 boolean
-flooreffects(obj, x, y, verb)
-struct obj *obj;
-int x, y;
-const char *verb;
+flooreffects(struct obj *obj, int x, int y, const char *verb)
 {
     struct trap *t;
     struct monst *mtmp;
@@ -254,6 +247,8 @@ deletedwithboulder:
             pline("%s %s into %s %s.", The(xname(obj)),
                   otense(obj, "tumble"), the_your[t->madeby_u],
                   is_pit(t->ttyp) ? "pit" : "hole");
+        if (is_hole(t->ttyp) && ship_object(obj, x, y, FALSE))
+            return TRUE;
     } else if (obj->globby) {
         /* Globby things like puddings might stick together */
         while (obj && (otmp = obj_nexto_xy(obj, x, y, TRUE)) != 0) {
@@ -269,8 +264,7 @@ deletedwithboulder:
 
 /* obj is an object dropped on an altar */
 void
-doaltarobj(obj)
-register struct obj *obj;
+doaltarobj(struct obj *obj)
 {
     if (Blind)
         return;
@@ -297,8 +291,7 @@ register struct obj *obj;
 }
 
 static void
-trycall(obj)
-register struct obj *obj;
+trycall(struct obj *obj)
 {
     if (!objects[obj->otyp].oc_name_known && !objects[obj->otyp].oc_uname)
         docall(obj);
@@ -307,7 +300,7 @@ register struct obj *obj;
 /* Transforms the sink at the player's position into
    a fountain, throne, altar or grave. */
 static void
-polymorph_sink()
+polymorph_sink(void)
 {
     uchar sym = S_sink;
     boolean sinklooted;
@@ -364,7 +357,7 @@ polymorph_sink()
 /* Teleports the sink at the player's position;
    return True if sink teleported. */
 static boolean
-teleport_sink()
+teleport_sink(void)
 {
     int cx, cy;
     int cnt = 0;
@@ -395,8 +388,7 @@ teleport_sink()
 
 /* obj is a ring being dropped over a kitchen sink */
 static void
-dosinkring(obj)
-register struct obj *obj;
+dosinkring(struct obj *obj)
 {
     struct obj *otmp, *otmp2;
     boolean ideed = TRUE;
@@ -561,9 +553,7 @@ register struct obj *obj;
 
 /* some common tests when trying to drop or throw items */
 boolean
-canletgo(obj, word)
-struct obj *obj;
-const char *word;
+canletgo(struct obj *obj, const char *word)
 {
     if (obj->owornmask & (W_ARMOR | W_ACCESSORY)) {
         if (*word)
@@ -599,8 +589,7 @@ const char *word;
 }
 
 static int
-drop(obj)
-register struct obj *obj;
+drop(struct obj *obj)
 {
     if (!obj)
         return 0;
@@ -664,8 +653,7 @@ register struct obj *obj;
    called in several places - may produce output
    (eg ship_object() and dropy() -> sellobj() both produce output) */
 void
-dropx(obj)
-register struct obj *obj;
+dropx(struct obj *obj)
 {
     freeinv(obj);
     if (!u.uswallow) {
@@ -679,17 +667,14 @@ register struct obj *obj;
 
 /* dropy - put dropped object at destination; called from lots of places */
 void
-dropy(obj)
-struct obj *obj;
+dropy(struct obj *obj)
 {
     dropz(obj, FALSE);
 }
 
 /* dropz - really put dropped object at its destination... */
 void
-dropz(obj, with_impact)
-struct obj *obj;
-boolean with_impact;
+dropz(struct obj *obj, boolean with_impact)
 {
     if (obj == uwep)
         setuwep((struct obj *) 0);
@@ -698,8 +683,6 @@ boolean with_impact;
     if (obj == uswapwep)
         setuswapwep((struct obj *) 0);
 
-    if (!u.uswallow && flooreffects(obj, u.ux, u.uy, "drop"))
-        return;
     if (u.uswallow) {
         /* hero has dropped an item while inside an engulfer */
         if (obj != uball) { /* mon doesn't pick up ball */
@@ -711,6 +694,8 @@ boolean with_impact;
                 (void) mpickobj(u.ustuck, obj);
         }
     } else {
+        if (flooreffects(obj, u.ux, u.uy, "drop"))
+            return;
         place_object(obj, u.ux, u.uy);
         if (with_impact)
             container_impact_dmg(obj, u.ux, u.uy);
@@ -729,8 +714,7 @@ boolean with_impact;
    for purple worm, immediately eat any corpse, glob, or special meat item
    from object polymorph; return True if object is used up, False otherwise */
 static boolean
-engulfer_digests_food(obj)
-struct obj *obj;
+engulfer_digests_food(struct obj *obj)
 {
     /* animal swallower (purple worn, trapper, lurker above) eats any
        corpse, glob, or meat <item> but not other types of food */
@@ -774,8 +758,7 @@ struct obj *obj;
 /* things that must change when not held; recurse into containers.
    Called for both player and monsters */
 void
-obj_no_longer_held(obj)
-struct obj *obj;
+obj_no_longer_held(struct obj *obj)
 {
     if (!obj) {
         return;
@@ -806,7 +789,7 @@ struct obj *obj;
 
 /* 'D' command: drop several things */
 int
-doddrop()
+doddrop(void)
 {
     int result = 0;
 
@@ -830,15 +813,13 @@ doddrop()
 
 /* Drop things from the hero's inventory, using a menu. */
 static int
-menu_drop(retry)
-int retry;
+menu_drop(int retry)
 {
     int n, i, n_dropped = 0;
     long cnt;
     struct obj *otmp, *otmp2;
     menu_item *pick_list;
-    boolean all_categories = TRUE;
-    boolean drop_everything = FALSE;
+    boolean all_categories = TRUE, drop_everything = FALSE, autopick = FALSE;
 
     if (retry) {
         all_categories = (retry == -2);
@@ -852,12 +833,14 @@ int retry;
         if (!n)
             goto drop_done;
         for (i = 0; i < n; i++) {
-            if (pick_list[i].item.a_int == ALL_TYPES_SELECTED)
+            if (pick_list[i].item.a_int == ALL_TYPES_SELECTED) {
                 all_categories = TRUE;
-            else if (pick_list[i].item.a_int == 'A')
-                drop_everything = TRUE;
-            else
+            } else if (pick_list[i].item.a_int == 'A') {
+                drop_everything = autopick = TRUE;
+            } else {
                 add_valid_menu_class(pick_list[i].item.a_int);
+                drop_everything = FALSE;
+            }
         }
         free((genericptr_t) pick_list);
     } else if (flags.menu_style == MENU_COMBINATION) {
@@ -874,7 +857,7 @@ int retry;
         }
     }
 
-    if (drop_everything) {
+    if (autopick) {
         /*
          * Dropping a burning potion of oil while levitating can cause
          * an explosion which might destroy some of hero's inventory,
@@ -888,10 +871,16 @@ int retry;
          * Use the bypass bit to mark items already processed (hence
          * not droppable) and rescan inventory until no unbypassed
          * items remain.
+         *
+         * FIXME?  if something explodes, or even breaks, we probably
+         * ought to halt the traversal or perhaps ask player whether
+         * to halt it.
          */
         bypass_objlist(g.invent, FALSE); /* clear bypass bit for invent */
-        while ((otmp = nxt_unbypassed_obj(g.invent)) != 0)
-            n_dropped += drop(otmp);
+        while ((otmp = nxt_unbypassed_obj(g.invent)) != 0) {
+            if (drop_everything || all_categories || allow_category(otmp))
+                n_dropped += drop(otmp);
+        }
         /* we might not have dropped everything (worn armor, welded weapon,
            cursed loadstones), so reset any remaining inventory to normal */
         bypass_objlist(g.invent, FALSE);
@@ -947,13 +936,12 @@ int retry;
 
 /* the '>' command */
 int
-dodown()
+dodown(void)
 {
     struct trap *trap = 0;
-    boolean stairs_down = ((u.ux == xdnstair && u.uy == ydnstair)
-                           || (u.ux == g.sstairs.sx && u.uy == g.sstairs.sy
-                               && !g.sstairs.up)),
-            ladder_down = (u.ux == xdnladder && u.uy == ydnladder);
+    stairway *stway = stairway_at(u.ux, u.uy);
+    boolean stairs_down = (stway && !stway->up && !stway->isladder),
+            ladder_down = (stway && !stway->up &&  stway->isladder);
 
     if (u_rooted())
         return 1;
@@ -1103,8 +1091,10 @@ dodown()
 
 /* the '<' command */
 int
-doup()
+doup(void)
 {
+    stairway *stway = stairway_at(u.ux,u.uy);
+
     if (u_rooted())
         return 1;
 
@@ -1114,10 +1104,7 @@ doup()
         return 1;
     }
 
-    if ((u.ux != xupstair || u.uy != yupstair)
-        && (!xupladder || u.ux != xupladder || u.uy != yupladder)
-        && (!g.sstairs.sx || u.ux != g.sstairs.sx || u.uy != g.sstairs.sy
-            || !g.sstairs.up)) {
+    if (!stway || (stway && !stway->up)) {
         You_cant("go up here.");
         return 0;
     }
@@ -1155,7 +1142,7 @@ doup()
 
 /* check that we can write out the current level */
 static NHFILE *
-currentlevel_rewrite()
+currentlevel_rewrite(void)
 {
     NHFILE *nhfp;
     char whynot[BUFSZ];
@@ -1182,7 +1169,7 @@ currentlevel_rewrite()
 
 #ifdef INSURANCE
 void
-save_currentstate()
+save_currentstate(void)
 {
     NHFILE *nhfp;
 
@@ -1205,8 +1192,7 @@ save_currentstate()
 
 /*
 static boolean
-badspot(x, y)
-register xchar x, y;
+badspot(register xchar x, register xchar y)
 {
     return (boolean) ((levl[x][y].typ != ROOM
                        && levl[x][y].typ != AIR
@@ -1218,8 +1204,7 @@ register xchar x, y;
 /* when arriving on a level, if hero and a monster are trying to share same
    spot, move one; extracted from goto_level(); also used by wiz_makemap() */
 void
-u_collide_m(mtmp)
-struct monst *mtmp;
+u_collide_m(struct monst *mtmp)
 {
     coord cc;
 
@@ -1254,10 +1239,10 @@ struct monst *mtmp;
     }
 }
 
+DISABLE_WARNING_FORMAT_NONLITERAL
+
 void
-goto_level(newlevel, at_stairs, falling, portal)
-d_level *newlevel;
-boolean at_stairs, falling, portal;
+goto_level(d_level *newlevel, boolean at_stairs, boolean falling, boolean portal)
 {
     int l_idx, save_mode;
     NHFILE *nhfp;
@@ -1448,7 +1433,7 @@ boolean at_stairs, falling, portal;
     assign_level(&u.uz0, &u.uz);
     assign_level(&u.uz, newlevel);
     assign_level(&u.utolev, newlevel);
-    u.utotype = 0;
+    u.utotype = UTOTYPE_NONE;
     if (!builds_up(&u.uz)) { /* usual case */
         if (dunlev(&u.uz) > dunlev_reached(&u.uz))
             dunlev_reached(&u.uz) = dunlev(&u.uz);
@@ -1458,6 +1443,7 @@ boolean at_stairs, falling, portal;
             dunlev_reached(&u.uz) = dunlev(&u.uz);
     }
 
+    stairway_free_all();
     /* set default level change destination areas */
     /* the special level code may override these */
     (void) memset((genericptr_t) &g.updest, 0, sizeof g.updest);
@@ -1472,7 +1458,7 @@ boolean at_stairs, falling, portal;
         mklev();
         new = TRUE; /* made the level */
 
-        familiar = (find_ghost_with_name(g.plname) != (struct monst *) 0);
+        familiar = bones_include_name(g.plname);
     } else {
         /* returning to previously visited level; reload it */
         nhfp = open_levelfile(new_ledger, whynot);
@@ -1528,8 +1514,9 @@ boolean at_stairs, falling, portal;
         }
     } else if (at_stairs && !In_endgame(&u.uz)) {
         if (up) {
-            if (g.at_ladder)
-                u_on_newpos(xdnladder, ydnladder);
+            stairway *stway = stairway_find_from(&u.uz0, g.at_ladder);
+            if (stway)
+                u_on_newpos(stway->sx, stway->sy);
             else if (newdungeon)
                 u_on_sstairs(1);
             else
@@ -1544,8 +1531,9 @@ boolean at_stairs, falling, portal;
                       (Flying && g.at_ladder) ? " along" : "",
                       g.at_ladder ? "ladder" : "stairs");
         } else { /* down */
-            if (g.at_ladder)
-                u_on_newpos(xupladder, yupladder);
+            stairway *stway = stairway_find_from(&u.uz0, g.at_ladder);
+            if (stway)
+                u_on_newpos(stway->sx, stway->sy);
             else if (newdungeon)
                 u_on_sstairs(0);
             else
@@ -1614,7 +1602,7 @@ boolean at_stairs, falling, portal;
 
     /* Reset the screen. */
     vision_reset(); /* reset the blockages */
-    g.glyphmap_perlevel_flags = 0L; /* force per-level mapglyph() changes */
+    g.glyphmap_perlevel_flags = 0L; /* force per-level map_glyphinfo() changes */
     docrt();        /* does a full vision recalc */
     flush_screen(-1);
 
@@ -1751,9 +1739,11 @@ boolean at_stairs, falling, portal;
     (void) pickup(1);
 }
 
+RESTORE_WARNING_FORMAT_NONLITERAL
+
 /* usually called from goto_level(); might be called from Sting_effects() */
 void
-maybe_lvltport_feedback()
+maybe_lvltport_feedback(void)
 {
     if (g.dfr_post_msg && !strncmpi(g.dfr_post_msg, "You materialize", 15)) {
         /* "You materialize on a different level." */
@@ -1763,7 +1753,7 @@ maybe_lvltport_feedback()
 }
 
 static void
-final_level()
+final_level(void)
 {
     struct monst *mtmp;
 
@@ -1783,24 +1773,11 @@ final_level()
 
 /* change levels at the end of this turn, after monsters finish moving */
 void
-schedule_goto(tolev, at_stairs, falling, portal_flag, pre_msg, post_msg)
-d_level *tolev;
-boolean at_stairs, falling;
-int portal_flag;
-const char *pre_msg, *post_msg;
+schedule_goto(d_level *tolev, int utotype_flags,
+              const char *pre_msg, const char *post_msg)
 {
-    int typmask = 0100; /* non-zero triggers `deferred_goto' */
-
-    /* destination flags (`goto_level' args) */
-    if (at_stairs)
-        typmask |= 1;
-    if (falling)
-        typmask |= 2;
-    if (portal_flag)
-        typmask |= 4;
-    if (portal_flag < 0)
-        typmask |= 0200; /* flag for portal removal */
-    u.utotype = typmask;
+    /* UTOTYPE_DEFERRED is used, so UTOTYPE_NONE can trigger deferred_goto() */
+    u.utotype = utotype_flags | UTOTYPE_DEFERRED;
     /* destination level */
     assign_level(&u.utolev, tolev);
 
@@ -1812,7 +1789,7 @@ const char *pre_msg, *post_msg;
 
 /* handle something like portal ejection */
 void
-deferred_goto()
+deferred_goto(void)
 {
     if (!on_level(&u.uz, &u.utolev)) {
         d_level dest, oldlev;
@@ -1822,8 +1799,10 @@ deferred_goto()
         assign_level(&oldlev, &u.uz);
         if (g.dfr_pre_msg)
             pline1(g.dfr_pre_msg);
-        goto_level(&dest, !!(typmask & 1), !!(typmask & 2), !!(typmask & 4));
-        if (typmask & 0200) { /* remove portal */
+        goto_level(&dest, !!(typmask & UTOTYPE_ATSTAIRS),
+                   !!(typmask & UTOTYPE_FALLING),
+                   !!(typmask & UTOTYPE_PORTAL));
+        if (typmask & UTOTYPE_RMPORTAL) { /* remove portal */
             struct trap *t = t_at(u.ux, u.uy);
 
             if (t) {
@@ -1834,7 +1813,7 @@ deferred_goto()
         if (g.dfr_post_msg && !on_level(&u.uz, &oldlev))
             pline1(g.dfr_post_msg);
     }
-    u.utotype = 0; /* our caller keys off of this */
+    u.utotype = UTOTYPE_NONE; /* our caller keys off of this */
     if (g.dfr_pre_msg)
         free((genericptr_t) g.dfr_pre_msg), g.dfr_pre_msg = 0;
     if (g.dfr_post_msg)
@@ -1846,8 +1825,7 @@ deferred_goto()
  * corpse is gone.
  */
 boolean
-revive_corpse(corpse)
-struct obj *corpse;
+revive_corpse(struct obj *corpse)
 {
     struct monst *mtmp, *mcarry;
     boolean is_uwep, chewed;
@@ -1935,9 +1913,7 @@ struct obj *corpse;
 /* Revive the corpse via a timeout. */
 /*ARGSUSED*/
 void
-revive_mon(arg, timeout)
-anything *arg;
-long timeout UNUSED;
+revive_mon(anything *arg, long timeout UNUSED)
 {
     struct obj *body = arg->a_obj;
     struct permonst *mptr = &mons[body->corpsenm];
@@ -1968,13 +1944,11 @@ long timeout UNUSED;
 
         if (is_rider(mptr) && rn2(99)) { /* Rider usually tries again */
             action = REVIVE_MON;
-            for (when = 3L; when < 67L; when++)
-                if (!rn2(3))
-                    break;
+            when = rider_revival_time(body, TRUE);
         } else { /* rot this corpse away */
             You_feel("%sless hassled.", is_rider(mptr) ? "much " : "");
             action = ROT_CORPSE;
-            when = 250L - (g.monstermoves - body->age);
+            when = (long) d(5, 50) - (g.monstermoves - body->age);
             if (when < 1L)
                 when = 1L;
         }
@@ -1983,32 +1957,27 @@ long timeout UNUSED;
 }
 
 /* Timeout callback. Revive the corpse as a zombie. */
-/*ARGSUSED*/
 void
-zombify_mon(arg, timeout)
-anything *arg;
-long timeout UNUSED;
+zombify_mon(anything *arg, long timeout)
 {
     struct obj *body = arg->a_obj;
     int zmon = zombie_form(&mons[body->corpsenm]);
 
-    if (zmon != NON_PM) {
-
+    if (zmon != NON_PM && !(g.mvitals[zmon].mvflags & G_GENOD)) {
         if (has_omid(body))
             free_omid(body);
         if (has_omonst(body))
             free_omonst(body);
 
-        body->corpsenm = zmon;
+        set_corpsenm(body, zmon);
         revive_mon(arg, timeout);
+    } else {
+        rot_corpse(arg, timeout);
     }
 }
 
 boolean
-cmd_safety_prevention(cmddesc, act, flagcounter)
-const char *cmddesc;
-const char *act;
-int *flagcounter;
+cmd_safety_prevention(const char *cmddesc, const char *act, int *flagcounter)
 {
     if (flags.safe_wait && !iflags.menu_requested
         && !g.multi && monster_nearby()) {
@@ -2028,7 +1997,7 @@ int *flagcounter;
 /* '.' command: do nothing == rest; also the
    ' ' command iff 'rest_on_space' option is On */
 int
-donull()
+donull(void)
 {
     if (cmd_safety_prevention("a no-op (to rest)",
                           "Are you waiting to get hit?",
@@ -2038,7 +2007,7 @@ donull()
 }
 
 static int
-wipeoff(VOID_ARGS)
+wipeoff(void)
 {
     if (u.ucreamed < 4)
         u.ucreamed = 0;
@@ -2064,7 +2033,7 @@ wipeoff(VOID_ARGS)
 }
 
 int
-dowipe()
+dowipe(void)
 {
     if (u.ucreamed) {
         static NEARDATA char buf[39];
@@ -2082,9 +2051,8 @@ dowipe()
 
 /* common wounded legs feedback */
 void
-legs_in_no_shape(for_what, by_steed)
-const char *for_what; /* jumping, kicking, riding */
-boolean by_steed;
+legs_in_no_shape(const char *for_what, /* jumping, kicking, riding */
+                 boolean by_steed)
 {
     if (by_steed && u.usteed) {
         pline("%s is in no shape for %s.", Monnam(u.usteed), for_what);
@@ -2101,9 +2069,7 @@ boolean by_steed;
 }
 
 void
-set_wounded_legs(side, timex)
-long side;
-int timex;
+set_wounded_legs(long side, int timex)
 {
     /* KMH -- STEED
      * If you are riding, your steed gets the wounded legs instead.
@@ -2122,8 +2088,8 @@ int timex;
 }
 
 void
-heal_legs(how)
-int how; /* 0: ordinary, 1: dismounting steed, 2: limbs turn to stone */
+heal_legs(int how) /* 0: ordinary, 1: dismounting steed,
+                      2: limbs turn to stone */
 {
     if (Wounded_legs) {
         g.context.botl = 1;

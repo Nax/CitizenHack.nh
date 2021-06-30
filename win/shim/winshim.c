@@ -35,7 +35,13 @@ EMSCRIPTEN_KEEPALIVE
 static char *shim_callback_name = NULL;
 void shim_graphics_set_callback(char *cbName) {
     if (shim_callback_name != NULL) free(shim_callback_name);
-    shim_callback_name = strdup(cbName);
+    if(cbName && strlen(cbName) > 0) {
+        debugf("setting shim_callback_name: %s\n", cbName);
+        shim_callback_name = strdup(cbName);
+    } else {
+        debugf("un-setting shim_callback_name\n");
+        shim_callback_name = NULL;
+    }
     /* TODO: free(shim_callback_name) during shutdown? */
 }
 void local_callback (const char *cb_name, const char *shim_name, void *ret_ptr, const char *fmt_str, void *args);
@@ -96,27 +102,6 @@ void name fn_args { \
 }
 #endif /* __EMSCRIPTEN__ */
 
-enum win_types {
-    WINSHIM_MESSAGE = 1,
-    WINSHIM_MAP,
-    WINSHIM_MENU,
-    WINSHIM_EXT
-};
-
-#define VSTUB(name, args) \
-void name args { \
-    printf ("Running " #name "...\n"); \
-}
-
-#define STUB(name, retval, args) \
-name args { \
-    printf ("Running " #name "...\n"); \
-    return retval; \
-}
-
-#define DECL(name, args) \
-void name args;
-
 VDECLCB(shim_init_nhwindows,(int *argcp, char **argv), "vpp", P2V argcp, P2V argv)
 VDECLCB(shim_player_selection,(void), "v")
 VDECLCB(shim_askname,(void), "v")
@@ -126,32 +111,32 @@ VDECLCB(shim_suspend_nhwindows,(const char *str), "vs", P2V str)
 VDECLCB(shim_resume_nhwindows,(void), "v")
 DECLCB(winid, shim_create_nhwindow, (int type), "ii", A2P type)
 VDECLCB(shim_clear_nhwindow,(winid window), "vi", A2P window)
-VDECLCB(shim_display_nhwindow,(winid window, BOOLEAN_P blocking), "vii", A2P window, A2P blocking)
+VDECLCB(shim_display_nhwindow,(winid window, boolean blocking), "vii", A2P window, A2P blocking)
 VDECLCB(shim_destroy_nhwindow,(winid window), "vi", A2P window)
 VDECLCB(shim_curs,(winid a, int x, int y), "viii", A2P a, A2P x, A2P y)
 VDECLCB(shim_putstr,(winid w, int attr, const char *str), "viis", A2P w, A2P attr, P2V str)
-VDECLCB(shim_display_file,(const char *name, BOOLEAN_P complain), "vsi", P2V name, A2P complain)
+VDECLCB(shim_display_file,(const char *name, boolean complain), "vsi", P2V name, A2P complain)
 VDECLCB(shim_start_menu,(winid window, unsigned long mbehavior), "vii", A2P window, A2P mbehavior)
 VDECLCB(shim_add_menu,
-    (winid window, int glyph, const ANY_P *identifier, CHAR_P ch, CHAR_P gch, int attr, const char *str, unsigned int itemflags),
-    "viipiiisi",
-    A2P window, A2P glyph, P2V identifier, A2P ch, A2P gch, A2P attr, P2V str, A2P itemflags)
+    (winid window, const glyph_info *glyphinfo, const ANY_P *identifier, char ch, char gch, int attr, const char *str, unsigned int itemflags),
+    "vippiiisi",
+    A2P window, P2V glyphinfo, P2V identifier, A2P ch, A2P gch, A2P attr, P2V str, A2P itemflags)
 VDECLCB(shim_end_menu,(winid window, const char *prompt), "vis", A2P window, P2V prompt)
 /* XXX: shim_select_menu menu_list is an output */
 DECLCB(int, shim_select_menu,(winid window, int how, MENU_ITEM_P **menu_list), "iiio", A2P window, A2P how, P2V menu_list)
-DECLCB(char, shim_message_menu,(CHAR_P let, int how, const char *mesg), "ciis", A2P let, A2P how, P2V mesg)
+DECLCB(char, shim_message_menu,(char let, int how, const char *mesg), "ciis", A2P let, A2P how, P2V mesg)
 VDECLCB(shim_mark_synch,(void), "v")
 VDECLCB(shim_wait_synch,(void), "v")
 VDECLCB(shim_cliparound,(int x, int y), "vii", A2P x, A2P y)
 VDECLCB(shim_update_positionbar,(char *posbar), "vp", P2V posbar)
-VDECLCB(shim_print_glyph,(winid w, int x, int y, int glyph, int bkglyph), "viiiii", A2P w, A2P x, A2P y, A2P glyph, A2P bkglyph)
+VDECLCB(shim_print_glyph,(winid w, xchar x, xchar y, const glyph_info *glyphinfo, const glyph_info *bkglyphinfo), "viiipp", A2P w, A2P x, A2P y, P2V glyphinfo, P2V bkglyphinfo)
 VDECLCB(shim_raw_print,(const char *str), "vs", P2V str)
 VDECLCB(shim_raw_print_bold,(const char *str), "vs", P2V str)
 DECLCB(int, shim_nhgetch,(void), "i")
 DECLCB(int, shim_nh_poskey,(int *x, int *y, int *mod), "iooo", P2V x, P2V y, P2V mod)
 VDECLCB(shim_nhbell,(void), "v")
 DECLCB(int, shim_doprev_message,(void),"iv")
-DECLCB(char, shim_yn_function,(const char *query, const char *resp, CHAR_P def), "cssi", P2V query, P2V resp, A2P def)
+DECLCB(char, shim_yn_function,(const char *query, const char *resp, char def), "cssi", P2V query, P2V resp, A2P def)
 VDECLCB(shim_getlin,(const char *query, char *bufp), "vso", P2V query, P2V bufp)
 DECLCB(int,shim_get_ext_cmd,(void),"iv")
 VDECLCB(shim_number_pad,(int state), "vi", A2P state)
@@ -165,11 +150,11 @@ DECLCB(char *,shim_get_color_string,(void),"sv")
 VDECLCB(shim_start_screen, (void), "v")
 VDECLCB(shim_end_screen, (void), "v")
 VDECLCB(shim_preference_update, (const char *pref), "vp", P2V pref)
-DECLCB(char *,shim_getmsghistory, (BOOLEAN_P init), "si", A2P init)
-VDECLCB(shim_putmsghistory, (const char *msg, BOOLEAN_P restoring_msghist), "vsi", P2V msg, A2P restoring_msghist)
+DECLCB(char *,shim_getmsghistory, (boolean init), "si", A2P init)
+VDECLCB(shim_putmsghistory, (const char *msg, boolean restoring_msghist), "vsi", P2V msg, A2P restoring_msghist)
 VDECLCB(shim_status_init, (void), "v")
 VDECLCB(shim_status_enablefield,
-    (int fieldidx, const char *nm, const char *fmt, BOOLEAN_P enable),
+    (int fieldidx, const char *nm, const char *fmt, boolean enable),
     "vippi",
     A2P fieldidx, P2V nm, P2V fmt, A2P enable)
 /* XXX: the second argument to shim_status_update is sometimes an integer and sometimes a pointer */
@@ -279,8 +264,6 @@ EM_JS(void, local_callback, (const char *cb_name, const char *shim_name, void *r
             jsArgs.push(val);
         }
 
-        decodeArgs(name, jsArgs);
-
         // do the callback
         let userCallback = globalThis[cbName];
         runJsEventLoop(() => userCallback.call(this, name, ... jsArgs)).then((retVal) => {
@@ -292,86 +275,6 @@ EM_JS(void, local_callback, (const char *cb_name, const char *shim_name, void *r
                 wakeUp();
             }, 0);
         });
-
-        // make callback arguments friendly: convert numbers to strings where possible
-        function decodeArgs(name, args) {
-            // if (!globalThis.nethackGlobal.makeArgsFriendly) return;
-
-            switch(name) {
-                case "shim_create_nhwindow":
-                    args[0] = globalThis.nethackGlobal.constants["WIN_TYPE"][args[0]];
-                    break;
-                case "shim_status_update":
-                    // which field is being updated?
-                    args[0] = globalThis.nethackGlobal.constants["STATUS_FIELD"][args[0]];
-                    // arg[1] is a string unless it is BL_CONDITION, BL_RESET, BL_FLUSH, BL_CHARACTERISTICS
-                    if(["BL_CONDITION", "BL_RESET", "BL_FLUSH", "BL_CHARACTERISTICS"].indexOf(args[0] && args[1]) < 0) {
-                        args[1] = getArg(name, args[1], "s");
-                    } else {
-                        args[1] = getArg(name, args[1], "p");
-                    }
-                    break;
-                case "shim_display_file":
-                    args[1] = !!args[1];
-                case "shim_display_nhwindow":
-                    args[0] = decodeWindow(args[0]);
-                    args[1] = !!args[1];
-                    break;
-                case "shim_getmsghistory":
-                    args[0] = !!args[0];
-                    break;
-                case "shim_putmsghistory":
-                    args[1] = !!args[1];
-                    break;
-                case "shim_status_enablefield":
-                    console.log("shim_status_enablefield arg 1:", args[1]);
-                    args[3] = !!args[3];
-                    break;
-                case "shim_add_menu":
-                    args[0] = decodeWindow(args[0]);
-                    // args[1] = mapglyphHelper(args[1]);
-                    // args[5] = decodeAttr(args[5]);
-                    break;
-                case "shim_putstr":
-                    args[0] = decodeWindow(args[0]);
-                    break;
-                case "shim_select_menu":
-                    args[0] = decodeWindow(args[0]);
-                    args[1] = decodeSelected(args[1]);
-                    break;
-                case "shim_clear_nhwindow":
-                case "shim_destroy_nhwindow":
-                case "shim_curs":
-                case "shim_start_menu":
-                case "shim_end_menu":
-                case "shim_print_glyph":
-                    args[0] = decodeWindow(args[0]);
-                    break;
-            }
-        }
-
-        function decodeWindow(winid) {
-            let { WIN_MAP, WIN_INVEN, WIN_STATUS, WIN_MESSAGE } = globalThis.nethackGlobal.globals;
-            switch(winid) {
-                case WIN_MAP: return "WIN_MAP";
-                case WIN_MESSAGE: return "WIN_MESSAGE";
-                case WIN_STATUS: return "WIN_STATUS";
-                case WIN_INVEN: return "WIN_INVEN";
-                default: return winid;
-            }
-            // return winid;
-        }
-
-        function decodeSelected(how) {
-            let { PICK_NONE, PICK_ONE, PICK_ANY } = globalThis.nethackGlobal.constants.MENU_SELECT;
-            switch(how) {
-                case PICK_NONE: return "PICK_NONE";
-                case PICK_ONE: return "PICK_ONE";
-                case PICK_ANY: return "PICK_ANY";
-                default: return how;
-            }
-
-        }
 
         function getArg(name, ptr, type) {
             return (type === "o")?ptr:getPointerValue(name, getValue(ptr, "*"), type);

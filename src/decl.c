@@ -1,4 +1,4 @@
-/* NetHack 3.7	decl.c	$NHDT-Date: 1600468453 2020/09/18 22:34:13 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.218 $ */
+/* NetHack 3.7	decl.c	$NHDT-Date: 1606919256 2020/12/02 14:27:36 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.221 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2009. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -15,10 +15,13 @@ NEARDATA long yn_number = 0L;
 
 const char disclosure_options[] = "iavgco";
 
-/* x/y/z deltas for the 10 movement directions (8 compass pts, 2 up/down) */
-const schar xdir[10] = { -1, -1, 0, 1, 1, 1, 0, -1, 0, 0 };
-const schar ydir[10] = { 0, -1, -1, -1, 0, 1, 1, 1, 0, 0 };
-const schar zdir[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, -1 };
+/* x/y/z deltas for the 10 movement directions (8 compass pts, 2 down/up) */
+const schar xdir[N_DIRS_Z] = { -1, -1,  0,  1,  1,  1,  0, -1, 0,  0 };
+const schar ydir[N_DIRS_Z] = {  0, -1, -1, -1,  0,  1,  1,  1, 0,  0 };
+const schar zdir[N_DIRS_Z] = {  0,  0,  0,  0,  0,  0,  0,  0, 1, -1 };
+/* redordered directions, cardinals first */
+const schar dirs_ord[N_DIRS] =
+    { DIR_W, DIR_N, DIR_E, DIR_S, DIR_NW, DIR_NE, DIR_SE, DIR_SW };
 
 NEARDATA struct flag flags;
 NEARDATA boolean has_strong_rngseed = FALSE;
@@ -39,7 +42,6 @@ struct engr *head_engr;
 #ifdef TEXTCOLOR
 /*
  *  This must be the same order as used for buzz() in zap.c.
- *  (They're only used in mapglyph.c so probably shouldn't be here.)
  */
 const int zapcolors[NUM_ZAP] = {
     HI_ZAP,     /* 0 - missile */
@@ -154,9 +156,6 @@ NEARDATA struct savefile_info sfcap, sfrestinfo, sfsaveinfo;
 const char *ARGV0;
 #endif
 
-/* support for lint.h */
-unsigned nhUse_dummy = 0;
-
 #define IVMAGIC 0xdeadbeef
 
 #ifdef GCC_WARN
@@ -211,6 +210,9 @@ const struct Race urace_init_data = {
 };
 
 const struct instance_globals g_init = {
+
+    NULL, /* command_queue */
+
     /* apply.c */
     0,  /* jumping_is_magic */
     -1, /* polearm_range_min */
@@ -247,7 +249,7 @@ const struct instance_globals g_init = {
     UNDEFINED_VALUES, /* clicklook_cc */
     WIN_ERR, /* en_win */
     FALSE, /* en_via_menu */
-    UNDEFINED_VALUE, /* last_multi */
+    UNDEFINED_VALUE, /* last_command_count */
 
     /* dbridge.c */
     UNDEFINED_VALUES, /* occupants */
@@ -260,7 +262,12 @@ const struct instance_globals g_init = {
     UNDEFINED_VALUES, /* chosen_windowtype */
     DUMMY, /* bases */
     0, /* multi */
-    NULL, /* g.multi_reason */
+    UNDEFINED_VALUES, /* command_line */
+    0, /* command_count */
+    NULL, /* multi_reason */
+    /* multi_reason usually points to a string literal (when not Null)
+       but multireasonbuf[] is available for when it needs to be dynamic */
+    DUMMY, /* multireasonbuf[] */
     0, /* nroom */
     0, /* nsubroom */
     0, /* occtime */
@@ -270,10 +277,7 @@ const struct instance_globals g_init = {
     (ROWNO - 1) & ~1, /* y_maze_max */
     UNDEFINED_VALUE, /* otg_temp */
     0, /* in_doagain */
-    DUMMY, /* dnstair */
-    DUMMY, /* upstair */
-    DUMMY, /* dnladder */
-    DUMMY, /* upladder */
+    NULL, /* stairs */
     DUMMY, /* smeq */
     0, /* doorindex */
     NULL, /* save_cm */
@@ -294,7 +298,6 @@ const struct instance_globals g_init = {
     UNDEFINED_PTR, /* sp_levchn */
     { 0, 0, STRANGE_OBJECT, FALSE }, /* m_shot */
     UNDEFINED_VALUES, /* dungeons */
-    { 0, 0, { 0, 0 }, 0 }, /* sstairs */
     { 0, 0, 0, 0, 0, 0, 0, 0 }, /* updest */
     { 0, 0, 0, 0, 0, 0, 0, 0 }, /* dndest */
     { 0, 0} , /* inv_pos */
@@ -305,9 +308,6 @@ const struct instance_globals g_init = {
     FALSE, /* mrg_to_wielded */
     NULL, /* plinemsg_types */
     UNDEFINED_VALUES, /* toplines */
-    UNDEFINED_PTR, /* upstairs_room */
-    UNDEFINED_PTR, /* dnstairs_room */
-    UNDEFINED_PTR, /* sstairs_room */
     DUMMY, /* bhitpos */
     FALSE, /* in_steed_dismounting */
     DUMMY, /* doors */
@@ -485,7 +485,7 @@ const struct instance_globals g_init = {
 
     /* mkmaze.c */
     { {COLNO, ROWNO, 0, 0}, {COLNO, ROWNO, 0, 0} }, /* bughack */
-    UNDEFINED_VALUE, /* was_waterlevel */
+    FALSE, /* was_waterlevel */
     UNDEFINED_PTR, /* bbubbles */
     UNDEFINED_PTR, /* ebubbles */
     UNDEFINED_PTR, /* wportal */
@@ -495,10 +495,13 @@ const struct instance_globals g_init = {
     UNDEFINED_VALUE, /* ymax */
     0, /* ransacked */
 
+    /* mkobj.c */
+    FALSE, /* mkcorpstat_norevive */
+
     /* mon.c */
-    UNDEFINED_VALUE, /* vamp_rise_msg */
-    UNDEFINED_VALUE, /* disintegested */
-    UNDEFINED_VALUE, /* zombify */
+    FALSE, /* vamp_rise_msg */
+    FALSE, /* disintegested */
+    FALSE, /* zombify */
     NULL, /* animal_list */
     UNDEFINED_VALUE, /* animal_list_count */
 
@@ -511,7 +514,7 @@ const struct instance_globals g_init = {
     FALSE, /* m_using */
     UNDEFINED_VALUE, /* trapx */
     UNDEFINED_VALUE, /* trapy */
-    UNDEFINED_VALUE, /* zap_oseen */
+    FALSE, /* zap_oseen */
     UNDEFINED_VALUES, /* m */
 
     /* nhlan.c */
@@ -519,6 +522,9 @@ const struct instance_globals g_init = {
     UNDEFINED_VALUES, /* lusername */
     MAX_LAN_USERNAME, /* lusername_size */
 #endif /* MAX_LAN_USERNAME */
+
+    /* nhlua.c */
+    UNDEFINED_VALUE, /* luacore */
 
     /* o_init.c */
     DUMMY, /* disco */
@@ -618,6 +624,8 @@ const struct instance_globals g_init = {
     TRUE, /* havestate*/
     0, /* ustuck_id */
     0, /* usteed_id */
+    (struct obj *) 0, /* looseball */
+    (struct obj *) 0, /* loosechain */
 
     /* shk.c */
     'a', /* sell_response */
@@ -654,9 +662,6 @@ const struct instance_globals g_init = {
 
     /* topten.c */
     WIN_ERR, /* topten */
-#ifdef UPDATE_RECORD_IN_PLACE
-    UNDEFINED_VALUE, /* final_fpos */
-#endif
 
     /* trap.c */
     0, /* force_mintrap */
@@ -706,10 +711,14 @@ const struct const_globals cg = {
     DUMMY, /* zeroany */
 };
 
+/* glyph, color, ttychar, symidx, glyphflags */
+const glyph_info nul_glyphinfo =
+    { NO_GLYPH, NO_COLOR, ' ', 0, MG_UNEXPL };
+
 #define ZERO(x) memset(&x, 0, sizeof(x))
 
 void
-decl_globals_init()
+decl_globals_init(void)
 {
     g = g_init;
 
