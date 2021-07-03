@@ -170,6 +170,10 @@ static NEARDATA struct artifact artilist[] = {
     A("Clarent", SHORT_SWORD, (SPFX_RESTR | SPFX_INTEL | SPFX_LUCK),
       0, 0, PHYS(2, 8), NO_DFNS, NO_CARY, 0, A_LAWFUL, PM_KNIGHT, NON_PM,
       3000L, NO_COLOR),
+    
+    A("Aegis", GOLD_SHIELD, (SPFX_RESTR),
+      0, 0, NO_ATTK, DFNS(AD_STON), NO_CARY, 0, A_NONE, NON_PM, NON_PM,
+      5000L, NO_COLOR),
 
     /*
      *      The artifacts for the quest dungeon, all self-willed.

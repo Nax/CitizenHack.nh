@@ -462,6 +462,8 @@ set_artifact_intrinsic(struct obj *otmp, boolean on, long wp_mask)
         mask = &EPoison_resistance;
     else if (dtyp == AD_DRLI)
         mask = &EDrain_resistance;
+    else if (dtyp == AD_STON)
+        mask = &EStone_resistance;
 
     if (mask && wp_mask == W_ART && !on) {
         /* find out if some other artifact also confers this intrinsic;
@@ -1114,6 +1116,7 @@ artifact_hit(struct monst *magr, struct monst *mdef, struct obj *otmp,
     const char *wepdesc;
     static const char you[] = "you";
     char hittee[BUFSZ];
+    struct obj* o;
 
     Strcpy(hittee, youdefend ? you : mon_nam(mdef));
 
@@ -1272,6 +1275,15 @@ artifact_hit(struct monst *magr, struct monst *mdef, struct obj *otmp,
                 if (Hallucination && !flags.female)
                     pline("Good job Henry, but that wasn't Anne.");
                 otmp->dknown = TRUE;
+
+                /* If the monster was Medusa, we need to spawn the Aegis */
+                if (mdef->data == &mons[PM_MEDUSA]) {
+                    o = mksobj(GOLD_SHIELD, TRUE, FALSE);
+                    o->cursed = 0;
+                    o->spe = 0;
+                    o = oname(o, artiname(ART_AEGIS));
+                    place_object(o, mdef->mx, mdef->my);
+                }
                 return TRUE;
             } else {
                 if (!has_head(g.youmonst.data)) {

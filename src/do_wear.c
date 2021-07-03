@@ -621,6 +621,7 @@ Shield_on(void)
     case ORCISH_SHIELD:
     case DWARVISH_ROUNDSHIELD:
     case LARGE_SHIELD:
+    case GOLD_SHIELD:
     case SHIELD_OF_REFLECTION:
         break;
     default:
@@ -645,6 +646,7 @@ Shield_off(void)
     case ORCISH_SHIELD:
     case DWARVISH_ROUNDSHIELD:
     case LARGE_SHIELD:
+    case GOLD_SHIELD:
     case SHIELD_OF_REFLECTION:
         break;
     default:
