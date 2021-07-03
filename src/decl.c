@@ -52,8 +52,9 @@ const int zapcolors[NUM_ZAP] = {
     CLR_WHITE,  /* 5 - lightning */
     /* 3.6.3: poison gas zap used to be yellow and acid zap was green,
        which conflicted with the corresponding dragon colors */
-    CLR_GREEN,  /* 6 - poison gas */
-    CLR_YELLOW, /* 7 - acid */
+    CLR_GREEN,   /* 6 - poison gas */
+    CLR_YELLOW,  /* 7 - acid */
+    CLR_MAGENTA, /* 8 - petrification */
 };
 #endif /* text color */
 

@@ -378,6 +378,7 @@ HELM("helm of telepathy", "visored helmet",
    needed to create them */
 DRGN_ARMR("gray dragon scale mail",    1, ANTIMAGIC,  1200, 1, CLR_GRAY),
 DRGN_ARMR("silver dragon scale mail",  1, REFLECTING, 1200, 1, DRAGON_SILVER),
+DRGN_ARMR("purple dragon scale mail",  1, STONE_RES,  1200, 1, CLR_MAGENTA),
 #if 0 /* DEFERRED */
 DRGN_ARMR("shimmering dragon scale mail", 1, DISPLACED, 1200, 1, CLR_CYAN),
 #endif
@@ -393,6 +394,7 @@ DRGN_ARMR("yellow dragon scale mail",  1, ACID_RES,    900, 1, CLR_YELLOW),
    magical properties but are produced "naturally" */
 DRGN_ARMR("gray dragon scales",        0, ANTIMAGIC,   700, 7, CLR_GRAY),
 DRGN_ARMR("silver dragon scales",      0, REFLECTING,  700, 7, DRAGON_SILVER),
+DRGN_ARMR("purple dragon scales",      0, STONE_RES,   700, 7, CLR_MAGENTA),
 #if 0 /* DEFERRED */
 DRGN_ARMR("shimmering dragon scales",  0, DISPLACED,   700, 7, CLR_CYAN),
 #endif

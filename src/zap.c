@@ -10,7 +10,8 @@
  * which kills the monster.  The damage routine returns this cookie to
  * indicate that the monster should be disintegrated.
  */
-#define MAGIC_COOKIE 1000
+#define MAGIC_COOKIE_DISN 1000
+#define MAGIC_COOKIE_STON 1001
 
 static void polyuse(struct obj *, int, int);
 static void create_polymon(struct obj *, int);
@@ -37,6 +38,7 @@ static void wishcmdassist(int);
 #define ZT_LIGHTNING (AD_ELEC - 1)
 #define ZT_POISON_GAS (AD_DRST - 1)
 #define ZT_ACID (AD_ACID - 1)
+#define ZT_STON (AD_STON - 1)
 /* 8 and 9 are currently unassigned */
 
 #define ZT_WAND(x) (x)
@@ -65,7 +67,7 @@ const char *const flash_types[] =       /* also used in buzzmu(mcastu.c) */
         "blast of missiles", /* Dragon breath equivalents 20-29*/
         "blast of fire", "blast of frost", "blast of sleep gas",
         "blast of disintegration", "blast of lightning",
-        "blast of poison gas", "blast of acid", "", ""
+        "blast of poison gas", "blast of acid", "blast of petrification", ""
     };
 
 /*
@@ -3786,8 +3788,8 @@ zhitm(
         if (abs(type) != ZT_BREATH(ZT_DEATH)) { /* death */
             if (mon->data == &mons[PM_DEATH]) {
                 mon->mhpmax += mon->mhpmax / 2;
-                if (mon->mhpmax >= MAGIC_COOKIE)
-                    mon->mhpmax = MAGIC_COOKIE - 1;
+                if (mon->mhpmax >= MAGIC_COOKIE_DISN)
+                    mon->mhpmax = MAGIC_COOKIE_DISN - 1;
                 mon->mhp = mon->mhpmax;
                 tmp = 0;
                 break;
@@ -3815,7 +3817,7 @@ zhitm(
             } else {
                 /* no body armor, victim dies; destroy cloak
                    and shirt now in case target gets life-saved */
-                tmp = MAGIC_COOKIE;
+                tmp = MAGIC_COOKIE_DISN;
                 if ((otmp2 = which_armor(mon, W_ARMC)) != 0)
                     m_useup(mon, otmp2);
                 if ((otmp2 = which_armor(mon, W_ARMU)) != 0)
@@ -3867,6 +3869,13 @@ zhitm(
             acid_damage(MON_WEP(mon));
         if (!rn2(6))
             erode_armor(mon, ERODE_CORRODE);
+        break;
+    case ZT_STON:
+        if (resists_ston(mon)) {
+            sho_shieldeff = TRUE;
+            break;
+        }
+        tmp = MAGIC_COOKIE_STON;
         break;
     }
     if (sho_shieldeff)
@@ -4017,6 +4026,14 @@ zhitu(int type, int nd, const char *fltxt, xchar sx, xchar sy)
             acid_damage(uswapwep);
         if (!rn2(6))
             erode_armor(&g.youmonst, ERODE_CORRODE);
+        break;
+    case ZT_STON:
+        if (Stone_resistance) {
+            You("are not slower.");
+            monstseesu(M_SEEN_STON);
+            break;
+        }
+        instapetrify(fltxt ? fltxt : "");
         break;
     }
 
@@ -4189,7 +4206,7 @@ dobuzz(int type, int nd, xchar sx, xchar sy, int dx, int dy,
             pline("%s rips into %s%s", The(fltxt), mon_nam(u.ustuck),
                   exclam(tmp));
         /* Using disintegration from the inside only makes a hole... */
-        if (tmp == MAGIC_COOKIE)
+        if (tmp == MAGIC_COOKIE_DISN)
             u.ustuck->mhp = 0;
         if (DEADMONSTER(u.ustuck))
             killed(u.ustuck);
@@ -4281,9 +4298,11 @@ dobuzz(int type, int nd, xchar sx, xchar sy, int dx, int dy,
                         break; /* Out of while loop */
                     }
 
-                    if (tmp == MAGIC_COOKIE) { /* disintegration */
+                    if (tmp == MAGIC_COOKIE_DISN) { /* disintegration */
                         disintegrate_mon(mon, type, fltxt);
-                    } else if (DEADMONSTER(mon)) {
+                    } else if (tmp == MAGIC_COOKIE_STON) { /* petrification */
+                        minstapetrify(mon, (type >= 0));
+                    }else if (DEADMONSTER(mon)) {
                         if (type < 0) {
                             /* mon has just been killed by another monster */
                             monkilled(mon, fltxt, AD_RBRE);

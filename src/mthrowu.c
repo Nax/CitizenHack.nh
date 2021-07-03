@@ -18,7 +18,7 @@ static int m_lined_up(struct monst *, struct monst *);
  */
 static NEARDATA const char *breathwep[] = {
     "fragments", "fire", "frost", "sleep gas", "a disintegration blast",
-    "lightning", "poison gas", "acid", "strange breath #8",
+    "lightning", "poison gas", "acid", "a petrification blast",
     "strange breath #9"
 };
 
@@ -809,8 +809,8 @@ spitmm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
 int
 breamm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
 {
-    /* if new breath types are added, change AD_ACID to max type */
-    int typ = (mattk->adtyp == AD_RBRE) ? rnd(AD_ACID) : mattk->adtyp ;
+    /* if new breath types are added, change AD_STON to max type */
+    int typ = (mattk->adtyp == AD_RBRE) ? rnd(AD_STON) : mattk->adtyp ;
 
     if (m_lined_up(mtarg, mtmp)) {
         if (mtmp->mcan) {
@@ -831,7 +831,7 @@ breamm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
 	    return MM_HIT;
 
         if (!mtmp->mspec_used && rn2(3)) {
-            if ((typ >= AD_MAGM) && (typ <= AD_ACID)) {
+            if ((typ >= AD_MAGM) && (typ <= AD_STON)) {
                 boolean utarget = (mtarg == &g.youmonst);
                 if (canseemon(mtmp))
                     pline("%s breathes %s!", Monnam(mtmp), breathwep[typ - 1]);
