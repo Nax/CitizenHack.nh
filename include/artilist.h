@@ -171,9 +171,13 @@ static NEARDATA struct artifact artilist[] = {
       0, 0, PHYS(2, 8), NO_DFNS, NO_CARY, 0, A_LAWFUL, PM_KNIGHT, NON_PM,
       3000L, NO_COLOR),
     
-    A("Aegis", GOLD_SHIELD, (SPFX_RESTR),
+    A("The Aegis", GOLD_SHIELD, SPFX_RESTR,
       0, 0, NO_ATTK, DFNS(AD_STON), NO_CARY, 0, A_NONE, NON_PM, NON_PM,
       5000L, NO_COLOR),
+    
+    A("The Boots of Ubiquity", SPEED_BOOTS, SPFX_RESTR,
+      0, 0, NO_ATTK, NO_DFNS, NO_CARY,
+      LEV_TELE, A_NEUTRAL, NON_PM, NON_PM, 2000L, NO_COLOR),
 
     /*
      *      The artifacts for the quest dungeon, all self-willed.
