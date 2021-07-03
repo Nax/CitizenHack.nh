@@ -2802,10 +2802,10 @@ upgrade_object(struct obj* obj, int buc)
     }
 
     Your("%s warps %s and turn into something else!", xname(obj), buc < 0 ? "maliciously" : "strangely");
-    obj->otyp = candidates[rn2(candidate_count)];
-    obj->oclass = objects[obj->otyp].oc_class;
-    obj->owt = objects[obj->otyp].oc_weight;
+
+    obj = poly_obj(obj, candidates[rn2(candidate_count)]);
     prinv((const char*)0, obj, 0L);
+    
     return TRUE;
 }
 

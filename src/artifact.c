@@ -1602,6 +1602,12 @@ arti_invoke(struct obj *obj)
             nhUse(otmp);
             break;
         }
+        case PETRIFY:
+            if (!getdir((void*)0))
+                obj->age = 0;
+            else
+                buzz((int) (20 + AD_STON - 1), 0, u.ux, u.uy, u.dx, u.dy);
+            break;
         }
     } else {
         long eprop = (u.uprops[oart->inv_prop].extrinsic ^= W_ARTI),

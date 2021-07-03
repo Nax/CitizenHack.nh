@@ -1642,6 +1642,19 @@ poly_obj(struct obj *obj, int id)
             otmp->quan = 1L;
             otmp->cursed = FALSE;
         }
+
+        /* turn Medusa's corpse into the Aegis */
+        if (obj->corpsenm == PM_MEDUSA) {
+            otmp->otyp = GOLD_SHIELD;
+            otmp->oclass = ARMOR_CLASS;
+            otmp->spe = 0;
+            otmp->oeroded = 0;
+            otmp->oerodeproof = FALSE;
+            otmp->quan = 1L;
+            otmp->cursed = FALSE;
+
+            otmp = oname(otmp, artiname(ART_AEGIS));
+        }
     }
 
     /* no box contents --KAA */

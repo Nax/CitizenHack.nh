@@ -167,12 +167,12 @@ static NEARDATA struct artifact artilist[] = {
       NO_ATTK, NO_DFNS, NO_CARY, 0, A_NONE, NON_PM, NON_PM, 7500L,
       NO_COLOR),
 
-    A("Clarent", SHORT_SWORD, (SPFX_RESTR | SPFX_INTEL | SPFX_LUCK),
+    A("Clarent", SHORT_SWORD, (SPFX_RESTR | SPFX_LUCK),
       0, 0, PHYS(2, 8), NO_DFNS, NO_CARY, 0, A_LAWFUL, PM_KNIGHT, NON_PM,
       3000L, NO_COLOR),
     
     A("The Aegis", GOLD_SHIELD, SPFX_RESTR,
-      0, 0, NO_ATTK, DFNS(AD_STON), NO_CARY, 0, A_NONE, NON_PM, NON_PM,
+      0, 0, NO_ATTK, DFNS(AD_STON), NO_CARY, PETRIFY, A_NONE, NON_PM, NON_PM,
       5000L, NO_COLOR),
     
     A("The Boots of Ubiquity", SPEED_BOOTS, SPFX_RESTR,
