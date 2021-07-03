@@ -179,6 +179,10 @@ static NEARDATA struct artifact artilist[] = {
       0, 0, NO_ATTK, NO_DFNS, NO_CARY,
       LEV_TELE, A_NEUTRAL, NON_PM, NON_PM, 2000L, NO_COLOR),
 
+    A("The Ankh", AMULET_OF_LIFE_SAVING, SPFX_RESTR,
+      0, 0, NO_ATTK, NO_DFNS, NO_CARY,
+      0, A_NEUTRAL, NON_PM, NON_PM, 4000L, HI_GOLD),
+
     /*
      *      The artifacts for the quest dungeon, all self-willed.
      */

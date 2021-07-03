@@ -943,6 +943,8 @@ mksobj(int otyp, boolean init, boolean artif)
                 curse(otmp);
             } else
                 blessorcurse(otmp, 10);
+            if (artif && !rn2(20))
+                otmp = mk_artifact(otmp, (aligntyp) A_NONE);
             break;
         case VENOM_CLASS:
         case CHAIN_CLASS:

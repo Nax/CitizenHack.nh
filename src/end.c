@@ -1204,13 +1204,27 @@ done(int how)
     if (Lifesaved && (how <= GENOCIDED)) {
         pline("But wait...");
         makeknown(AMULET_OF_LIFE_SAVING);
-        Your("medallion %s!", !Blind ? "begins to glow" : "feels warm");
+        Your("%s %s!", uamul->oartifact ? "Ankh" : "medallion", !Blind ? "begins to glow" : "feels warm");
         if (how == CHOKING)
             You("vomit ...");
         You_feel("much better!");
-        pline_The("medallion crumbles to dust!");
-        if (uamul)
-            useup(uamul);
+        if (!uamul || !uamul->oartifact || !uamul->blessed)
+        {
+            pline_The("%s crumbles to dust!", uamul->oartifact ? "Ankh" : "medallion");
+            if (uamul)
+                useup(uamul);
+        }
+        else
+        {
+            pline_The("Ankh %s.", !Blind ? "glows with a black aura" : "feels colder");
+            curse(uamul);
+
+            adjattrib(A_STR, -1, TRUE);
+            adjattrib(A_DEX, -1, TRUE);
+            adjattrib(A_WIS, -1, TRUE);
+            adjattrib(A_INT, -1, TRUE);
+            adjattrib(A_CHA, -1, TRUE);
+        }
 
         (void) adjattrib(A_CON, -1, TRUE);
         savelife(how);
