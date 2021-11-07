@@ -1,4 +1,4 @@
-/* NetHack 3.7	zap.c	$NHDT-Date: 1620413928 2021/05/07 18:58:48 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.360 $ */
+/* NetHack 3.7	zap.c	$NHDT-Date: 1629817679 2021/08/24 15:07:59 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.372 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2013. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -12,6 +12,7 @@
  */
 #define MAGIC_COOKIE 1000
 
+static boolean zombie_can_dig(xchar x, xchar y);
 static void polyuse(struct obj *, int, int);
 static void create_polymon(struct obj *, int);
 static int stone_to_flesh_obj(struct obj *);
@@ -22,6 +23,7 @@ static boolean zap_steed(struct obj *);
 static void skiprange(int, int *, int *);
 static int zap_hit(int, int);
 static void disintegrate_mon(struct monst *, int, const char *);
+static int adtyp_to_prop(int);
 static void backfire(struct obj *);
 static int zap_ok(struct obj *);
 static void boxlock_invent(struct obj *);
@@ -742,6 +744,22 @@ get_container_location(struct obj *obj, int *loc, int *container_nesting)
     return (struct monst *) 0;
 }
 
+/* can zombie dig the location at x,y */
+static boolean
+zombie_can_dig(xchar x, xchar y)
+{
+    if (isok(x,y)) {
+        schar typ = levl[x][y].typ;
+        struct trap *ttmp;
+
+        if ((ttmp = t_at(x, y)) != 0)
+            return FALSE;
+        if (typ == ROOM || typ == CORR || typ == GRAVE)
+            return TRUE;
+    }
+    return FALSE;
+}
+
 /*
  * Attempt to revive the given corpse, return the revived monster if
  * successful.  Note: this does NOT use up the corpse if it fails.
@@ -759,6 +777,7 @@ revive(struct obj *corpse, boolean by_hero)
     boolean one_of;
     long mmflags = NO_MINVENT | MM_NOWAIT;
     int montype, cgend, container_nesting = 0;
+    boolean is_zomb = (mons[corpse->corpsenm].mlet == S_ZOMBIE);
 
     if (corpse->otyp != CORPSE) {
         impossible("Attempting to revive %s?", xname(corpse));
@@ -767,9 +786,11 @@ revive(struct obj *corpse, boolean by_hero)
 
     x = y = 0;
     if (corpse->where != OBJ_CONTAINED) {
-        /* only for invent, minvent, or floor */
+        int locflags = is_zomb ? BURIED_TOO : 0;
+
+        /* only for invent, minvent, or floor, or if zombie, buried */
         container = 0;
-        (void) get_obj_location(corpse, &x, &y, 0);
+        (void) get_obj_location(corpse, &x, &y, locflags);
     } else {
         /* deal with corpses in [possibly nested] containers */
         struct monst *carrier;
@@ -802,6 +823,10 @@ revive(struct obj *corpse, boolean by_hero)
         || (container && (container->olocked || container_nesting > 2
                           || container->otyp == STATUE
                           || (container->otyp == BAG_OF_HOLDING && rn2(40)))))
+        return (struct monst *) 0;
+
+    /* buried zombie cannot dig itself out, do not revive */
+    if (is_zomb && corpse->where == OBJ_BURIED && !zombie_can_dig(x, y))
         return (struct monst *) 0;
 
     /* record the object's location now that we're sure where it is */
@@ -977,6 +1002,13 @@ revive(struct obj *corpse, boolean by_hero)
         obj_extract_self(corpse);
         obfree(corpse, (struct obj *) 0);
         break;
+    case OBJ_BURIED:
+        if (is_zomb) {
+            obj_extract_self(corpse);
+            obfree(corpse, (struct obj *) 0);
+            break;
+        }
+        /*FALLTHRU*/
     default:
         panic("revive");
     }
@@ -2076,7 +2108,7 @@ bhito(struct obj *obj, struct obj *otmp)
                 int ooy = obj->oy;
                 if (g.context.mon_moving
                         ? !breaks(obj, obj->ox, obj->oy)
-                        : !hero_breaks(obj, obj->ox, obj->oy, FALSE))
+                        : !hero_breaks(obj, obj->ox, obj->oy, 0))
                     maybelearnit = FALSE; /* nothing broke */
                 else
                     newsym_force(oox,ooy);
@@ -2243,7 +2275,7 @@ bhitpile(
 int
 zappable(struct obj *wand)
 {
-    if (wand->spe < 0 || (wand->spe == 0 && rn2(121)))
+    if (wand->spe < 0 || (wand->spe == 0 && rn2(WAND_WREST_CHANCE)))
         return 0;
     if (wand->spe == 0)
         You("wrest one last charge from the worn-out wand.");
@@ -2898,19 +2930,8 @@ cancel_monst(struct monst *mdef, struct obj *obj, boolean youattack,
         }
     } else {
         mdef->mcan = 1;
-        /* force shapeshifter into its base form */
-        if (M_AP_TYPE(mdef) != M_AP_NOTHING)
-            seemimic(mdef);
-        /* [not 'else if'; chameleon might have been hiding as a mimic] */
-        if (mdef->cham >= LOW_PM) {
-            /* note: newcham() uncancels shapechangers (resets m->mcan
-               to 0), but only for shapechangers whose m->cham is already
-               NON_PM and we just verified that it's LOW_PM or higher */
-            newcham(mdef, &mons[mdef->cham], FALSE, FALSE);
-            mdef->cham = NON_PM; /* cancelled shapeshifter can't shift */
-        }
-        if (is_were(mdef->data) && !is_human(mdef->data))
-            were_change(mdef);
+        /* force shapeshifter into its base form or mimic to unhide */
+        normal_shape(mdef);
 
         if (mdef->data == &mons[PM_CLAY_GOLEM]) {
             if (canseemon(mdef))
@@ -3945,9 +3966,13 @@ zhitu(int type, int nd, const char *fltxt, xchar sx, xchar sy)
         break;
     case ZT_DEATH:
         if (abstyp == ZT_BREATH(ZT_DEATH)) {
+            boolean disn_prot = u_adtyp_resistance_obj(AD_DISN) && rn2(100);
+
             if (Disint_resistance) {
                 You("are not disintegrated.");
                 monstseesu(M_SEEN_DISINT);
+                break;
+            } else if (disn_prot) {
                 break;
             } else if (uarms) {
                 /* destroy shield; other possessions are safe */
@@ -4441,23 +4466,18 @@ melt_ice(xchar x, xchar y, const char *msg)
     if (lev->typ == DRAWBRIDGE_UP || lev->typ == DRAWBRIDGE_DOWN) {
         lev->drawbridgemask &= ~DB_ICE; /* revert to DB_MOAT */
     } else { /* lev->typ == ICE */
-#ifdef STUPID
-        if (lev->icedpool == ICED_POOL)
-            lev->typ = POOL;
-        else
-            lev->typ = MOAT;
-#else
         lev->typ = (lev->icedpool == ICED_POOL ? POOL : MOAT);
-#endif
         lev->icedpool = 0;
     }
     spot_stop_timers(x, y, MELT_ICE_AWAY); /* no more ice to melt away */
+    if (t_at(x, y))
+        trap_ice_effects(x, y, TRUE); /* TRUE because ice_is_melting */
     obj_ice_effects(x, y, FALSE);
     unearth_objs(x, y);
     if (Underwater)
         vision_recalc(1);
     newsym(x, y);
-    if (cansee(x, y))
+    if (cansee(x, y) || (x == u.ux && y == u.uy))
         Norep("%s", msg);
     if ((otmp = sobj_at(BOULDER, x, y)) != 0) {
         if (cansee(x, y))
@@ -4574,7 +4594,7 @@ zap_over_floor(xchar x, xchar y, int type, boolean *shopdamage,
             /* don't create steam clouds on Plane of Water; air bubble
                movement and gas regions don't understand each other */
             if (!on_water_level)
-                create_gas_cloud(x, y, rnd(3), 0); /* radius 1..3, no damg */
+                create_gas_cloud(x, y, rnd(5), 0); /* 1..5, no damg */
 
             if (lev->typ != POOL) { /* MOAT or DRAWBRIDGE_UP or WATER */
                 if (on_water_level)
@@ -4592,10 +4612,19 @@ zap_over_floor(xchar x, xchar y, int type, boolean *shopdamage,
             }
             if (msgtxt)
                 Norep("%s", msgtxt);
-            if (lev->typ == ROOM)
+            if (lev->typ == ROOM) {
+                if ((mon = m_at(x, y)) != 0) {
+                    /* probably ought to do some hefty damage to any
+                       creature caught in boiling water;
+                       at a minimum, eels are forced out of hiding */
+                    if (is_swimmer(mon->data) && mon->mundetected) {
+                        mon->mundetected = 0;
+                    }
+                }
                 newsym(x, y);
+            }
         } else if (IS_FOUNTAIN(lev->typ)) {
-            create_gas_cloud(x, y, rnd(2), 0); /* radius 1..2, no damage */
+            create_gas_cloud(x, y, rnd(3), 0); /* 1..3, no damage */
             if (see_it)
                 pline("Steam billows from the fountain.");
             rangemod -= 1;
@@ -4841,7 +4870,7 @@ zap_over_floor(xchar x, xchar y, int type, boolean *shopdamage,
     return rangemod;
 }
 
-/* fractured by pick-axe or wand of striking */
+/* fractured by pick-axe or wand of striking or by vault guard */
 void
 fracture_rock(struct obj *obj) /* no texts here! */
 {
@@ -4911,6 +4940,36 @@ break_statue(struct obj *obj)
     return TRUE;
 }
 
+/* convert attack damage AD_foo to property resistance */
+static int
+adtyp_to_prop(int dmgtyp)
+{
+    switch (dmgtyp) {
+    case AD_COLD: return COLD_RES;
+    case AD_FIRE: return FIRE_RES;
+    case AD_ELEC: return SHOCK_RES;
+    case AD_ACID: return ACID_RES;
+    case AD_DISN: return DISINT_RES;
+    default: return 0; /* prop_types start at 1 */
+    }
+}
+
+/* is hero wearing or wielding an object with resistance
+   to attack damage type */
+boolean
+u_adtyp_resistance_obj(int dmgtyp)
+{
+    int prop = adtyp_to_prop(dmgtyp);
+
+    if (!prop)
+        return FALSE;
+
+    if ((u.uprops[prop].extrinsic & (W_ARMOR | W_ACCESSORY | W_WEP)) != 0)
+        return TRUE;
+
+    return FALSE;
+}
+
 /*
  * destroy_strings[dindx][0:singular,1:plural,2:killer_reason]
  *      [0] freezing potion
@@ -4949,6 +5008,10 @@ destroy_one_item(struct obj *obj, int osym, int dmgtyp)
     /* lint suppression */
     dmg = dindx = 0;
     quan = 0L;
+
+    /* external worn item protects inventory? */
+    if (u_adtyp_resistance_obj(dmgtyp) && rn2(100))
+        return;
 
     switch (dmgtyp) {
     case AD_COLD:
@@ -5002,7 +5065,8 @@ destroy_one_item(struct obj *obj, int osym, int dmgtyp)
         quan = obj->quan;
         switch (osym) {
         case RING_CLASS:
-            if (obj->otyp == RIN_SHOCK_RESISTANCE) {
+            if (((obj->owornmask & W_RING) && uarmg && !is_metallic(uarmg))
+                || obj->otyp == RIN_SHOCK_RESISTANCE) {
                 skip++;
                 break;
             }

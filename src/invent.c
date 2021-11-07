@@ -1,4 +1,4 @@
-/* NetHack 3.7	invent.c	$NHDT-Date: 1620861205 2021/05/12 23:13:25 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.331 $ */
+/* NetHack 3.7	invent.c	$NHDT-Date: 1629409876 2021/08/19 21:51:16 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.339 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -31,7 +31,7 @@ static boolean this_type_only(struct obj *);
 static void dounpaid(void);
 static struct obj *find_unpaid(struct obj *, struct obj **);
 static void menu_identify(int);
-static boolean tool_in_use(struct obj *);
+static boolean tool_being_used(struct obj *);
 static int adjust_ok(struct obj *);
 static int adjust_gold_ok(struct obj *);
 static char obj_to_let(struct obj *);
@@ -719,6 +719,9 @@ merged(struct obj **potmp, struct obj **pobj)
             otmp = *potmp = oname(otmp, ONAME(obj));
         obj_extract_self(obj);
 
+        if (obj->pickup_prev && otmp->where == OBJ_INVENT)
+            otmp->pickup_prev = 1;
+
         /* really should merge the timeouts */
         if (obj->lamplit)
             obj_merge_light_sources(obj, otmp);
@@ -877,6 +880,11 @@ addinv_core0(struct obj *obj, struct obj *other_obj,
     obj_was_thrown = obj->was_thrown;
     obj->was_thrown = 0;       /* not meaningful for invent */
 
+    if (g.loot_reset_justpicked) {
+        g.loot_reset_justpicked = FALSE;
+        reset_justpicked(g.invent);
+    }
+
     addinv_core1(obj);
 
     /* for addinv_before(); if something has been removed and is now being
@@ -924,15 +932,20 @@ addinv_core0(struct obj *obj, struct obj *other_obj,
     obj->where = OBJ_INVENT;
 
     /* fill empty quiver if obj was thrown */
-    if (flags.pickup_thrown && !uquiver && obj_was_thrown
+    if (obj_was_thrown && flags.pickup_thrown && !uquiver
         /* if Mjollnir is thrown and fails to return, we want to
-           auto-pick it when we move to its spot, but not into quiver;
-           aklyses behave like Mjollnir when thrown while wielded, but
-           we lack sufficient information here make them exceptions */
-        && obj->oartifact != ART_MJOLLNIR
+           auto-pick it when we move to its spot, but not into quiver
+           because it needs to be wielded to be re-thrown;
+           aklys likewise because player using 'f' to throw it might
+           not notice that it isn't wielded until it fails to return
+           several times; we never auto-wield, just omit from quiver
+           so that player will be prompted for what to throw and
+           possibly realize that re-wielding is necessary */
+        && obj->oartifact != ART_MJOLLNIR && obj->otyp != AKLYS
         && (throwing_weapon(obj) || is_ammo(obj)))
         setuqwep(obj);
  added:
+    obj->pickup_prev = 1;
     addinv_core2(obj);
     carry_obj_effects(obj); /* carrying affects the obj */
     if (update_perm_invent)
@@ -1078,6 +1091,7 @@ useupall(struct obj *obj)
     obfree(obj, (struct obj *) 0); /* deletes contents also */
 }
 
+/* an item in inventory is going away after being used */
 void
 useup(struct obj *obj)
 {
@@ -1095,8 +1109,9 @@ useup(struct obj *obj)
 
 /* use one charge from an item and possibly incur shop debt for it */
 void
-consume_obj_charge(struct obj *obj,
-                   boolean maybe_unpaid) /* false if caller handles shop billing */
+consume_obj_charge(
+    struct obj *obj,
+    boolean maybe_unpaid) /* false if caller handles shop billing */
 {
     if (maybe_unpaid)
         check_unpaid(obj);
@@ -1158,10 +1173,12 @@ void
 freeinv(struct obj *obj)
 {
     extract_nobj(obj, &g.invent);
+    obj->pickup_prev = 0;
     freeinv_core(obj);
     update_inventory();
 }
 
+/* drawbridge is destroying all objects at <x,y> */
 void
 delallobj(int x, int y)
 {
@@ -1193,6 +1210,7 @@ delobj(struct obj *obj)
          * are indestructible via drawbridges, and exploding
          * chests, and golem creation, and ...
          */
+        obj->in_use = 0; /* in case caller has set this to 1 */
         return;
     }
     update_map = (obj->where == OBJ_FLOOR);
@@ -1861,7 +1879,7 @@ ggetobj(const char *word, int (*fn)(OBJ_P), int mx,
     boolean takeoff, ident, allflag, m_seen;
     int itemcount;
     int oletct, iletct, unpaid, oc_of_sym;
-    char sym, *ip, olets[MAXOCLASSES + 5], ilets[MAXOCLASSES + 10];
+    char sym, *ip, olets[MAXOCLASSES + 6], ilets[MAXOCLASSES + 11];
     char extra_removeables[3 + 1]; /* uwep,uswapwep,uquiver */
     char buf[BUFSZ] = DUMMY, qbuf[QBUFSZ];
 
@@ -1900,6 +1918,8 @@ ggetobj(const char *word, int (*fn)(OBJ_P), int mx,
             ilets[iletct++] = 'C';
         if (count_buc(g.invent, BUC_UNKNOWN, ofilter))
             ilets[iletct++] = 'X';
+        if (count_justpicked(g.invent))
+            ilets[iletct++] = 'P';
         ilets[iletct++] = 'a';
     }
     ilets[iletct++] = 'i';
@@ -1980,8 +2000,8 @@ ggetobj(const char *word, int (*fn)(OBJ_P), int mx,
         } else if (sym == 'u') {
             add_valid_menu_class('u');
             ckfn = ckunpaid;
-        } else if (index("BUCX", sym)) {
-            add_valid_menu_class(sym); /* 'B','U','C',or 'X' */
+        } else if (index("BUCXP", sym)) {
+            add_valid_menu_class(sym); /* 'B','U','C','X', or 'P' */
             ckfn = ckvalidcat;
         } else if (sym == 'm') {
             m_seen = TRUE;
@@ -2326,12 +2346,12 @@ learn_unseen_invent(void)
 
 /* persistent inventory window is maintained by interface code;
    'update_inventory' used to be a macro for
-   (*windowprocs.win_update_inventory) but the restore hackery
-   was getting out of hand; this is now a central call point */
+   (*windowprocs.win_update_inventory) but the restore hackery to suppress
+   screen updates was getting out of hand; this is now a central call point */
 void
 update_inventory(void)
 {
-    if (g.program_state.saving || g.program_state.restoring)
+    if (suppress_map_output()) /* despite name, used for perm_invent too */
         return;
 
     /*
@@ -2357,8 +2377,6 @@ doperminv(void)
      * (typically by typing <return> or <esc> but that's up to interface).
      */
 
-    if (iflags.debug_fuzzer)
-        return 0;
 #if 0
     /* [currently this would redraw the persistent inventory window
        whether that's needed or not, so also reset any previous
@@ -2529,7 +2547,7 @@ display_pickinv(
 {
     static const char not_carrying_anything[] = "Not carrying anything";
     struct obj *otmp, wizid_fakeobj;
-    char ilet, ret;
+    char ilet, ret, *formattedobj;
     const char *invlet = flags.inv_order;
     int n, classcount;
     winid win;                        /* windows being used */
@@ -2691,9 +2709,14 @@ display_pickinv(
                 any.a_char = ilet;
             tmpglyph = obj_to_glyph(otmp, rn2_on_display_rng);
             map_glyphinfo(0, 0, tmpglyph, 0U, &tmpglyphinfo);
+            formattedobj = doname(otmp);
             add_menu(win, &tmpglyphinfo, &any, ilet,
                      wizid ? def_oc_syms[(int) otmp->oclass].sym : 0,
-                     ATR_NONE, doname(otmp), MENU_ITEMFLAGS_NONE);
+                     ATR_NONE, formattedobj, MENU_ITEMFLAGS_NONE);
+            /* doname() uses a static pool of obuf[] output buffers and
+               we don't want inventory display to overwrite all of them,
+               so when we've used one we release it for re-use */
+            maybereleaseobuf(formattedobj);
             gotsomething = TRUE;
         }
     }
@@ -2905,7 +2928,7 @@ count_buc(struct obj *list, int type, boolean (*filterfunc)(OBJ_P))
    rather than looking for a specific type */
 void
 tally_BUCX(struct obj *list, boolean by_nexthere,
-           int *bcp, int *ucp, int *ccp, int *xcp, int *ocp)
+           int *bcp, int *ucp, int *ccp, int *xcp, int *ocp, int *jcp)
 {
     /* Future extensions:
      *  Skip current_container when list is invent, uchain when
@@ -2926,6 +2949,8 @@ tally_BUCX(struct obj *list, boolean by_nexthere,
                 ++(*ucp);
             continue;
         }
+        if (list->pickup_prev)
+            ++(*jcp);
         /* ordinary items */
         if (!list->bknown)
             ++(*xcp);
@@ -3098,6 +3123,9 @@ this_type_only(struct obj *obj)
         case 'X':
             res = !obj->bknown;
             break;
+        case 'P':
+            res = obj->pickup_prev;
+            break;
         default:
             break; /* use 'res' as-is */
         }
@@ -3113,7 +3141,7 @@ dotypeinv(void)
     int n, i = 0;
     char *extra_types, types[BUFSZ];
     int class_count, oclass, unpaid_count, itemcount;
-    int bcnt, ccnt, ucnt, xcnt, ocnt;
+    int bcnt, ccnt, ucnt, xcnt, ocnt, jcnt;
     boolean billx = *u.ushops && doinvbill(0);
     menu_item *pick_list;
     boolean traditional = TRUE;
@@ -3124,7 +3152,7 @@ dotypeinv(void)
         return 0;
     }
     unpaid_count = count_unpaid(g.invent);
-    tally_BUCX(g.invent, FALSE, &bcnt, &ucnt, &ccnt, &xcnt, &ocnt);
+    tally_BUCX(g.invent, FALSE, &bcnt, &ucnt, &ccnt, &xcnt, &ocnt, &jcnt);
 
     if (flags.menu_style != MENU_TRADITIONAL) {
         if (flags.menu_style == MENU_FULL
@@ -3141,6 +3169,8 @@ dotypeinv(void)
                 i |= BUC_CURSED;
             if (xcnt)
                 i |= BUC_UNKNOWN;
+            if (jcnt)
+                i |= JUSTPICKED;
             i |= INCLUDE_VENOM;
             n = query_category(prompt, g.invent, i, &pick_list, PICK_ONE);
             if (!n)
@@ -3169,6 +3199,8 @@ dotypeinv(void)
             types[class_count++] = 'C';
         if (xcnt)
             types[class_count++] = 'X';
+        if (jcnt)
+            types[class_count++] = 'P';
         types[class_count] = '\0';
         /* add everything not already included; user won't see these */
         extra_types = eos(types);
@@ -3225,7 +3257,7 @@ dotypeinv(void)
         return 0;
     }
     if (traditional) {
-        if (index("BUCX", c))
+        if (index("BUCXP", c))
             oclass = c; /* not a class but understood by this_type_only() */
         else
             oclass = def_char_to_objclass(c); /* change to object class */
@@ -3249,6 +3281,9 @@ dotypeinv(void)
             case 'X':
                 after = " whose blessed/uncursed/cursed status is unknown";
                 break; /* better phrasing is desirable */
+            case 'P':
+                after = " you just picked up";
+                break;
             default:
                 /* 'c' is an object class, because we've already handled
                    all the non-class letters which were put into 'types[]';
@@ -3281,7 +3316,7 @@ dfeature_at(int x, int y, char *buf)
     int ltyp = lev->typ, cmap = -1;
     const char *dfeature = 0;
     static char altbuf[BUFSZ];
-    stairway *stway = stairway_at(x,y);
+    stairway *stway = stairway_at(x, y);
 
     if (IS_DOOR(ltyp)) {
         switch (lev->doormask) {
@@ -3322,15 +3357,9 @@ dfeature_at(int x, int y, char *buf)
                 a_gname(),
                 align_str(Amask2align(lev->altarmask & ~AM_SHRINE)));
         dfeature = altbuf;
-    } else if (stway && !stway->isladder && stway->up)
-        cmap = S_upstair; /* "staircase up" */
-    else if (stway && !stway->isladder && !stway->up)
-        cmap = S_dnstair; /* "staircase down" */
-    else if (stway && stway->isladder && stway->up)
-        cmap = S_upladder; /* "ladder up" */
-    else if (stway && stway->isladder && !stway->up)
-        cmap = S_dnladder; /* "ladder down" */
-    else if (ltyp == DRAWBRIDGE_DOWN)
+    } else if (stway) {
+        dfeature = stairs_description(stway, altbuf, TRUE);
+    } else if (ltyp == DRAWBRIDGE_DOWN)
         cmap = S_vodbridge; /* "lowered drawbridge" */
     else if (ltyp == DBWALL)
         cmap = S_vcdbridge; /* "raised drawbridge" */
@@ -3435,7 +3464,8 @@ look_here(int obj_cnt, /* obj_cnt > 0 implies that autopickup is in progress */
         }
         if (dfeature && !drift && !strcmp(dfeature, surface(u.ux, u.uy)))
             dfeature = 0; /* ice already identified */
-        if (!can_reach_floor(TRUE)) {
+        trap = t_at(u.ux, u.uy);
+        if (!can_reach_floor(trap && is_pit(trap->ttyp))) {
             pline("But you can't reach it!");
             return 0;
         }
@@ -3808,8 +3838,9 @@ dopramulet(void)
     return 0;
 }
 
+/* is 'obj' a tool that's in use?  can't simply check obj->owornmask */
 static boolean
-tool_in_use(struct obj *obj)
+tool_being_used(struct obj *obj)
 {
     if ((obj->owornmask & (W_TOOL | W_SADDLE)) != 0L)
         return TRUE;
@@ -3828,7 +3859,7 @@ doprtool(void)
     char lets[52 + 1];
 
     for (otmp = g.invent; otmp; otmp = otmp->nobj)
-        if (tool_in_use(otmp)) {
+        if (tool_being_used(otmp)) {
             /* we could be carrying more than 52 items; theoretically they
                might all be lit candles so avoid potential lets[] overflow */
             if (ct >= (int) sizeof lets - 1)
@@ -3853,7 +3884,7 @@ doprinuse(void)
     char lets[52 + 1];
 
     for (otmp = g.invent; otmp; otmp = otmp->nobj)
-        if (is_worn(otmp) || tool_in_use(otmp)) {
+        if (is_worn(otmp) || tool_being_used(otmp)) {
             /* we could be carrying more than 52 items; theoretically they
                might all be lit candles so avoid potential lets[] overflow */
             if (ct >= (int) sizeof lets - 1)

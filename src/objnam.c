@@ -1,4 +1,4 @@
-/* NetHack 3.7	objnam.c	$NHDT-Date: 1620348711 2021/05/07 00:51:51 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.315 $ */
+/* NetHack 3.7	objnam.c	$NHDT-Date: 1634584224 2021/10/18 19:10:24 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.336 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -27,6 +27,7 @@ struct _readobjnam_data {
     int tmp, tinv, tvariety, mgend;
     int wetness, gsize;
     int ftype;
+    boolean zombify;
     char globbuf[BUFSZ];
     char fruitbuf[BUFSZ];
 };
@@ -125,6 +126,44 @@ releaseobuf(char *bufp)
     if (bufp >= obufs[obufidx]
         && bufp < obufs[obufidx] + sizeof obufs[obufidx]) /* obufs[][BUFSZ] */
         obufidx = (obufidx - 1 + NUMOBUF) % NUMOBUF;
+}
+
+/* used by display_pickinv (invent.c, main whole-inventory routine) to
+   release each successive doname() result in order to try to avoid
+   clobbering all the obufs when 'perm_invent' is enabled and updated
+   while one or more obufs have been allocated but not released yet */
+void
+maybereleaseobuf(char *obuffer)
+{
+    releaseobuf(obuffer);
+
+    /*
+     * An example from 3.6.x where all obufs got clobbered was when a
+     * monster used a bullwhip to disarm the hero of a two-handed weapon:
+     * "The ogre lord yanks Cleaver from your corpses!"
+     |
+     | hand = body_part(HAND);
+     | if (use_plural)      // switches 'hand' from static buffer to an obuf
+     |   hand = makeplural(hand);
+      ...
+     | release_worn_item(); // triggers full inventory update for perm_invent
+      ...
+     | pline(..., hand);    // the obuf[] for "hands" was clobbered with the
+     |                      //+ partial formatting of an item from invent
+     *
+     * Another example was from writing a scroll without room in invent to
+     * hold it after being split from a stack of blank scrolls:
+     * "Oops!  food rations out of your grasp!"
+     * hold_another_object() was passed 'the(aobjnam(newscroll, "slip"))'
+     * as an argument and that should have yielded
+     * "Oops!  The scroll of <foo> slips out of your grasp!"
+     * but attempting to add the item to inventory triggered update for
+     * perm_invent and the result from 'the(...)' was clobbered by partial
+     * formatting of some inventory item.  [It happened in a shop and the
+     * shk claimed ownership of the new scroll, but that wasn't relevant.]
+     * That got fixed earlier, by delaying update_inventory() during
+     * hold_another_object() rather than by avoiding using all the obufs.
+     */
 }
 
 char *
@@ -433,6 +472,7 @@ xname_flags(
     unsigned cxn_flags) /* bitmask of CXN_xxx values */
 {
     register char *buf;
+    char *obufp;
     register int typ = obj->otyp;
     register struct objclass *ocl = &objects[typ];
     int nn = ocl->oc_name_known, omndx = obj->corpsenm;
@@ -573,10 +613,18 @@ xname_flags(
             } else {
                 Strcpy(buf, f->fname);
                 if (pluralize) {
-                    /* ick; already pluralized fruit names
-                       are allowed--we want to try to avoid
-                       adding a redundant plural suffix */
-                    Strcpy(buf, makeplural(makesingular(buf)));
+                    /* ick: already pluralized fruit names are allowed--we
+                       want to try to avoid adding a redundant plural suffix;
+                       double ick: makesingular() and makeplural() each use
+                       and return an obuf but we don't want any particular
+                       xname() call to consume more than one of those
+                       [note: makeXXX() will be fully evaluated and done with
+                       'buf' before strcpy() touches its output buffer] */
+                    Strcpy(buf, obufp = makesingular(buf));
+                    releaseobuf(obufp);
+                    Strcpy(buf, obufp = makeplural(buf));
+                    releaseobuf(obufp);
+
                     pluralize = FALSE;
                 }
             }
@@ -616,8 +664,17 @@ xname_flags(
                       : the_unique_pm(&mons[omndx]) ? "the "
                         : just_an(anbuf, statue_pmname),
                     statue_pmname);
-        } else
-            Strcpy(buf, actualn);
+        } else {
+            /* sometimes caller wants "next boulder" rather than just
+               "boulder" (when pushing against a pile of more than one);
+               originally we just tested for non-0 but checking for 1 is
+               more robust because the default value for that overloaded
+               field (obj->corpsenm) is NON_PM (-1) rather than 0 */
+            if (typ == BOULDER && obj->next_boulder == 1)
+                Strcat(strcpy(buf, "next "), actualn);
+            else
+                Strcpy(buf, actualn);
+        }
         break;
     case BALL_CLASS:
         Sprintf(buf, "%sheavy iron ball",
@@ -728,8 +785,11 @@ xname_flags(
         Sprintf(buf, "glorkum %d %d %d", obj->oclass, typ, obj->spe);
         break;
     }
-    if (pluralize)
-        Strcpy(buf, makeplural(buf));
+    if (pluralize) {
+        /* (see fruit name handling in case FOOD_CLASS above) */
+        Strcpy(buf, obufp = makeplural(buf));
+        releaseobuf(obufp);
+    }
 
     /* maybe give some extra information which isn't shown during play */
     if (g.program_state.gameover) {
@@ -749,6 +809,10 @@ xname_flags(
             lbl = candy_wrapper_text(obj);
             if (*lbl)
                 Sprintf(eos(buf), " labeled \"%s\"", lbl);
+            break;
+        case HAWAIIAN_SHIRT:
+            Sprintf(eos(buf), " with %s motif",
+                    an(hawaiian_motif(obj, tmpbuf)));
             break;
         default:
             break;
@@ -773,7 +837,7 @@ xname_flags(
      potion of object detection -- if discovered
  */
 static char *
-minimal_xname(struct obj* obj)
+minimal_xname(struct obj *obj)
 {
     char *bufp;
     struct obj bareobj;
@@ -800,12 +864,15 @@ minimal_xname(struct obj* obj)
                         /* default is "on" for types which don't use it */
                         : !objects[otyp].oc_uses_known;
     bareobj.quan = 1L;         /* don't want plural */
-    bareobj.corpsenm = NON_PM; /* suppress statue and figurine details */
+    /* for a boulder, leave corpsenm as 0; non-zero produces "next boulder" */
+    if (otyp != BOULDER)
+        bareobj.corpsenm = NON_PM; /* suppress statue and figurine details */
     /* but suppressing fruit details leads to "bad fruit #0"
        [perhaps we should force "slime mold" rather than use xname?] */
     if (obj->otyp == SLIME_MOLD)
         bareobj.spe = obj->spe;
 
+    /* bufp will be an obuf[] and a pointer into middle of that is viable */
     bufp = distant_name(&bareobj, xname); /* xname(&bareobj) */
     if (!strncmp(bufp, "uncursed ", 9))
         bufp += 9; /* Role_if(PM_CLERIC) */
@@ -1089,6 +1156,9 @@ doname_base(struct obj* obj, unsigned int doname_flags)
             if (obj == uarmg && Glib) /* just appended "(something)",
                                        * change to "(something; slippery)" */
                 Strcpy(rindex(bp, ')'), "; slippery)");
+            else if (!Blind && obj->lamplit && artifact_light(obj))
+                Sprintf(rindex(bp, ')'), ", %s lit)",
+                        arti_light_description(obj));
         }
         /*FALLTHRU*/
     case WEAPON_CLASS:
@@ -1224,13 +1294,17 @@ doname_base(struct obj* obj, unsigned int doname_flags)
                     /* avoid "tethered wielded in right hand" for twoweapon */
                     (twoweap_primary && !tethered) ? "wielded" : "weapon",
                     twoweap_primary ? "right " : "", hand_s);
-
-            if (g.warn_obj_cnt && obj == uwep
-                && (EWarn_of_mon & W_WEP) != 0L) {
-                if (!Blind) /* we know bp[] ends with ')'; overwrite that */
+            if (!Blind) {
+                if (g.warn_obj_cnt && obj == uwep
+                    && (EWarn_of_mon & W_WEP) != 0L)
+                    /* we know bp[] ends with ')'; overwrite that */
                     Sprintf(eos(bp) - 1, ", %s %s)",
                             glow_verb(g.warn_obj_cnt, TRUE),
                             glow_color(obj->oartifact));
+                else if (obj->lamplit && artifact_light(obj))
+                    /* as above, overwrite known closing paren */
+                    Sprintf(eos(bp) - 1, ", %s lit)",
+                            arti_light_description(obj));
             }
         }
     }
@@ -1474,11 +1548,15 @@ corpse_xname(
         }
     }
 
-    /* it's safe to overwrite our nambuf after an() has copied
-       its old value into another buffer */
-    if (any_prefix)
-        Strcpy(nambuf, an(nambuf));
+    /* it's safe to overwrite our nambuf[] after an() has copied its
+       old value into another buffer; and once _that_ has been copied,
+       the obuf[] returned by an() can be made available for re-use */
+    if (any_prefix) {
+        char *obufp;
 
+        Strcpy(nambuf, obufp = an(nambuf));
+        releaseobuf(obufp);
+    }
     return nambuf;
 }
 
@@ -1681,10 +1759,16 @@ just_an(char *outbuf, const char *str)
                || !strcmpi(str, "iron bars") || !strcmpi(str, "ice")) {
         ; /* no article */
     } else {
-        if ((index(vowels, c0) && strncmpi(str, "one-", 4)
-             && strncmpi(str, "eucalyptus", 10) && strncmpi(str, "unicorn", 7)
-             && strncmpi(str, "uranium", 7) && strncmpi(str, "useful", 6))
-            || (index("x", c0) && !index(vowels, lowc(str[1]))))
+        /* normal case is "an <vowel>" or "a <consonant>" */
+        if ((index(vowels, c0) /* some exceptions warranting "a <vowel>" */
+             /* 'wun' initial sound */
+             && (strncmpi(str, "one", 3) || (str[3] && !index("-_ ", str[3])))
+             /* long 'u' initial sound */
+             && strncmpi(str, "eu", 2) /* "eucalyptus leaf" */
+             && strncmpi(str, "uke", 3) && strncmpi(str, "ukulele", 7)
+             && strncmpi(str, "unicorn", 7) && strncmpi(str, "uranium", 7)
+             && strncmpi(str, "useful", 6)) /* "useful tool" */
+            || (c0 == 'x' && !index(vowels, lowc(str[1]))))
             Strcpy(outbuf, "an ");
         else
             Strcpy(outbuf, "a ");
@@ -1931,10 +2015,17 @@ Ysimple_name2(struct obj* obj)
 char *
 simpleonames(struct obj* obj)
 {
-    char *simpleoname = minimal_xname(obj);
+    char *obufp, *simpleoname = minimal_xname(obj);
 
-    if (obj->quan != 1L)
-        simpleoname = makeplural(simpleoname);
+    if (obj->quan != 1L) {
+        /* 'simpleoname' points to an obuf; makeplural() will allocate
+           another one and only that one can be explicitly released for
+           re-use, so this is slightly convoluted to cope with that;
+           makeplural() will be fully evaluated and done with its input
+           argument before strcpy() touches its output argument */
+        Strcpy(simpleoname, obufp = makeplural(simpleoname));
+        releaseobuf(obufp);
+    }
     return simpleoname;
 }
 
@@ -1942,7 +2033,7 @@ simpleonames(struct obj* obj)
 char *
 ansimpleoname(struct obj* obj)
 {
-    char *simpleoname = simpleonames(obj);
+    char *obufp, *simpleoname = simpleonames(obj);
     int otyp = obj->otyp;
 
     /* prefix with "the" if a unique item, or a fake one imitating same,
@@ -1951,12 +2042,16 @@ ansimpleoname(struct obj* obj)
     if (otyp == FAKE_AMULET_OF_YENDOR)
         otyp = AMULET_OF_YENDOR;
     if (objects[otyp].oc_unique
-        && !strcmp(simpleoname, OBJ_NAME(objects[otyp])))
-        return the(simpleoname);
-
-    /* simpleoname is singular if quan==1, plural otherwise */
-    if (obj->quan == 1L)
-        simpleoname = an(simpleoname);
+        && !strcmp(simpleoname, OBJ_NAME(objects[otyp]))) {
+        /* the() will allocate another obuf[]; we want to avoid using two */
+        Strcpy(simpleoname, obufp = the(simpleoname));
+        releaseobuf(obufp);
+    } else if (obj->quan == 1L) {
+        /* simpleoname[] is singular if quan==1, plural otherwise;
+           an() will allocate another obuf[]; we want to avoid using two */
+        Strcpy(simpleoname, obufp = an(simpleoname));
+        releaseobuf(obufp);
+    }
     return simpleoname;
 }
 
@@ -1964,9 +2059,12 @@ ansimpleoname(struct obj* obj)
 char *
 thesimpleoname(struct obj* obj)
 {
-    char *simpleoname = simpleonames(obj);
+    char *obufp, *simpleoname = simpleonames(obj);
 
-    return the(simpleoname);
+    /* the() will allocate another obuf[]; we want to avoid using two */
+    Strcpy(simpleoname, obufp = the(simpleoname));
+    releaseobuf(obufp);
+    return simpleoname;
 }
 
 /* artifact's name without any object type or known/dknown/&c feedback */
@@ -2939,7 +3037,7 @@ rnd_otyp_by_namedesc(
      * probabilities are not very useful because they don't take
      * the class generation probability into account.  [If 10%
      * of spellbooks were blank and 1% of scrolls were blank,
-     * "blank" would have 10/11 chance to yield a blook even though
+     * "blank" would have 10/11 chance to yield a book even though
      * scrolls are supposed to be much more common than books.]
      */
     for (i = lo; i <= hi; ++i) {
@@ -3194,8 +3292,16 @@ wizterrainwish(struct _readobjnam_data *d)
         }
     } else if (!BSTRCMPI(bp, p - 4, "wall")
                          && (bp == p - 4 || p[-4] == ' ')) {
-        pline("Wishing for walls is not implemented.");
-        badterrain = TRUE;
+        schar wall = HWALL;
+
+        if ((isok(u.ux, u.uy-1) && IS_WALL(levl[u.ux][u.uy-1].typ))
+            || (isok(u.ux, u.uy+1) && IS_WALL(levl[u.ux][u.uy+1].typ)))
+            wall = VWALL;
+        madeterrain = TRUE;
+        lev->typ = wall;
+        fix_wall_spines(max(0,u.ux-1), max(0,u.uy-1),
+                        min(COLNO,u.ux+1), min(ROWNO,u.uy+1));
+        pline("A wall.");
     } else if (!BSTRCMPI(bp, p - 15, "secret corridor")) {
         if (lev->typ == CORR) {
             lev->typ = SCORR;
@@ -3292,6 +3398,7 @@ readobjnam_init(char *bp, struct _readobjnam_data *d)
     d->actualn = d->dn = d->un = 0;
     d->wetness = 0;
     d->gsize = 0;
+    d->zombify = FALSE;
     d->bp = d->origbp = bp;
     d->p = (char *) 0;
     d->name = (const char *) 0;
@@ -3313,6 +3420,7 @@ readobjnam_preparse(struct _readobjnam_data *d)
 
         if (!d->bp || !*d->bp)
             break;
+        res = 0;
 
         if (!strncmpi(d->bp, "an ", l = 3) || !strncmpi(d->bp, "a ", l = 2)) {
             d->cnt = 1;
@@ -3335,18 +3443,12 @@ readobjnam_preparse(struct _readobjnam_data *d)
             l = 0;
         } else if (!strncmpi(d->bp, "blessed ", l = 8)
                    || !strncmpi(d->bp, "holy ", l = 5)) {
-            d->blessed = 1;
-        } else if (!strncmpi(d->bp, "moist ", l = 6)
-                   || !strncmpi(d->bp, "wet ", l = 4)) {
-            if (!strncmpi(d->bp, "wet ", 4))
-                d->wetness = rn2(3) + 3;
-            else
-                d->wetness = rnd(2);
+            d->blessed = 1, d->uncursed = d->iscursed = 0;
         } else if (!strncmpi(d->bp, "cursed ", l = 7)
                    || !strncmpi(d->bp, "unholy ", l = 7)) {
-            d->iscursed = 1;
+            d->iscursed = 1, d->blessed = d->uncursed = 0;
         } else if (!strncmpi(d->bp, "uncursed ", l = 9)) {
-            d->uncursed = 1;
+            d->uncursed = 1, d->blessed = d->iscursed = 0;
         } else if (!strncmpi(d->bp, "rustproof ", l = 10)
                    || !strncmpi(d->bp, "erodeproof ", l = 11)
                    || !strncmpi(d->bp, "corrodeproof ", l = 13)
@@ -3360,7 +3462,16 @@ readobjnam_preparse(struct _readobjnam_data *d)
         } else if (!strncmpi(d->bp, "unlit ", l = 6)
                    || !strncmpi(d->bp, "extinguished ", l = 13)) {
             d->islit = 0;
-            /* "unlabeled" and "blank" are synonymous */
+
+        /* "wet" and "moist" are only applicable for towels */
+        } else if (!strncmpi(d->bp, "moist ", l = 6)
+                   || !strncmpi(d->bp, "wet ", l = 4)) {
+            if (!strncmpi(d->bp, "wet ", 4))
+                d->wetness = 3 + rn2(3); /* 3..5 */
+            else
+                d->wetness = rnd(2); /* 1..2 */
+
+        /* "unlabeled" and "blank" are synonymous */
         } else if (!strncmpi(d->bp, "unlabeled ", l = 10)
                    || !strncmpi(d->bp, "unlabelled ", l = 11)
                    || !strncmpi(d->bp, "blank ", l = 6)) {
@@ -3403,6 +3514,8 @@ readobjnam_preparse(struct _readobjnam_data *d)
             d->looted = 1;
         } else if (!strncmpi(d->bp, "greased ", l = 8)) {
             d->isgreased = 1;
+        } else if (!strncmpi(d->bp, "zombifying ", l = 11)) {
+            d->zombify = TRUE;
         } else if (!strncmpi(d->bp, "very ", l = 5)) {
             /* very rusted very heavy iron ball */
             d->very = 1;
@@ -3491,9 +3604,7 @@ readobjnam_preparse(struct _readobjnam_data *d)
                 || !strncmpi(d->bp + l, "an ", more_l = 3)
                 || !strncmpi(d->bp + l, "the ", more_l = 4))
                 l += more_l;
-            res = 0;
         } else {
-            res = 0;
             break;
         }
         d->bp += l;
@@ -3811,12 +3922,29 @@ readobjnam_postparse1(struct _readobjnam_data *d)
 
     d->p = eos(d->bp);
     if (!BSTRCMPI(d->bp, d->p - 10, "holy water")) {
-        d->typ = POT_WATER;
-        if ((d->p - d->bp) >= 12 && *(d->p - 12) == 'u')
-            d->iscursed = 1; /* unholy water */
+        /* this isn't needed for "[un]holy water" because adjective parsing
+           handles holy==blessed and unholy==cursed and leaves "water" for
+           the object type, but it is needed for "potion of [un]holy water"
+           since that parsing stops when it reaches "potion"; also, neither
+           "holy water" nor "unholy water" is an actual type of potion */
+        if (!BSTRNCMPI(d->bp, d->p - 10 - 2, "un", 2))
+            d->iscursed = 1, d->blessed = d->uncursed = 0; /* unholy water */
         else
-            d->blessed = 1;
+            d->blessed = 1, d->iscursed = d->uncursed = 0; /* holy water */
+        d->typ = POT_WATER;
         return 2; /*goto typfnd;*/
+    }
+    /* accept "paperback" or "paperback book", reject "paperback spellbook" */
+    if (!strncmpi(d->bp, "paperback", 9)) {
+        char *dbp = d->bp + 9; /* just past "paperback" */
+
+        if (!*dbp || !strncmpi(dbp, " book", 5)) {
+            d->typ = SPE_NOVEL;
+            return 2; /*goto typfnd;*/
+        } else {
+            d->otmp = (struct obj *) 0;
+            return 3;
+        }
     }
     if (d->unlabeled && !BSTRCMPI(d->bp, d->p - 6, "scroll")) {
         d->typ = SCR_BLANK_PAPER;
@@ -3874,6 +4002,7 @@ readobjnam_postparse1(struct _readobjnam_data *d)
         for (i = 0; i < (int) (sizeof wrpsym); i++) {
             register int j = strlen(wrp[i]);
 
+            /* check for "<class> [ of ] something" */
             if (!strncmpi(d->bp, wrp[i], j)) {
                 d->oclass = wrpsym[i];
                 if (d->oclass != AMULET_CLASS) {
@@ -3885,12 +4014,27 @@ readobjnam_postparse1(struct _readobjnam_data *d)
                     d->actualn = d->bp;
                 return 1; /*goto srch;*/
             }
+            /* check for "something <class>" */
             if (!BSTRCMPI(d->bp, d->p - j, wrp[i])) {
                 d->oclass = wrpsym[i];
-                d->p -= j;
-                *d->p = 0;
-                if (d->p > d->bp && d->p[-1] == ' ')
-                    d->p[-1] = 0;
+                /* for "foo amulet", leave the class name so that
+                   wishymatch() can do "of inversion" to try matching
+                   "amulet of foo"; other classes don't include their
+                   class name in their full object names (where
+                   "potion of healing" is just "healing", for instance) */
+                if (d->oclass != AMULET_CLASS) {
+                    d->p -= j;
+                    *d->p = '\0';
+                    if (d->p > d->bp && d->p[-1] == ' ')
+                        d->p[-1] = '\0';
+                } else {
+                    /* amulet without "of"; convoluted wording but better a
+                       special case that's handled than one that's missing */
+                    if (!strncmpi(d->bp, "versus poison ", 14)) {
+                        d->typ = AMULET_VERSUS_POISON;
+                        return 2; /*goto typfnd;*/
+                    }
+                }
                 d->actualn = d->dn = d->bp;
                 return 1; /*goto srch;*/
             }
@@ -4438,6 +4582,10 @@ readobjnam(char *bp, struct obj *no_wish)
                 if (mons[d.mntmp].msound == MS_GUARDIAN)
                     d.mntmp = genus(d.mntmp, 1);
                 set_corpsenm(d.otmp, d.mntmp);
+            }
+            if (d.zombify && zombie_form(&mons[d.mntmp])) {
+                (void) start_timer(rn1(5, 10), TIMER_OBJECT,
+                                   ZOMBIFY_MON, obj_to_any(d.otmp));
             }
             break;
         case EGG:

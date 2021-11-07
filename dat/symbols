@@ -67,8 +67,12 @@ start: NHAccess
 	S_litcorr: \062
 	S_upstair: \060
 	S_dnstair: \062
+	S_brupstair: \060
+	S_brdnstair: \062
 	S_upladder: \095
 	S_dnladder: \092
+	S_brupladder: \095
+	S_brdnladder: \092
 	S_altar: \035
 	S_grave: \126
 	S_throne: \126
@@ -123,15 +127,15 @@ start: NHAccess
 	S_sw_bl: \092
 	S_sw_bc: \045
 	S_sw_br: \047
-	S_explode1: \047
-	S_explode2: \045
-	S_explode3: \092
-	S_explode4: \058
-	S_explode5: \032
-	S_explode6: \058
-	S_explode7: \092
-	S_explode8: \045
-	S_explode9: \047
+	S_expl_tl: \047
+	S_expl_tc: \045
+	S_expl_tr: \092
+	S_expl_ml: \058
+	S_expl_mc: \032
+	S_expl_mr: \058
+	S_expl_bl: \092
+	S_expl_bc: \045
+	S_expl_br: \047
 finish
 
 # All symbols are spaces
@@ -170,19 +174,21 @@ start: Blank
         S_digbeam: \032
         S_dnladder: \032
         S_dnstair: \032
+        S_brdnladder: \032
+        S_brdnstair: \032
         S_dog: \032
         S_dragon: \032
         S_eel: \032
         S_elemental: \032
-        S_explode1: \032
-        S_explode2: \032
-        S_explode3: \032
-        S_explode4: \032
-        S_explode5: \032
-        S_explode6: \032
-        S_explode7: \032
-        S_explode8: \032
-        S_explode9: \032
+        S_expl_tl: \032
+        S_expl_tc: \032
+        S_expl_tr: \032
+        S_expl_ml: \032
+        S_expl_mc: \032
+        S_expl_mr: \032
+        S_expl_bl: \032
+        S_expl_bc: \032
+        S_expl_br: \032
         S_eye: \032
         S_falling_rock_trap: \032
         S_feline: \032
@@ -288,7 +294,9 @@ start: Blank
         S_umber: \032
         S_unicorn: \032
         S_upladder: \032
+        S_brupladder: \032
         S_upstair: \032
+        S_brupstair: \032
         S_vampire: \032
         S_vbeam: \032
         S_vcdbridge: \032
@@ -347,8 +355,8 @@ start: IBMgraphics
 	S_hbeam: \xc4			# meta-D, horizontal rule
 	S_sw_ml: \xb3			# meta-3, vertical rule
 	S_sw_mr: \xb3			# meta-3, vertical rule
-	S_explode4: \xb3		# meta-3, vertical rule
-	S_explode6: \xb3		# meta-3, vertical rule
+	S_expl_ml: \xb3			# meta-3, vertical rule
+	S_expl_mr: \xb3			# meta-3, vertical rule
 finish
 
 start: IBMGraphics_1
@@ -369,8 +377,8 @@ start: IBMGraphics_1
 	S_hbeam: \xc4			# meta-D, horizontal rule
 	S_sw_ml: \xb3			# meta-3, vertical rule
 	S_sw_mr: \xb3			# meta-3, vertical rule
-	S_explode4: \xb3		# meta-3, vertical rule
-	S_explode6: \xb3		# meta-3, vertical rule
+	S_expl_ml: \xb3			# meta-3, vertical rule
+	S_expl_mr: \xb3			# meta-3, vertical rule
 finish
 
 start: IBMGraphics_2
@@ -395,8 +403,8 @@ start: IBMGraphics_2
 	S_hbeam: \xc4			# meta-D, horizontal rule
 	S_sw_ml: \xb3			# meta-3, vertical rule
 	S_sw_mr: \xb3			# meta-3, vertical rule
-	S_explode4: \xb3		# meta-3, vertical rule
-	S_explode6: \xb3		# meta-3, vertical rule
+	S_expl_ml: \xb3			# meta-3, vertical rule
+	S_expl_mr: \xb3			# meta-3, vertical rule
 finish
 
 start: RogueIBM
@@ -428,6 +436,8 @@ start: RogueIBM
 	S_litcorr: \xb2
 	S_upstair: \xf0			# Greek Xi
 	S_dnstair: \xf0
+	S_brupstair: \xf0		# Greek Xi
+	S_brdnstair: \xf0
 finish
 
 start: RogueEpyx
@@ -454,6 +464,8 @@ start: RogueEpyx
 	S_litcorr: \xb2
 	S_upstair: \xf0			# Greek Xi
 	S_dnstair: \xf0
+	S_brupstair: \xf0		# Greek Xi
+	S_brdnstair: \xf0
 	S_arrow_trap: \x04		# diamond (cards)
 	S_dart_trap: \x04
 	S_falling_rock_trap: \x04
@@ -530,6 +542,8 @@ start: RogueWindows
 	S_litcorr: \xb2
 	S_upstair: \xf0			# Greek Xi
 	S_dnstair: \xf0
+	S_brupstair: \xf0		# Greek Xi
+	S_brdnstair: \xf0
 finish
 
 start: curses
@@ -560,8 +574,8 @@ start: curses
 	S_hbeam: \xf1			# meta-D, horizontal rule
 	S_sw_ml: \xf8			# meta-3, vertical rule
 	S_sw_mr: \xf8			# meta-3, vertical rule
-	S_explode4: \xf8		# meta-3, vertical rule
-	S_explode6: \xf8		# meta-3, vertical rule
+	S_expl_ml: \xf8			# meta-3, vertical rule
+	S_expl_mr: \xf8			# meta-3, vertical rule
 finish
 
 start: DECgraphics
@@ -587,6 +601,8 @@ start: DECgraphics
 	S_room: \xfe			# meta-~, centered dot
 	S_upladder: \xf9		# meta-y, less-than-or-equals
 	S_dnladder: \xfa		# meta-z, greater-than-or-equals
+	S_brupladder: \xf9		# meta-y, less-than-or-equals
+	S_brdnladder: \xfa		# meta-z, greater-than-or-equals
 	S_altar: \xfb			# meta-{, pi (used to default to '_')
 	S_pool: \xe0			# meta-\, diamond
 	S_ice: \xfe			# meta-~, centered dot
@@ -600,10 +616,10 @@ start: DECgraphics
 	S_sw_ml: \xf8			# meta-x, vertical rule
 	S_sw_mr: \xf8			# meta-x, vertical rule
 	S_sw_bc: \xf3			# meta-s, low horizontal line
-	S_explode2: \xef		# meta-o, high horizontal line
-	S_explode4: \xf8		# meta-x, vertical rule
-	S_explode6: \xf8		# meta-x, vertical rule
-	S_explode8: \xf3		# meta-s, low horizontal line
+	S_expl_tc: \xef			# meta-o, high horizontal line
+	S_expl_ml: \xf8			# meta-x, vertical rule
+	S_expl_mr: \xf8			# meta-x, vertical rule
+	S_expl_bc: \xf3			# meta-s, low horizontal line
 finish
 
 start: MACgraphics

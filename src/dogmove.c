@@ -23,7 +23,19 @@ static void quickmimic(struct monst *);
 struct obj *
 droppables(struct monst *mon)
 {
-    struct obj *obj, *wep, dummy, *pickaxe, *unihorn, *key;
+    /*
+     * 'key|pickaxe|&c = &dummy' is used to make various creatures
+     * that can't use a key/pick-axe/&c behave as if they are already
+     * holding one so that any other such item in their inventory will
+     * be considered a duplicate and get treated as a normal candidate
+     * for dropping.
+     *
+     * This could be 'auto', but then 'gcc -O2' warns that this function
+     * might return the address of a local variable.  It's mistaken,
+     * &dummy is never returned.  'static' is simplest way to shut it up.
+     */
+    static struct obj dummy;
+    struct obj *obj, *wep, *pickaxe, *unihorn, *key;
 
     dummy = cg.zeroobj;
     dummy.otyp = GOLD_PIECE; /* not STRANGE_OBJECT or tools of interest */
@@ -209,8 +221,8 @@ dog_eat(struct monst *mtmp,
     char objnambuf[BUFSZ];
 
     objnambuf[0] = '\0';
-    if (edog->hungrytime < g.monstermoves)
-        edog->hungrytime = g.monstermoves;
+    if (edog->hungrytime < g.moves)
+        edog->hungrytime = g.moves;
     nutrit = dog_nutrition(mtmp, obj);
 
     deadmimic = (obj->otyp == CORPSE && (obj->corpsenm == PM_SMALL_MIMIC
@@ -291,7 +303,7 @@ dog_eat(struct monst *mtmp,
 #ifdef LINT
         edog->apport = 0;
 #else
-        edog->apport += (int) (200L / ((long) edog->dropdist + g.monstermoves
+        edog->apport += (int) (200L / ((long) edog->dropdist + g.moves
                                        - edog->droptime));
 #endif
     if (mtmp->data == &mons[PM_RUST_MONSTER] && obj->oerodeproof) {
@@ -357,9 +369,9 @@ dog_eat(struct monst *mtmp,
 static boolean
 dog_hunger(struct monst *mtmp, struct edog *edog)
 {
-    if (g.monstermoves > edog->hungrytime + 500) {
+    if (g.moves > edog->hungrytime + 500) {
         if (!carnivorous(mtmp->data) && !herbivorous(mtmp->data)) {
-            edog->hungrytime = g.monstermoves + 500;
+            edog->hungrytime = g.moves + 500;
             /* but not too high; it might polymorph */
         } else if (!edog->mhpmax_penalty) {
             /* starving pets are limited in healing */
@@ -378,7 +390,7 @@ dog_hunger(struct monst *mtmp, struct edog *edog)
             else
                 You_feel("worried about %s.", y_monnam(mtmp));
             stop_occupation();
-        } else if (g.monstermoves > edog->hungrytime + 750
+        } else if (g.moves > edog->hungrytime + 750
                    || DEADMONSTER(mtmp)) {
  dog_died:
             if (mtmp->mleashed && mtmp != u.usteed)
@@ -421,7 +433,7 @@ dog_invent(struct monst *mtmp, struct edog *edog, int udist)
                 if (edog->apport > 1)
                     edog->apport--;
                 edog->dropdist = udist; /* hpscdi!jon */
-                edog->droptime = g.monstermoves;
+                edog->droptime = g.moves;
             }
     } else {
         if ((obj = g.level.objects[omx][omy]) != 0
@@ -429,7 +441,9 @@ dog_invent(struct monst *mtmp, struct edog *edog, int udist)
 #ifdef MAIL_STRUCTURES
             && obj->otyp != SCR_MAIL
 #endif
-            ) {
+            /* avoid special items; once hero picks them up, they'll cease
+               being special and become eligible for normal monst activity */
+            && !(is_mines_prize(obj) || is_soko_prize(obj))) {
             int edible = dogfood(mtmp, obj);
 
             if ((edible <= CADAVER
@@ -549,7 +563,7 @@ dog_goal(register struct monst *mtmp, struct edog *edog,
 
     /* follow player if appropriate */
     if (g.gtyp == UNDEF || (g.gtyp != DOGFOOD && g.gtyp != APPORT
-                          && g.monstermoves < edog->hungrytime)) {
+                          && g.moves < edog->hungrytime)) {
         g.gx = u.ux;
         g.gy = u.uy;
         if (after && udist <= 4 && g.gx == u.ux && g.gy == u.uy)
@@ -909,7 +923,7 @@ dog_move(register struct monst *mtmp,
         else if (j == 1)
             goto newdogpos; /* eating something */
 
-        whappr = (g.monstermoves - edog->whistletime < 5);
+        whappr = (g.moves - edog->whistletime < 5);
     } else
         whappr = 0;
 
@@ -1009,7 +1023,7 @@ dog_move(register struct monst *mtmp,
                 return 2;
 
             if ((mstatus & MM_HIT) && !(mstatus & MM_DEF_DIED) && rn2(4)
-                && mtmp2->mlstmv != g.monstermoves
+                && mtmp2->mlstmv != g.moves
                 && !onscary(mtmp->mx, mtmp->my, mtmp2)
                 /* monnear check needed: long worms hit on tail */
                 && monnear(mtmp2, mtmp->mx, mtmp->my)) {
@@ -1062,7 +1076,7 @@ dog_move(register struct monst *mtmp,
                     cursemsg[i] = TRUE;
                 } else if ((otyp = dogfood(mtmp, obj)) < MANFOOD
                          && (otyp < ACCFOOD
-                             || edog->hungrytime <= g.monstermoves)) {
+                             || edog->hungrytime <= g.moves)) {
                     /* Note: our dog likes the food so much that he
                      * might eat it even when it conceals a cursed object */
                     nix = nx;
@@ -1118,7 +1132,7 @@ dog_move(register struct monst *mtmp,
         if (!mtmp->isminion) {
             struct edog *dog = EDOG(mtmp);
 
-            hungry = (g.monstermoves > (dog->hungrytime + 300));
+            hungry = (g.moves > (dog->hungrytime + 300));
         }
 
         /* Identify the best target in a straight line from the pet;
@@ -1354,7 +1368,7 @@ finish_meating(struct monst *mtmp)
     mtmp->meating = 0;
     if (M_AP_TYPE(mtmp) && mtmp->mappearance && mtmp->cham == NON_PM) {
         /* was eating a mimic and now appearance needs resetting */
-        mtmp->m_ap_type = 0;
+        mtmp->m_ap_type = M_AP_NOTHING;
         mtmp->mappearance = 0;
         newsym(mtmp->mx, mtmp->my);
     }

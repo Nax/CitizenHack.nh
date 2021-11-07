@@ -39,24 +39,6 @@ NEARDATA struct obj *uwep, *uarm, *uswapwep,
 
 struct engr *head_engr;
 
-#ifdef TEXTCOLOR
-/*
- *  This must be the same order as used for buzz() in zap.c.
- */
-const int zapcolors[NUM_ZAP] = {
-    HI_ZAP,     /* 0 - missile */
-    CLR_ORANGE, /* 1 - fire */
-    CLR_WHITE,  /* 2 - frost */
-    HI_ZAP,     /* 3 - sleep */
-    CLR_BLACK,  /* 4 - death */
-    CLR_WHITE,  /* 5 - lightning */
-    /* 3.6.3: poison gas zap used to be yellow and acid zap was green,
-       which conflicted with the corresponding dragon colors */
-    CLR_GREEN,  /* 6 - poison gas */
-    CLR_YELLOW, /* 7 - acid */
-};
-#endif /* text color */
-
 const int shield_static[SHIELD_COUNT] = {
     S_ss1, S_ss2, S_ss3, S_ss2, S_ss1, S_ss2, S_ss4, /* 7 per row */
     S_ss1, S_ss2, S_ss3, S_ss2, S_ss1, S_ss2, S_ss4,
@@ -280,7 +262,6 @@ const struct instance_globals g_init = {
     NULL, /* stairs */
     DUMMY, /* smeq */
     0, /* doorindex */
-    NULL, /* save_cm */
     0, /* done_money */
     0L, /* domove_attempting */
     0L, /* domove_succeeded */
@@ -325,7 +306,6 @@ const struct instance_globals g_init = {
     NULL, /* subrooms */
     UNDEFINED_VALUES, /* level */
     1, /* moves */
-    1, /* monstermoves */
     0, /* wailmsg */
     NULL, /* migrating_objs */
     NULL, /* billobjs */
@@ -485,7 +465,6 @@ const struct instance_globals g_init = {
 
     /* mkmaze.c */
     { {COLNO, ROWNO, 0, 0}, {COLNO, ROWNO, 0, 0} }, /* bughack */
-    FALSE, /* was_waterlevel */
     UNDEFINED_PTR, /* bbubbles */
     UNDEFINED_PTR, /* ebubbles */
     UNDEFINED_PTR, /* wportal */
@@ -528,6 +507,7 @@ const struct instance_globals g_init = {
 
     /* o_init.c */
     DUMMY, /* disco */
+    DUMMY, /* oclass_prob_totals */
 
     /* objname.c */
     0, /* distantname */
@@ -540,6 +520,7 @@ const struct instance_globals g_init = {
     FALSE, /* opt_initial */
     FALSE, /* opt_from_file */
     FALSE, /* opt_need_redraw */
+    FALSE, /* opt_need_glyph_reset */
     FALSE, /* save_menucolors */
     (struct menucoloring *) 0, /* save_colorings */
     (struct menucoloring *) 0, /* color_colorings */
@@ -553,6 +534,8 @@ const struct instance_globals g_init = {
     UNDEFINED_VALUE, /* class_filter */
     UNDEFINED_VALUE, /* bucx_filter */
     UNDEFINED_VALUE, /* shop_filter */
+    UNDEFINED_VALUE, /* picked_filter */
+    UNDEFINED_VALUE, /* loot_reset_justpicked */
 
     /* pline.c */
     0, /* pline_flags */
@@ -595,7 +578,6 @@ const struct instance_globals g_init = {
     /* restore.c */
     0, /* n_ids_mapped */
     0, /* id_map */
-    FALSE, /* restoring */
     UNDEFINED_PTR, /* oldfruit */
     UNDEFINED_VALUE, /* omoves */
 
@@ -710,10 +692,6 @@ const struct const_globals cg = {
     DUMMY, /* zeromonst */
     DUMMY, /* zeroany */
 };
-
-/* glyph, color, ttychar, symidx, glyphflags */
-const glyph_info nul_glyphinfo =
-    { NO_GLYPH, NO_COLOR, ' ', 0, MG_UNEXPL };
 
 #define ZERO(x) memset(&x, 0, sizeof(x))
 

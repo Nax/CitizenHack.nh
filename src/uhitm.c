@@ -1,4 +1,4 @@
-/* NetHack 3.7	uhitm.c	$NHDT-Date: 1617035737 2021/03/29 16:35:37 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.300 $ */
+/* NetHack 3.7	uhitm.c	$NHDT-Date: 1625838649 2021/07/09 13:50:49 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.312 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -202,17 +202,24 @@ attack_checks(struct monst *mtmp,
             seemimic(mtmp);
             return FALSE;
         }
-        if (!((Blind ? Blind_telepat : Unblind_telepat) || Detect_monsters)) {
+        if (!tp_sensemon(mtmp) && !Detect_monsters) {
             struct obj *obj;
+            char lmonbuf[BUFSZ];
+            boolean notseen;
 
+            Strcpy(lmonbuf, l_monnam(mtmp));
+            /* might be unseen if invisible and hero can't see invisible */
+            notseen = !strcmp(lmonbuf, "it"); /* note: not strcmpi() */
             if (!Blind && Hallucination)
-                pline("A %s %s appeared!",
-                      mtmp->mtame ? "tame" : "wild", l_monnam(mtmp));
+                pline("A %s %s %s!", mtmp->mtame ? "tame" : "wild",
+                      notseen ? "creature" : (const char *) lmonbuf,
+                      notseen ? "is present" : "appears");
             else if (Blind || (is_pool(mtmp->mx, mtmp->my) && !Underwater))
                 pline("Wait!  There's a hidden monster there!");
             else if ((obj = g.level.objects[mtmp->mx][mtmp->my]) != 0)
                 pline("Wait!  There's %s hiding under %s!",
-                      an(l_monnam(mtmp)), doname(obj));
+                      notseen ? something : (const char *) an(lmonbuf),
+                      doname(obj));
             return TRUE;
         }
     }
@@ -573,7 +580,7 @@ hitum_cleave(struct monst *target, /* non-Null; forcefight at nothing doesn't
      */
     for (count = 3; count > 0; --count) {
         struct monst *mtmp;
-        int tx, ty, tmp, dieroll, mhit, attknum, armorpenalty;
+        int tx, ty, tmp, dieroll, mhit, attknum = 0, armorpenalty;
 
         /* ++i, wrap 8 to i=0 /or/ --i, wrap -1 to i=7 */
         i = clockwise ? DIR_RIGHT(i) : DIR_LEFT(i);
@@ -2039,7 +2046,8 @@ mhitm_ad_fire(struct monst *magr, struct attack *mattk, struct monst *mdef,
                 mhm->done = TRUE;
                 return;
             }
-            mhm->hitflags = (MM_DEF_DIED | (grow_up(magr, mdef) ? 0 : MM_AGR_DIED));
+            mhm->hitflags = (MM_DEF_DIED
+                             | (grow_up(magr, mdef) ? 0 : MM_AGR_DIED));
             mhm->done = TRUE;
             return;
         }
@@ -2235,6 +2243,7 @@ mhitm_ad_acid(struct monst *magr, struct attack *mattk, struct monst *mdef,
     }
 }
 
+/* steal gold */
 void
 mhitm_ad_sgld(struct monst *magr, struct attack *mattk, struct monst *mdef,
               struct mhitm_data *mhm)
@@ -3148,9 +3157,13 @@ void
 mhitm_ad_famn(struct monst *magr, struct attack *mattk UNUSED,
               struct monst *mdef, struct mhitm_data *mhm)
 {
+    struct permonst *pd = mdef->data;
+
     if (magr == &g.youmonst) {
-        /* uhitm */
-        mhm->damage = 0;
+        /* uhitm; hero can't polymorph into anything with this attack
+           so this won't happen; if it could, it would be the same as
+           the mhitm case except for messaging */
+        goto mhitm_famn;
     } else if (mdef == &g.youmonst) {
         /* mhitu */
         pline("%s reaches out, and your body shrivels.", Monnam(magr));
@@ -3159,28 +3172,39 @@ mhitm_ad_famn(struct monst *magr, struct attack *mattk UNUSED,
             morehungry(rn1(40, 40));
         /* plus the normal damage */
     } else {
-        /* mhitm */
-        mhm->damage = 0;
+ mhitm_famn:
+        /* mhitm; it's possible for Famine to hit another monster;
+           if target is something that doesn't eat, it won't be harmed;
+           otherwise, just inflict the normal damage */
+        if (!(carnivorous(pd) || herbivorous(pd) || metallivorous(pd)))
+            mhm->damage = 0;
     }
 }
 
 void
-mhitm_ad_pest(struct monst *magr, struct attack *mattk UNUSED,
+mhitm_ad_pest(struct monst *magr, struct attack *mattk,
               struct monst *mdef, struct mhitm_data *mhm)
 {
+    struct attack alt_attk;
     struct permonst *pa = magr->data;
 
     if (magr == &g.youmonst) {
-        /* uhitm */
-        mhm->damage = 0;
+        /* uhitm; hero can't polymorph into anything with this attack
+           so this won't happen; if it could, it would be the same as
+           the mhitm case except for messaging */
+        goto mhitm_pest;
     } else if (mdef == &g.youmonst) {
         /* mhitu */
         pline("%s reaches out, and you feel fever and chills.", Monnam(magr));
         (void) diseasemu(pa);
         /* plus the normal damage */
     } else {
-        /* mhitm */
-        mhm->damage = 0;
+ mhitm_pest:
+        /* mhitm; it's possible for Pestilence to hit another monster;
+           treat it the same as an attack for AD_DISE damage */
+        alt_attk = *mattk;
+        alt_attk.adtyp = AD_DISE;
+        mhitm_ad_dise(magr, &alt_attk, mdef, mhm);
     }
 }
 
@@ -3191,13 +3215,16 @@ mhitm_ad_deth(struct monst *magr, struct attack *mattk UNUSED,
     struct permonst *pd = mdef->data;
 
     if (magr == &g.youmonst) {
-        /* uhitm */
-        mhm->damage = 0;
+        /* uhitm; hero can't polymorph into anything with this attack
+           so this won't happen; if it could, it would be the same as
+           the mhitm case except for messaging */
+        goto mhitm_deth;
     } else if (mdef == &g.youmonst) {
         /* mhitu */
         pline("%s reaches out with its deadly touch.", Monnam(magr));
         if (is_undead(pd)) {
-            /* Still does normal damage */
+            /* still does some damage */
+            mhm->damage = (mhm->damage + 1) / 2;
             pline("Was that the touch of death?");
             return;
         }
@@ -3213,7 +3240,7 @@ mhitm_ad_deth(struct monst *magr, struct attack *mattk UNUSED,
             /*FALLTHRU*/
         default: /* case 16: ... case 5: */
             You_feel("your life force draining away...");
-            mhm->permdmg = 1; /* actual damage done below */
+            mhm->permdmg = 1; /* actual damage done by caller */
             return;
         case 4:
         case 3:
@@ -3227,8 +3254,18 @@ mhitm_ad_deth(struct monst *magr, struct attack *mattk UNUSED,
             return;
         }
     } else {
-        /* mhitm */
-        mhm->damage = 0;
+ mhitm_deth:
+        /* mhitm; it's possible for Death to hit another monster;
+           if target is undead, it will take some damage but less than an
+           undead hero would; otherwise, just inflict the normal damage */
+        if (is_undead(pd) && mhm->damage > 1)
+            mhm->damage = rnd(mhm->damage / 2);
+        /*
+         * FIXME?
+         *  most monsters should be vulnerable to Death's touch
+         *  instead of only receiving ordinary damage, but is it
+         *  worth bothering with?
+         */
     }
 }
 
@@ -3848,26 +3885,37 @@ mhitm_ad_samu(struct monst *magr, struct attack *mattk, struct monst *mdef,
     }
 }
 
+/* disease */
 void
 mhitm_ad_dise(struct monst *magr, struct attack *mattk, struct monst *mdef,
               struct mhitm_data *mhm)
 {
-    struct permonst *pa = magr->data;
+    struct obj *mwep;
+    struct permonst *pa = magr->data, *pd = mdef->data;
 
     if (magr == &g.youmonst) {
-        /* uhitm */
-        mhm->damage = 0;
+        /* uhitm; hero can't polymorph into anything with this attack so
+           this won't happen; if it could, it would be the same as the
+           mhitm case except for messaging */
+        goto mhitm_dise;
     } else if (mdef == &g.youmonst) {
         /* mhitu */
         hitmsg(magr, mattk);
         if (!diseasemu(pa))
             mhm->damage = 0;
     } else {
-        /* mhitm */
-        mhm->damage = 0;
+ mhitm_dise:
+        /* mhitm; protected monsters use the same criteria as for
+           poly'd hero gaining sick resistance combined with any hero
+           [hypothetically] wielding a weapon that guards against disease */
+        if (pd->mlet == S_FUNGUS || pd == &mons[PM_GHOUL]
+            || ((mwep = MON_WEP(mdef)) != 0 && defends(AD_DISE, mwep)))
+            mhm->damage = 0;
+        /* else does ordinary damage */
     }
 }
 
+/* seduce and also steal item */
 void
 mhitm_ad_sedu(struct monst *magr, struct attack *mattk, struct monst *mdef,
               struct mhitm_data *mhm)
@@ -3974,7 +4022,8 @@ mhitm_ad_sedu(struct monst *magr, struct attack *mattk, struct monst *mdef,
             mdef->mstrategy &= ~STRAT_WAITFORU;
             mselftouch(mdef, (const char *) 0, FALSE);
             if (DEADMONSTER(mdef)) {
-                mhm->hitflags = (MM_DEF_DIED | (grow_up(magr, mdef) ? 0 : MM_AGR_DIED));
+                mhm->hitflags = (MM_DEF_DIED
+                                 | (grow_up(magr, mdef) ? 0 : MM_AGR_DIED));
                 mhm->done = TRUE;
                 return;
             }
@@ -4216,8 +4265,10 @@ gulpum(struct monst *mdef, struct attack *mattk)
         return MM_MISS;
 
     if (u.uhunger < 1500 && !u.uswallow) {
-        for (otmp = mdef->minvent; otmp; otmp = otmp->nobj)
-            (void) snuff_lit(otmp);
+        if (!flaming(g.youmonst.data)) {
+            for (otmp = mdef->minvent; otmp; otmp = otmp->nobj)
+                (void) snuff_lit(otmp);
+        }
 
         /* force vampire in bat, cloud, or wolf form to revert back to
            vampire form now instead of dealing with that when it dies */
@@ -4432,6 +4483,7 @@ hmonas(struct monst *mon)
     int i, tmp, armorpenalty, sum[NATTK], nsum = MM_MISS,
         dhit = 0, attknum = 0;
     int dieroll, multi_claw = 0;
+    boolean monster_survived;
 
     /* not used here but umpteen mhitm_ad_xxxx() need this */
     g.vis = (canseemon(mon) || distu(mon->mx, mon->my) <= 2);
@@ -4512,17 +4564,18 @@ hmonas(struct monst *mon)
             dieroll = rnd(20);
             dhit = (tmp > dieroll || u.uswallow);
             /* caller must set g.bhitpos */
-            if (!known_hitum(mon, weapon, &dhit, tmp,
-                             armorpenalty, mattk, dieroll)) {
+            monster_survived = known_hitum(mon, weapon, &dhit, tmp,
+                                           armorpenalty, mattk, dieroll);
+            /* originalweapon points to an equipment slot which might
+               now be empty if the weapon was destroyed during the hit;
+               passive(,weapon,...) won't call passive_obj() in that case */
+            weapon = *originalweapon; /* might receive passive erosion */
+            if (!monster_survived) {
                 /* enemy dead, before any special abilities used */
                 sum[i] = MM_DEF_DIED;
                 break;
             } else
                 sum[i] = dhit ? MM_HIT : MM_MISS;
-            /* originalweapon points to an equipment slot which might
-               now be empty if the weapon was destroyed during the hit;
-               passive(,weapon,...) won't call passive_obj() in that case */
-            weapon = *originalweapon; /* might receive passive erosion */
             /* might be a worm that gets cut in half; if so, early return */
             if (m_at(u.ux + u.dx, u.uy + u.dy) != mon) {
                 i = NATTK; /* skip additional attacks */
@@ -4956,6 +5009,15 @@ passive(struct monst *mon,
             } else if (aatyp == AT_BITE || aatyp == AT_BUTT
                        || (aatyp >= AT_STNG && aatyp < AT_WEAP)) {
                 break; /* no object involved */
+            } else {
+                /*
+                 * TODO:  #H2668 - if hitting with a ring that has a
+                 * positive enchantment, it ought to be subject to
+                 * having that enchantment reduced.  But we don't have
+                 * sufficient information here to know which hand/ring
+                 * has delived a weaponless blow.
+                 */
+                ;
             }
             passive_obj(mon, weapon, &(ptr->mattk[i]));
         }

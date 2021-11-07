@@ -1,4 +1,4 @@
-/* NetHack 3.7	mthrowu.c	$NHDT-Date: 1620923922 2021/05/13 16:38:42 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.114 $ */
+/* NetHack 3.7	mthrowu.c	$NHDT-Date: 1629497158 2021/08/20 22:05:58 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.117 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Pasi Kallinen, 2016. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -40,7 +40,7 @@ m_has_launcher_and_ammo(struct monst* mtmp)
 /* hero is hit by something other than a monster */
 int
 thitu(
-    int tlev, 
+    int tlev,
     int dam,
     struct obj **objp,
     const char *name) /* if null, then format `*objp' */
@@ -154,7 +154,7 @@ drop_throw(
             }
         }
     } else
-        obfree(obj, (struct obj *) 0);
+        delobj(obj);
     return retvalu;
 }
 
@@ -227,9 +227,10 @@ monshoot(struct monst* mtmp, struct obj* otmp, struct obj* mwep)
                      mtarg ? mtarg->mx : mtmp->mux,
                      mtarg ? mtarg->my : mtmp->muy),
         multishot = monmulti(mtmp, otmp, mwep);
-        /*
-         * Caller must have called linedup() to set up g.tbx, g.tby.
-         */
+
+    /*
+     * Caller must have called linedup() to set up <g.tbx, g.tby>.
+     */
 
     if (canseemon(mtmp)) {
         const char *onm;
@@ -246,9 +247,7 @@ monshoot(struct monst* mtmp, struct obj* otmp, struct obj* mwep)
             onm = obj_is_pname(otmp) ? the(onm) : an(onm);
         }
         g.m_shot.s = ammo_and_launcher(otmp, mwep) ? TRUE : FALSE;
-        Strcpy(trgbuf, mtarg ? mon_nam(mtarg) : "");
-        if (!strcmp(trgbuf, "it"))
-            Strcpy(trgbuf, humanoid(mtmp->data) ? "someone" : something);
+        Strcpy(trgbuf, mtarg ? some_mon_nam(mtarg) : "");
         pline("%s %s %s%s%s!", Monnam(mtmp),
               g.m_shot.s ? "shoots" : "throws", onm,
               mtarg ? " at " : "", trgbuf);
@@ -445,7 +444,7 @@ ohitmon(
     return 0;
 }
 
-#define MT_FLIGHTCHECK(pre) \
+#define MT_FLIGHTCHECK(pre,forcehit) \
     (/* missile hits edge of screen */                                  \
      !isok(g.bhitpos.x + dx, g.bhitpos.y + dy)                          \
      /* missile hits the wall */                                        \
@@ -459,7 +458,7 @@ ohitmon(
          && hits_bars(&singleobj,                                       \
                       g.bhitpos.x, g.bhitpos.y,                         \
                       g.bhitpos.x + dx, g.bhitpos.y + dy,               \
-                      ((pre) ? 0 : !rn2(5)), 0))                        \
+                      ((pre) ? 0 : forcehit), 0))                       \
      /* Thrown objects "sink" */                                        \
      || (!(pre) && IS_SINK(levl[g.bhitpos.x][g.bhitpos.y].typ))         \
      )
@@ -474,6 +473,7 @@ m_throw(
 {
     struct monst *mtmp;
     struct obj *singleobj;
+    boolean forcehit;
     char sym = obj->oclass;
     int hitu = 0, oldumort, blindinc = 0;
 
@@ -525,7 +525,7 @@ m_throw(
         }
     }
 
-    if (MT_FLIGHTCHECK(TRUE)) {
+    if (MT_FLIGHTCHECK(TRUE, 0)) {
         (void) drop_throw(singleobj, 0, g.bhitpos.x, g.bhitpos.y);
         return;
     }
@@ -579,10 +579,9 @@ m_throw(
                 potionhit(&g.youmonst, singleobj, POTHIT_MONST_THROW);
                 break;
             }
-
             oldumort = u.umortality;
+
             switch (singleobj->otyp) {
-                int dam, hitv;
             case EGG:
                 if (!touch_petrifies(&mons[singleobj->corpsenm])) {
                     impossible("monster throwing egg type %d",
@@ -596,24 +595,28 @@ m_throw(
                 hitu = thitu(8, 0, &singleobj, (char *) 0);
                 break;
             default:
-                dam = dmgval(singleobj, &g.youmonst);
-                hitv = 3 - distmin(u.ux, u.uy, mon->mx, mon->my);
-                if (hitv < -4)
-                    hitv = -4;
-                if (is_elf(mon->data)
-                    && objects[singleobj->otyp].oc_skill == P_BOW) {
-                    hitv++;
-                    if (MON_WEP(mon) && MON_WEP(mon)->otyp == ELVEN_BOW)
+                {
+                    int dam, hitv;
+
+                    dam = dmgval(singleobj, &g.youmonst);
+                    hitv = 3 - distmin(u.ux, u.uy, mon->mx, mon->my);
+                    if (hitv < -4)
+                        hitv = -4;
+                    if (is_elf(mon->data)
+                        && objects[singleobj->otyp].oc_skill == P_BOW) {
                         hitv++;
-                    if (singleobj->otyp == ELVEN_ARROW)
-                        dam++;
+                        if (MON_WEP(mon) && MON_WEP(mon)->otyp == ELVEN_BOW)
+                            hitv++;
+                        if (singleobj->otyp == ELVEN_ARROW)
+                            dam++;
+                    }
+                    if (bigmonst(g.youmonst.data))
+                        hitv++;
+                    hitv += 8 + singleobj->spe;
+                    if (dam < 1)
+                        dam = 1;
+                    hitu = thitu(hitv, dam, &singleobj, (char *) 0);
                 }
-                if (bigmonst(g.youmonst.data))
-                    hitv++;
-                hitv += 8 + singleobj->spe;
-                if (dam < 1)
-                    dam = 1;
-                hitu = thitu(hitv, dam, &singleobj, (char *) 0);
             }
             if (hitu && singleobj->opoisoned && is_poisonable(singleobj)) {
                 char onmbuf[BUFSZ], knmbuf[BUFSZ];
@@ -663,7 +666,9 @@ m_throw(
             }
         }
 
-        if (!range || MT_FLIGHTCHECK(FALSE)) { /* end of path or blocked */
+        forcehit = !rn2(5);
+        if (!range || MT_FLIGHTCHECK(FALSE, forcehit)) {
+            /* end of path or blocked */
             if (singleobj) { /* hits_bars might have destroyed it */
                 /* note: pline(The(missile)) rather than pline_The(missile)
                    in order to get "Grimtooth" rather than "The Grimtooth" */
@@ -823,12 +828,12 @@ breamm(struct monst* mtmp, struct attack* mattk, struct monst* mtarg)
             return MM_MISS;
         }
 
-	/* if we've seen the actual resistance, don't bother, or
-	 * if we're close by and they reflect, just jump the player */
-	if (m_seenres(mtmp, cvt_adtyp_to_mseenres(typ))
-	    || (m_seenres(mtmp, M_SEEN_REFL)
+        /* if we've seen the actual resistance, don't bother, or
+           if we're close by and they reflect, just jump the player */
+        if (m_seenres(mtmp, cvt_adtyp_to_mseenres(typ))
+            || (m_seenres(mtmp, M_SEEN_REFL)
                 && monnear(mtmp, mtmp->mux, mtmp->muy)))
-	    return MM_HIT;
+            return MM_HIT;
 
         if (!mtmp->mspec_used && rn2(3)) {
             if ((typ >= AD_MAGM) && (typ <= AD_ACID)) {
@@ -987,7 +992,8 @@ linedup_callback(
     if (!g.tbx && !g.tby)
         return FALSE;
 
-    if ((!g.tbx || !g.tby || abs(g.tbx) == abs(g.tby)) /* straight line or diagonal */
+    /* straight line, orthogonal to the map or diagonal */
+    if ((!g.tbx || !g.tby || abs(g.tbx) == abs(g.tby))
         && distmin(g.tbx, g.tby, 0, 0) < BOLT_LIM) {
         dx = sgn(ax - bx), dy = sgn(ay - by);
         do {
@@ -1023,7 +1029,8 @@ linedup(
     if (!g.tbx && !g.tby)
         return FALSE;
 
-    if ((!g.tbx || !g.tby || abs(g.tbx) == abs(g.tby)) /* straight line or diagonal */
+    /* straight line, orthogonal to the map or diagonal */
+    if ((!g.tbx || !g.tby || abs(g.tbx) == abs(g.tby))
         && distmin(g.tbx, g.tby, 0, 0) < BOLT_LIM) {
         if ((ax == u.ux && ay == u.uy) ? (boolean) couldsee(bx, by)
                                        : clear_path(ax, ay, bx, by))
@@ -1091,45 +1098,52 @@ m_carrying(struct monst* mtmp, int type)
 
 void
 hit_bars(
-    struct obj **objp,      /* *objp will be set to NULL if object breaks */
-    int objx, int objy, int barsx, int barsy,
-    boolean your_fault, boolean from_invent)
+    struct obj **objp,    /* *objp will be set to NULL if object breaks */
+    int objx, int objy,   /* hero's spot (when wielded) or missile's spot */
+    int barsx, int barsy, /* adjacent spot where bars are located */
+    unsigned breakflags)  /* breakage control */
 {
     struct obj *otmp = *objp;
     int obj_type = otmp->otyp;
-    boolean unbreakable = (levl[barsx][barsy].wall_info & W_NONDIGGABLE) != 0;
+    boolean nodissolve = (levl[barsx][barsy].wall_info & W_NONDIGGABLE) != 0,
+            your_fault = (breakflags & BRK_BY_HERO) != 0;
 
     if (your_fault
-        ? hero_breaks(otmp, objx, objy, from_invent)
+        ? hero_breaks(otmp, objx, objy, breakflags)
         : breaks(otmp, objx, objy)) {
         *objp = 0; /* object is now gone */
         /* breakage makes its own noises */
         if (obj_type == POT_ACID) {
-            if (cansee(barsx, barsy) && !unbreakable)
+            if (cansee(barsx, barsy) && !nodissolve)
                 pline_The("iron bars are dissolved!");
             else
-                You_hear(Hallucination ? "angry snakes!" : "a hissing noise.");
-            if (!unbreakable)
+                You_hear(Hallucination ? "angry snakes!"
+                                       : "a hissing noise.");
+            if (!nodissolve)
                 dissolve_bars(barsx, barsy);
         }
+    } else {
+        if (!Deaf)
+            pline("%s!", (obj_type == BOULDER || obj_type == HEAVY_IRON_BALL)
+                         ? "Whang"
+                         : (otmp->oclass == COIN_CLASS
+                            || objects[obj_type].oc_material == GOLD
+                            || objects[obj_type].oc_material == SILVER)
+                           ? "Clink"
+                           : "Clonk");
     }
-    else if (obj_type == BOULDER || obj_type == HEAVY_IRON_BALL)
-        pline("Whang!");
-    else if (otmp->oclass == COIN_CLASS
-             || objects[obj_type].oc_material == GOLD
-             || objects[obj_type].oc_material == SILVER)
-        pline("Clink!");
-    else
-        pline("Clonk!");
 }
 
 /* TRUE iff thrown/kicked/rolled object doesn't pass through iron bars */
 boolean
 hits_bars(
-    struct obj **obj_p, /* *obj_p will be set to NULL if object breaks */
-    int x, int y, int barsx, int barsy,
-    int always_hit, /* caller can force a hit for items which would fit through */
-    int whodidit)   /* 1==hero, 0=other, -1==just check whether it'll pass thru */
+    struct obj **obj_p,   /* *obj_p will be set to NULL if object breaks */
+    int x, int y,
+    int barsx, int barsy,
+    int always_hit,       /* caller can force a hit for items which would
+                           * fit through */
+    int whodidit)         /* 1==hero, 0=other, -1==just check whether it
+                           * will pass through */
 {
     struct obj *otmp = *obj_p;
     int obj_type = otmp->otyp;
@@ -1177,7 +1191,8 @@ hits_bars(
         }
 
     if (hits && whodidit != -1) {
-        hit_bars(obj_p, x,y, barsx,barsy, whodidit, FALSE);
+        hit_bars(obj_p, x, y, barsx, barsy,
+                 (whodidit == 1) ? BRK_BY_HERO : 0);
     }
 
     return hits;

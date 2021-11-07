@@ -6,7 +6,9 @@
 
 #include "win32api.h" /* for GetModuleFileName */
 #include "hack.h"
+#ifdef DLB
 #include "dlb.h"
+#endif
 #include <ctype.h>
 #include <stdlib.h>
 #include <sys\stat.h>
@@ -497,6 +499,7 @@ _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);*/
         iflags.windowtype_locked = TRUE;
     windowtype = default_window_sys;
 
+#ifdef DLB
     if (!dlb_init()) {
         pline("%s\n%s\n%s\n%s\n\n",
               copyright_banner_line(1), copyright_banner_line(2),
@@ -506,6 +509,7 @@ _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);*/
             pline("\nAre you perhaps trying to run NetHack within a zip utility?");
         error("dlb_init failure.");
     }
+#endif
 
     if (!iflags.windowtype_locked) {
 #if defined(TTY_GRAPHICS)
@@ -648,6 +652,11 @@ process_options(int argc, char * argv[])
             reveal_paths();
             nethack_exit(EXIT_SUCCESS);
         }
+#ifndef NODUMPENUMS
+        if (argcheck(argc, argv, ARG_DUMPENUMS) == 2) {
+            nethack_exit(EXIT_SUCCESS);
+       }
+#endif
         if (argcheck(argc, argv, ARG_DEBUG) == 1) {
             argc--;
             argv++;

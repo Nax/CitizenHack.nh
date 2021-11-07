@@ -298,11 +298,15 @@ bee_eat_jelly(struct monst* mon, struct obj* obj)
     return -1; /* a queen is already present; ordinary bee hasn't moved yet */
 }
 
-#define flees_light(mon) ((mon)->data == &mons[PM_GREMLIN]     \
-                          && (uwep && artifact_light(uwep) && uwep->lamplit))
-/* we could include this in the above macro, but probably overkill/overhead */
-/*      && (!(which_armor((mon), W_ARMC) != 0                               */
-/*            && which_armor((mon), W_ARMH) != 0))                          */
+/* FIXME: gremlins don't flee from monsters wielding Sunsword or wearing
+   gold dragon scales/mail, nor from gold dragons, only from the hero */
+#define flees_light(mon) \
+    ((mon)->data == &mons[PM_GREMLIN]                                     \
+     && ((uwep && uwep->lamplit && artifact_light(uwep))                  \
+         || (uarm && uarm->lamplit && artifact_light(uarm)))              \
+     /* not applicable if mon can't see or hero isn't in line of sight */ \
+     && mon->mcansee && couldsee(mon->mx, mon->my))                       \
+     /* doesn't matter if hero is invisible--light being emitted isn't */
 
 /* monster begins fleeing for the specified time, 0 means untimed flee
  * if first, only adds fleetime if monster isn't already fleeing
@@ -341,13 +345,28 @@ monflee(
             if (!mtmp->mcanmove || !mtmp->data->mmove) {
                 pline("%s seems to flinch.", Adjmonnam(mtmp, "immobile"));
             } else if (flees_light(mtmp)) {
-                if (rn2(10) || Deaf)
+                if (Unaware) {
+                    /* tell the player even if the hero is unconscious */
+                    pline("%s is frightened.", Monnam(mtmp));
+                } else if (rn2(10) || Deaf) {
+                    /* via flees_light(), will always be either via uwep
+                       (Sunsword) or uarm (gold dragon scales/mail) or both;
+                       TODO? check for both and describe the one which is
+                       emitting light with a bigger radius */
+                    const char *lsrc = (uwep && artifact_light(uwep))
+                                       ? bare_artifactname(uwep)
+                                       : (uarm && artifact_light(uarm))
+                                         ? yname(uarm)
+                                         : "[its imagination?]";
+
                     pline("%s flees from the painful light of %s.",
-                          Monnam(mtmp), bare_artifactname(uwep));
-                else
+                          Monnam(mtmp), lsrc);
+                } else {
                     verbalize("Bright light!");
-            } else
+                }
+            } else {
                 pline("%s turns to flee.", Monnam(mtmp));
+            }
         }
         mtmp->mflee = 1;
     }
@@ -769,7 +788,7 @@ should_displace(
     coord *poss, /* coord poss[9] */
     long *info,  /* long info[9] */
     int cnt,
-    xchar gx, 
+    xchar gx,
     xchar gy)
 {
     int shortest_with_displacing = -1;
@@ -1165,6 +1184,11 @@ m_move(register struct monst* mtmp, register int after)
                    down on move overhead by filtering out most common item */
                 if (otmp->otyp == ROCK)
                     continue;
+                /* avoid special items; once hero picks them up, they'll
+                   cease being special */
+                if (is_mines_prize(otmp) || is_soko_prize(otmp))
+                    continue;
+
                 xx = otmp->ox;
                 yy = otmp->oy;
                 /* Nymphs take everything.  Most other creatures should not
@@ -1888,6 +1912,7 @@ vamp_shift(
 {
     int reslt = 0;
     char oldmtype[BUFSZ];
+    boolean sawmon = canseemon(mon); /* before shape change */
 
     /* remember current monster type before shapechange */
     Strcpy(oldmtype, domsg ? noname_monnam(mon, ARTICLE_THE) : "");
@@ -1901,9 +1926,14 @@ vamp_shift(
     }
 
     if (reslt && domsg) {
-        pline("You %s %s where %s was.",
-              !canseemon(mon) ? "now detect" : "observe",
-              noname_monnam(mon, ARTICLE_A), oldmtype);
+        /* might have seen vampire/bat/wolf with infravision then be
+           unable to see the same creature when it turns into a fog cloud */
+        if (canspotmon(mon))
+            You("%s %s where %s was.",
+                !canseemon(mon) ? "now detect" : "observe",
+                noname_monnam(mon, ARTICLE_A), oldmtype);
+        else
+            You("can no longer %s %s.", sawmon ? "see" : "sense", oldmtype);
         /* this message is given when it turns into a fog cloud
            in order to move under a closed door */
         display_nhwindow(WIN_MESSAGE, FALSE);

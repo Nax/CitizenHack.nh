@@ -1,4 +1,4 @@
-/* NetHack 3.7	do_name.c	$NHDT-Date: 1624322669 2021/06/22 00:44:29 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.208 $ */
+/* NetHack 3.7	do_name.c	$NHDT-Date: 1625885761 2021/07/10 02:56:01 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.213 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Pasi Kallinen, 2018. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -17,6 +17,7 @@ static void gloc_filter_done(void);
 static boolean gather_locs_interesting(int, int, int);
 static void gather_locs(coord **, int *, int);
 static void auto_describe(int, int);
+static void truncate_to_map(int *, int *, schar, schar);
 static void do_mgivenname(void);
 static boolean alreadynamed(struct monst *, char *, char *);
 static void do_oname(struct obj *);
@@ -107,15 +108,22 @@ getpos_help(boolean force, const char *goal)
     char sbuf[BUFSZ];
     boolean doing_what_is;
     winid tmpwin = create_nhwindow(NHW_MENU);
+    int runkey = iflags.num_pad ? NHKF_RUN2 : NHKF_RUN;
+    int rushkey = iflags.num_pad ? NHKF_RUSH2 : NHKF_RUSH;
 
     Sprintf(sbuf,
-            "Use '%c', '%c', '%c', '%c' to move the cursor to %s.", /* hjkl */
-            g.Cmd.move[DIR_W], g.Cmd.move[DIR_S],
-            g.Cmd.move[DIR_N], g.Cmd.move[DIR_E], goal);
+            "Use '%s', '%s', '%s', '%s' to move the cursor to %s.", /* hjkl */
+            visctrl(g.Cmd.move[DIR_W]), visctrl(g.Cmd.move[DIR_S]),
+            visctrl(g.Cmd.move[DIR_N]), visctrl(g.Cmd.move[DIR_E]), goal);
     putstr(tmpwin, 0, sbuf);
     Sprintf(sbuf,
-            "Use 'H', 'J', 'K', 'L' to fast-move the cursor, %s.",
+            "Use '%s', '%s', '%s', '%s' to fast-move the cursor, %s.",
+            visctrl(g.Cmd.run[DIR_W]), visctrl(g.Cmd.run[DIR_S]),
+            visctrl(g.Cmd.run[DIR_N]), visctrl(g.Cmd.run[DIR_E]),
             fastmovemode[iflags.getloc_moveskip]);
+    putstr(tmpwin, 0, sbuf);
+    Sprintf(sbuf, "(or prefix normal move with '%s' or '%s' to fast-move)",
+            visctrl(g.Cmd.spkeys[runkey]), visctrl(g.Cmd.spkeys[rushkey]));
     putstr(tmpwin, 0, sbuf);
     putstr(tmpwin, 0, "Or enter a background symbol (ex. '<').");
     Sprintf(sbuf, "Use '%s' to move the cursor on yourself.",
@@ -362,7 +370,8 @@ gather_locs_interesting(int x, int y, int gloc)
         /* unlike '/M', this skips monsters revealed by
            warning glyphs and remembered unseen ones */
         return (glyph_is_monster(glyph)
-                && glyph != monnum_to_glyph(PM_LONG_WORM_TAIL));
+                && glyph != monnum_to_glyph(PM_LONG_WORM_TAIL,MALE) &&
+                   glyph != monnum_to_glyph(PM_LONG_WORM_TAIL, FEMALE));
     case GLOC_OBJS:
         return (glyph_is_object(glyph)
                 && glyph != objnum_to_glyph(BOULDER)
@@ -521,11 +530,14 @@ coord_desc(int x, int y, char *outbuf, char cmode)
         /* for normal map sizes, force a fixed-width formatting so that
            /m, /M, /o, and /O output lines up cleanly; map sizes bigger
            than Nx999 or 999xM will still work, but not line up like normal
-           when displayed in a column setting */
+           when displayed in a column setting.
+
+	   The (100) is placed in brackets below to mark the [: "03"] as
+           explicit compile-time dead code for clang */
         if (!*screen_fmt)
             Sprintf(screen_fmt, "[%%%sd,%%%sd]",
-                    (ROWNO - 1 + 2 < 100) ? "02" :  "03",
-                    (COLNO - 1 < 100) ? "02" : "03");
+                    (ROWNO - 1 + 2 < (100)) ? "02" :  "03",
+                    (COLNO - 1 < (100)) ? "02" : "03");
         /* map line 0 is screen row 2;
            map column 0 isn't used, map column 1 is screen column 1 */
         Sprintf(outbuf, screen_fmt, y + 2, x);
@@ -623,6 +635,29 @@ getpos_menu(coord *ccp, int gloc)
     return (pick_cnt > 0);
 }
 
+/* add dx,dy to cx,cy, truncating at map edges */
+static void
+truncate_to_map(int *cx, int *cy, schar dx, schar dy)
+{
+    /* diagonal moves complicate this... */
+    if (*cx + dx < 1) {
+        dy -= sgn(dy) * (1 - (*cx + dx));
+        dx = 1 - *cx; /* so that (cx+dx == 1) */
+    } else if (*cx + dx > COLNO - 1) {
+        dy += sgn(dy) * ((COLNO - 1) - (*cx + dx));
+        dx = (COLNO - 1) - *cx;
+    }
+    if (*cy + dy < 0) {
+        dx -= sgn(dx) * (0 - (*cy + dy));
+        dy = 0 - *cy; /* so that (cy+dy == 0) */
+    } else if (*cy + dy > ROWNO - 1) {
+        dx += sgn(dx) * ((ROWNO - 1) - (*cy + dy));
+        dy = (ROWNO - 1) - *cy;
+    }
+    *cx += dx;
+    *cy += dy;
+}
+
 int
 getpos(coord *ccp, boolean force, const char *goal)
 {
@@ -660,6 +695,11 @@ getpos(coord *ccp, boolean force, const char *goal)
     coord *garr[NUM_GLOCS] = DUMMY;
     int gcount[NUM_GLOCS] = DUMMY;
     int gidx[NUM_GLOCS] = DUMMY;
+    schar udx = u.dx, udy = u.dy, udz = u.dz;
+    int dx, dy;
+    boolean rushrun = FALSE;
+    int runkey = iflags.num_pad ? NHKF_RUN2 : NHKF_RUN;
+    int rushkey = iflags.num_pad ? NHKF_RUSH2 : NHKF_RUSH;
 
     for (i = 0; i < SIZE(pick_chars_def); i++)
         pick_chars[i] = g.Cmd.spkeys[pick_chars_def[i].nhkf];
@@ -696,7 +736,10 @@ getpos(coord *ccp, boolean force, const char *goal)
             auto_describe(cx, cy);
         }
 
-        c = nh_poskey(&tx, &ty, &sidx);
+        rushrun = FALSE;
+
+        g.program_state.getting_a_command = 1;
+        c = readchar_poskey(&tx, &ty, &sidx);
 
         if (hilite_state) {
             (*getpos_hilitefunc)(2);
@@ -714,6 +757,10 @@ getpos(coord *ccp, boolean force, const char *goal)
             result = -1;
             break;
         }
+        if (c == g.Cmd.spkeys[runkey] || c == g.Cmd.spkeys[rushkey]) {
+            c = readchar_poskey(&tx, &ty, &sidx);
+            rushrun = TRUE;
+        }
         if (c == 0) {
             if (!isok(tx, ty))
                 continue;
@@ -726,55 +773,34 @@ getpos(coord *ccp, boolean force, const char *goal)
             /* '.' => 0, ',' => 1, ';' => 2, ':' => 3 */
             result = pick_chars_def[(int) (cp - pick_chars)].ret;
             break;
-        }
-        for (i = 0; i < N_DIRS; i++) {
-            int dx, dy;
+        } else if (movecmd(c, MV_WALK)) {
+            if (rushrun)
+                goto do_rushrun;
+            dx = u.dx;
+            dy = u.dy;
+            truncate_to_map(&cx, &cy, dx, dy);
+            goto nxtc;
+        } else if (movecmd(c, MV_RUSH) || movecmd(c, MV_RUN)) {
+ do_rushrun:
+            if (iflags.getloc_moveskip) {
+                /* skip same glyphs */
+                int glyph = glyph_at(cx, cy);
 
-            if (g.Cmd.dirchars[i] == c) {
-                /* a normal movement letter or digit */
-                dx = xdir[i];
-                dy = ydir[i];
-            } else if (g.Cmd.alphadirchars[i] == lowc((char) c)
-                       || (g.Cmd.num_pad && g.Cmd.dirchars[i] == (c & 0177))) {
-                /* a shifted movement letter or Meta-digit */
-                if (iflags.getloc_moveskip) {
-                    /* skip same glyphs */
-                    int glyph = glyph_at(cx, cy);
+                dx = u.dx;
+                dy = u.dy;
+                while (isok(cx + dx, cy + dy)
+                       && glyph == glyph_at(cx + dx, cy + dy)
+                       && isok(cx + dx + u.dx, cy + dy + u.dy)
+                       && glyph == glyph_at(cx + dx + u.dx, cy + dy + u.dy)) {
+                    dx += u.dx;
+                    dy += u.dy;
 
-                    dx = xdir[i];
-                    dy = ydir[i];
-                    while (isok(cx + dx, cy + dy)
-                           && glyph == glyph_at(cx + dx, cy + dy)
-                           && isok(cx + dx + xdir[i], cy + dy + ydir[i])
-                           && glyph == glyph_at(cx + dx + xdir[i],
-                                                cy + dy + ydir[i])) {
-                        dx += xdir[i];
-                        dy += ydir[i];
-                    }
-                } else {
-                    dx = 8 * xdir[i];
-                    dy = 8 * ydir[i];
                 }
-            } else
-                continue;
-
-            /* truncate at map edge; diagonal moves complicate this... */
-            if (cx + dx < 1) {
-                dy -= sgn(dy) * (1 - (cx + dx));
-                dx = 1 - cx; /* so that (cx+dx == 1) */
-            } else if (cx + dx > COLNO - 1) {
-                dy += sgn(dy) * ((COLNO - 1) - (cx + dx));
-                dx = (COLNO - 1) - cx;
+            } else {
+                dx = 8 * u.dx;
+                dy = 8 * u.dy;
             }
-            if (cy + dy < 0) {
-                dx -= sgn(dx) * (0 - (cy + dy));
-                dy = 0 - cy; /* so that (cy+dy == 0) */
-            } else if (cy + dy > ROWNO - 1) {
-                dx += sgn(dx) * ((ROWNO - 1) - (cy + dy));
-                dy = (ROWNO - 1) - cy;
-            }
-            cx += dx;
-            cy += dy;
+            truncate_to_map(&cx, &cy, dx, dy);
             goto nxtc;
         }
 
@@ -986,6 +1012,7 @@ getpos(coord *ccp, boolean force, const char *goal)
             free((genericptr_t) garr[i]);
     getpos_hilitefunc = (void (*)(int)) 0;
     getpos_getvalid = (boolean (*)(int, int)) 0;
+    u.dx = udx, u.dy = udy, u.dz = udz;
     return result;
 }
 
@@ -1642,9 +1669,13 @@ rndghostname(void)
  *                seen        unseen       detected               named
  * mon_nam:     the newt        it      the invisible orc       Fido
  * noit_mon_nam:the newt (as if detected) the invisible orc     Fido
+ * some_mon_nam:the newt    someone     the invisible orc       Fido
+ *          or              something
  * l_monnam:    newt            it      invisible orc           dog called Fido
  * Monnam:      The newt        It      The invisible orc       Fido
  * noit_Monnam: The newt (as if detected) The invisible orc     Fido
+ * Some_Monnam: The newt    Someone     The invisible orc       Fido
+ *          or              Something
  * Adjmonnam:   The poor newt   It      The poor invisible orc  The poor Fido
  * Amonnam:     A newt          It      An invisible orc        Fido
  * a_monnam:    a newt          it      an invisible orc        Fido
@@ -1684,7 +1715,7 @@ x_monnam(
     char *buf = nextmbuf();
     struct permonst *mdat = mtmp->data;
     const char *pm_name = mon_pmname(mtmp);
-    boolean do_hallu, do_invis, do_it, do_saddle, do_name;
+    boolean do_hallu, do_invis, do_it, do_saddle, do_name, augment_it;
     boolean name_at_start, has_adjectives,
             falseCap = (*pm_name != lowc(*pm_name));
     char *bp;
@@ -1701,12 +1732,16 @@ x_monnam(
             && !(u.uswallow && mtmp == u.ustuck) && !(suppress & SUPPRESS_IT);
     do_saddle = !(suppress & SUPPRESS_SADDLE);
     do_name = !(suppress & SUPPRESS_NAME) || type_is_pname(mdat);
+    augment_it = (suppress & AUGMENT_IT) != 0;
 
     buf[0] = '\0';
 
-    /* unseen monsters, etc.  Use "it" */
+    /* unseen monsters, etc.; usually "it" but sometimes more specific;
+       when hallucinating, the more specific values might be inverted */
     if (do_it) {
-        Strcpy(buf, "it");
+        Strcpy(buf, !augment_it ? "it"
+                    : (!do_hallu ? humanoid(mdat) : !rn2(2)) ? "someone"
+                      : "something");
         return buf;
     }
 
@@ -1881,8 +1916,19 @@ char *
 noit_mon_nam(struct monst *mtmp)
 {
     return x_monnam(mtmp, ARTICLE_THE, (char *) 0,
-                    (has_mgivenname(mtmp)) ? (SUPPRESS_SADDLE | SUPPRESS_IT)
-                                      : SUPPRESS_IT,
+                    (has_mgivenname(mtmp) ? (SUPPRESS_SADDLE | SUPPRESS_IT)
+                                          : SUPPRESS_IT),
+                    FALSE);
+}
+
+/* in between noit_mon_nam() and mon_nam(); if the latter would pick "it",
+   use "someone" (for humanoids) or "something" (for others) instead */
+char *
+some_mon_nam(struct monst *mtmp)
+{
+    return x_monnam(mtmp, ARTICLE_THE, (char *) 0,
+                    (has_mgivenname(mtmp) ? (SUPPRESS_SADDLE | AUGMENT_IT)
+                                          : AUGMENT_IT),
                     FALSE);
 }
 
@@ -1899,6 +1945,15 @@ char *
 noit_Monnam(struct monst *mtmp)
 {
     register char *bp = noit_mon_nam(mtmp);
+
+    *bp = highc(*bp);
+    return  bp;
+}
+
+char *
+Some_Monnam(struct monst *mtmp)
+{
+    char *bp = some_mon_nam(mtmp);
 
     *bp = highc(*bp);
     return  bp;
@@ -2403,6 +2458,10 @@ lookup_novel(const char *lookname, int *idx)
         lookname = "Sourcery"; /* [4] */
     else if (!strcmpi(lookname, "Masquerade"))
         lookname = "Maskerade"; /* [17] */
+    else if (!strcmpi(The(lookname), "The Amazing Maurice"))
+        lookname = "The Amazing Maurice and His Educated Rodents"; /* [27] */
+    else if (!strcmpi(lookname, "Thud"))
+        lookname = "Thud!"; /* [33] */
 
     for (k = 0; k < SIZE(sir_Terry_novels); ++k) {
         if (!strcmpi(lookname, sir_Terry_novels[k])

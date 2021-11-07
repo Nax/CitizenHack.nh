@@ -6,8 +6,6 @@
     <Defs Include = "$(IncDir)date.h"/>
 	<!-- -o -->
     <Defs Include = "$(IncDir)onames.h"/>
-	<!-- -p -->
-    <Defs Include = "$(IncDir)pm.h"/>
 	<!-- -r -->
     <Defs Include = "$(DatDir)rumors"/>
 	<!-- -s -->
@@ -28,6 +26,7 @@
     <Luafiles Include = "bigrm-8.lua"/>
     <Luafiles Include = "bigrm-9.lua"/>
     <Luafiles Include = "bigrm-10.lua"/>
+    <Luafiles Include = "bigrm-11.lua"/>
     <Luafiles Include = "castle.lua"/>
     <Luafiles Include = "air.lua"/>
     <Luafiles Include = "astral.lua"/>

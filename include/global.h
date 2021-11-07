@@ -67,6 +67,7 @@ typedef xchar boolean; /* 0 or 1 */
 #define TRUE ((boolean) 1)
 #define FALSE ((boolean) 0)
 #endif
+#define BOOL_RANDOM (-1)
 
 enum optchoice { opt_in, opt_out};
 
@@ -109,40 +110,6 @@ typedef uchar nhsym;
 #define LARGEST_INT 32767
 
 #include "coord.h"
-
-#if defined(CROSSCOMPILE)
-struct cross_target_s {
-    const char *build_date;
-    const char *copyright_banner_c;
-    const char *git_sha;
-    const char *git_branch;
-    const char *version_string;
-    const char *version_id;
-    unsigned long version_number;
-    unsigned long version_features;
-    unsigned long ignored_features;
-    unsigned long version_sanity1;
-    unsigned long version_sanity2;
-    unsigned long version_sanity3;
-    unsigned long build_time;
-};
-extern struct cross_target_s cross_target;
-#if defined(CROSSCOMPILE_TARGET) && !defined(MAKEDEFS_C)
-#define BUILD_DATE cross_target.build_date        /* "Wed Apr 1 00:00:01 2020" */
-#define COPYRIGHT_BANNER_C cross_target.copyright_banner_c
-#define NETHACK_GIT_SHA cross_target.git_sha
-#define NETHACK_GIT_BRANCH cross_target.git_branch
-#define VERSION_ID cross_target.version_id
-#define IGNORED_FEATURES cross_target.ignored_features
-#define VERSION_FEATURES cross_target.version_features
-#define VERSION_NUMBER cross_target.version_number
-#define VERSION_SANITY1 cross_target.version_sanity1
-#define VERSION_SANITY2 cross_target.version_sanity2
-#define VERSION_SANITY3 cross_target.version_sanity3
-#define VERSION_STRING cross_target.version_string
-#define BUILD_TIME cross_target.build_time        /* (1574157640UL) */
-#endif /* CROSSCOMPILE_TARGET && !MAKEDEFS_C */
-#endif /* CROSSCOMPILE */
 
 /*
  * Automatic inclusions for the subsidiary files.
@@ -253,13 +220,17 @@ extern struct cross_target_s cross_target;
 
 #if defined(X11_GRAPHICS) || defined(QT_GRAPHICS) || defined(GNOME_GRAPHICS) \
     || defined(WIN32)
+#ifndef NO_TILE_C
 #ifndef USE_TILES
-#define USE_TILES /* glyph2tile[] will be available */
+#define USE_TILES /* glyphmap[] with prefilled tile mappings will be available */
+#endif
 #endif
 #endif
 #if defined(AMII_GRAPHICS) || defined(GEM_GRAPHICS)
+#ifndef NO_TILE_C
 #ifndef USE_TILES
 #define USE_TILES
+#endif
 #endif
 #endif
 
@@ -355,6 +326,26 @@ struct savefile_info {
 #define SFI1_ZEROCOMP (1L << 2)
 #endif
 
+/* This is used to store some build-info data that used
+   to be present in makedefs-generated header file date.h */
+
+struct nomakedefs_s {
+    const char *build_date;
+    const char *copyright_banner_c;
+    const char *git_sha;
+    const char *git_branch;
+    const char *version_string;
+    const char *version_id;
+    unsigned long version_number;
+    unsigned long version_features;
+    unsigned long ignored_features;
+    unsigned long version_sanity1;
+    unsigned long version_sanity2;
+    unsigned long version_sanity3;
+    unsigned long build_time;
+};
+extern struct nomakedefs_s nomakedefs;
+
 /*
  * Configurable internal parameters.
  *
@@ -423,7 +414,7 @@ struct savefile_info {
 #if defined(__linux__) && defined(__GLIBC__) && (__GLIBC__ >= 2)
 #define PANICTRACE_LIBC
 #endif
-#if defined(MACOSX)
+#if defined(MACOS)
 #define PANICTRACE_LIBC
 #endif
 #ifdef UNIX

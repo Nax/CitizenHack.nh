@@ -187,16 +187,26 @@ curses_init_nhwindows(int *argcp UNUSED,
 #ifdef PDCURSES
 # ifdef DEF_GAME_NAME
 #  ifdef VERSION_STRING
-    sprintf(window_title, "%s %s", DEF_GAME_NAME, VERSION_STRING);
+    Snprintf(window_title, sizeof window_title, "%s %s",
+                DEF_GAME_NAME, VERSION_STRING);
 #  else
-    sprintf(window_title, "%s", DEF_GAME_NAME);
+    if (nomakedefs.version_string)
+        Snprintf(window_title, sizeof window_title, "%s %s",
+                DEF_GAME_NAME, nomakedefs.version_string);
+    else
+        Snprintf(window_title, sizeof window_title, "%s", DEF_GAME_NAME);
 #  endif
        /* VERSION_STRING */
 # else
 #  ifdef VERSION_STRING
-    sprintf(window_title, "%s %s", "NetHack", VERSION_STRING);
+    Snprintf(window_title, sizeof window_title, "%s %s",
+                "NetHack", VERSION_STRING);
 #  else
-    sprintf(window_title, "%s", "NetHack");
+    if (nomakedefs.version_string)
+        Snprintf(window_title, sizeof window_title, "%s %s",
+                    "NetHack", nomakedefs.version_string);
+    else
+        Snprintf(window_title, sizeof window_title, "%s", "NetHack");
 #  endif
        /* VERSION_STRING */
 # endif/* DEF_GAME_NAME */
@@ -737,9 +747,9 @@ curses_print_glyph(winid wid, xchar x, xchar y,
     int attr = -1;
 
     glyph = glyphinfo->glyph;
-    special = glyphinfo->glyphflags;
+    special = glyphinfo->gm.glyphflags;
     ch = glyphinfo->ttychar;
-    color = glyphinfo->color;
+    color = glyphinfo->gm.color;
     if ((special & MG_PET) && iflags.hilite_pet) {
         attr = iflags.wc2_petattr;
     }

@@ -35,7 +35,7 @@
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
       <AdditionalIncludeDirectories>$(WinWin32Dir);$(IncDir);$(SysWindDir);$(SysShareDir);$(WinShareDir);$(LuaDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>TILES;WIN32CON;DLB;MSWIN_GRAPHICS;SAFEPROCS;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32CON;NO_TILE_C;DLB;MSWIN_GRAPHICS;SAFEPROCS;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;winmm.lib;Winmm.lib;bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -56,6 +56,7 @@
     <ClCompile Include="$(SrcDir)botl.c" />
     <ClCompile Include="$(SrcDir)cmd.c" />
     <ClCompile Include="$(SrcDir)dbridge.c" />
+    <ClCompile Include="$(SrcDir)date.c" />
     <ClCompile Include="$(SrcDir)decl.c" />
     <ClCompile Include="$(SrcDir)detect.c" />
     <ClCompile Include="$(SrcDir)dig.c" />
@@ -142,7 +143,6 @@
     <ClCompile Include="$(SrcDir)symbols.c" />
     <ClCompile Include="$(SrcDir)sys.c" />
     <ClCompile Include="$(SrcDir)teleport.c" />
-    <ClCompile Include="$(SrcDir)tile.c" />
     <ClCompile Include="$(SrcDir)timeout.c" />
     <ClCompile Include="$(SrcDir)topten.c" />
     <ClCompile Include="$(SrcDir)track.c" />
@@ -195,8 +195,8 @@
     <ClInclude Include="$(IncDir)config1.h" />
     <ClInclude Include="$(IncDir)context.h" />
     <ClInclude Include="$(IncDir)coord.h" />
-    <ClInclude Include="$(IncDir)date.h" />
     <ClInclude Include="$(IncDir)decl.h" />
+    <ClInclude Include="$(IncDir)defsym.h" />
     <ClInclude Include="$(IncDir)display.h" />
     <ClInclude Include="$(IncDir)dlb.h" />
     <ClInclude Include="$(IncDir)dungeon.h" />
@@ -213,16 +213,15 @@
     <ClInclude Include="$(IncDir)monattk.h" />
     <ClInclude Include="$(IncDir)mondata.h" />
     <ClInclude Include="$(IncDir)monflag.h" />
+    <ClInclude Include="$(IncDir)monsters.h" />
     <ClInclude Include="$(IncDir)monst.h" />
-    <ClInclude Include="$(IncDir)monsym.h" />
     <ClInclude Include="$(IncDir)nhlua.h" />
     <ClInclude Include="$(IncDir)windconf.h" />
     <ClInclude Include="$(IncDir)obj.h" />
     <ClInclude Include="$(IncDir)objclass.h" />
-    <ClInclude Include="$(IncDir)onames.h" />
+    <ClInclude Include="$(IncDir)objects.h" />
     <ClInclude Include="$(IncDir)patchlevel.h" />
     <ClInclude Include="$(IncDir)permonst.h" />
-    <ClInclude Include="$(IncDir)pm.h" />
     <ClInclude Include="$(IncDir)prop.h" />
     <ClInclude Include="$(IncDir)quest.h" />
     <ClInclude Include="$(IncDir)rect.h" />
@@ -231,6 +230,7 @@
     <ClInclude Include="$(IncDir)skills.h" />
     <ClInclude Include="$(IncDir)spell.h" />
     <ClInclude Include="$(IncDir)sp_lev.h" />
+    <ClInclude Include="$(IncDir)sym.h" />
     <ClInclude Include="$(IncDir)timeout.h" />
     <ClInclude Include="$(IncDir)tradstdc.h" />
     <ClInclude Include="$(IncDir)trap.h" />

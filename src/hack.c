@@ -1,4 +1,4 @@
-/* NetHack 3.7	hack.c	$NHDT-Date: 1617035736 2021/03/29 16:35:36 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.281 $ */
+/* NetHack 3.7	hack.c	$NHDT-Date: 1633802068 2021/10/09 17:54:28 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.298 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -7,17 +7,19 @@
 
 /* #define DEBUG */ /* uncomment for debugging */
 
-static void maybe_wail(void);
+static boolean could_move_onto_boulder(int, int);
 static int moverock(void);
 static void dosinkfall(void);
 static boolean findtravelpath(int);
 static boolean trapmove(int, int, struct trap *);
+static void check_buried_zombies(xchar, xchar);
+static void domove_core(void);
+static void maybe_smudge_engr(int, int, int, int);
 static struct monst *monstinroom(struct permonst *, int);
-static boolean doorless_door(int, int);
 static void move_update(boolean);
 static int pickup_checks(void);
-static void maybe_smudge_engr(int, int, int, int);
-static void domove_core(void);
+static boolean doorless_door(int, int);
+static void maybe_wail(void);
 
 #define IS_SHOP(x) (g.rooms[x].rtype >= SHOPBASE)
 
@@ -93,16 +95,53 @@ revive_nasty(int x, int y, const char *msg)
     return revived;
 }
 
+#define squeezeablylightinvent() (!g.invent || inv_weight() <= -850)
+
+/* can hero move onto a spot containing one or more boulders?
+   used for m<dir> and travel and during boulder push failure */
+static boolean
+could_move_onto_boulder(int sx, int sy)
+{
+    /* can if able to phaze through rock (must be poly'd, so not riding) */
+    if (Passes_walls)
+        return TRUE;
+    /* can't when riding */
+    if (u.usteed)
+        return FALSE;
+    /* can if a giant, unless doing so allows hero to pass into a
+       diagonal squeeze at the same time */
+    if (throws_rocks(g.youmonst.data))
+        return (!u.dx || !u.dy || !(IS_ROCK(levl[u.ux][sy].typ)
+                                    && IS_ROCK(levl[sx][u.uy].typ)));
+    /* can if tiny (implies carrying very little else couldn't move at all) */
+    if (verysmall(g.youmonst.data))
+        return TRUE;
+    /* can squeeze to spot if carrying extremely little, otherwise can't */
+    return squeezeablylightinvent();
+}
+
 static int
 moverock(void)
 {
     register xchar rx, ry, sx, sy;
-    register struct obj *otmp;
-    register struct trap *ttmp;
-    register struct monst *mtmp;
+    struct obj *otmp;
+    struct trap *ttmp;
+    struct monst *mtmp;
+    const char *what;
+    boolean firstboulder = TRUE;
+    int res = 0;
 
     sx = u.ux + u.dx, sy = u.uy + u.dy; /* boulder starting position */
     while ((otmp = sobj_at(BOULDER, sx, sy)) != 0) {
+        /* when otmp->next_boulder is 1, xname() will format it as
+           "next boulder" instead of just "boulder"; affects
+           boulder_hits_pool()'s messages as well as messages below */
+        otmp->next_boulder = firstboulder ? 0 : 1;
+        /* FIXME?  'firstboulder' should be reset to True if this boulder
+           isn't the first and the previous one is named differently from
+           this one.  Probably not worth bothering with... */
+        firstboulder = FALSE;
+
         /* make sure that this boulder is visible as the top object */
         if (otmp != g.level.objects[sx][sy])
             movobj(otmp, sx, sy);
@@ -110,12 +149,51 @@ moverock(void)
         rx = u.ux + 2 * u.dx; /* boulder destination position */
         ry = u.uy + 2 * u.dy;
         nomul(0);
+
+        /* using m<dir> towards an adjacent boulder steps over/onto it if
+           poly'd into a giant or squeezes under/beside it if small/light
+           enough but is a no-op in other circumstances unless move attempt
+           reveals an unseen boulder or lack of remembered, unseen monster */
+        if (g.context.nopick) {
+            int oldglyph = glyph_at(sx, sy); /* before feel_location() */
+
+            feel_location(sx, sy); /* same for all 3 if/else-if/else cases */
+            if (throws_rocks(g.youmonst.data)) {
+                /* player has used 'm<dir>' to move, so step to boulder's
+                   spot without pushing it; hero is poly'd into a giant,
+                   so exotic forms of locomotion are out, but might be
+                   levitating (ring, potion, spell) or flying (amulet) */
+                You("%s over a boulder here.",
+                    Levitation ? "float" : Flying ? "fly" : "step");
+                /* ["over" seems weird on air level but what else to say?] */
+                sokoban_guilt();
+                res = 0; /* move to <sx,sy> */
+            } else if (could_move_onto_boulder(sx, sy)) {
+                You("squeeze yourself %s the boulder.",
+                    Flying ? "over" : "against");
+                sokoban_guilt();
+                res = 0; /* move to <sx,sy> */
+            } else {
+                There("is a boulder in your way.");
+                /* use a move if hero learns something; see test_move() for
+                   how/why 'context.door_opened' is being dragged into this */
+                if (glyph_at(sx, sy) != oldglyph)
+                    g.context.door_opened = g.context.move = TRUE;
+                res = -1; /* don't move to <sx,sy>, so no soko guilt */
+            }
+            goto moverock_done; /* stop further push attempts */
+        }
         if (Levitation || Is_airlevel(&u.uz)) {
+            /* FIXME?  behavior in an air bubble on the water level should
+               be similar to being on the air level; both cases probably
+               ought to let push attempt proceed when flying (which implies
+               not levitating) */
             if (Blind)
                 feel_location(sx, sy);
             You("don't have enough leverage to push %s.", the(xname(otmp)));
             /* Give them a chance to climb over it? */
-            return -1;
+            res = -1;
+            goto moverock_done;
         }
         if (verysmall(g.youmonst.data) && !u.usteed) {
             if (Blind)
@@ -139,12 +217,14 @@ moverock(void)
                 goto cannot_push;
             }
 
-            if (revive_nasty(rx, ry, "You sense movement on the other side."))
-                return -1;
+            if (revive_nasty(rx, ry,
+                             "You sense movement on the other side.")) {
+                res = -1;
+                goto moverock_done;
+            }
 
             if (mtmp && !noncorporeal(mtmp->data)
-                && (!mtmp->mtrapped
-                    || !(ttmp && is_pit(ttmp->ttyp)))) {
+                && (!mtmp->mtrapped || !(ttmp && is_pit(ttmp->ttyp)))) {
                 boolean deliver_part1 = FALSE;
 
                 if (Blind)
@@ -164,15 +244,10 @@ moverock(void)
                     Strcpy(you_or_steed,
                            u.usteed ? y_monnam(u.usteed) : "you");
                     pline("%s%s cannot move %s.",
-                          deliver_part1
-                              ? "Perhaps that's why "
-                              : "",
-                          deliver_part1
-                              ? you_or_steed
-                              : upstart(you_or_steed),
-                          deliver_part1
-                              ? "it"
-                              : the(xname(otmp)));
+                          deliver_part1 ? "Perhaps that's why " : "",
+                          deliver_part1 ? you_or_steed
+                                        : upstart(you_or_steed),
+                          deliver_part1 ? "it" : the(xname(otmp)));
                 }
                 goto cannot_push;
             }
@@ -191,7 +266,16 @@ moverock(void)
                         obj_extract_self(otmp);
                         place_object(otmp, rx, ry);
                         newsym(sx, sy);
-                        pline("KAABLAMM!!!  %s %s land mine.",
+                        pline("%s!  %s %s land mine.",
+                              /* "kablam" is a variation of "ka-boom" or
+                                 "kablooey", rather cartoonish descriptions
+                                 of the sound of an explosion, but give it
+                                 even when deaf if hero sees the explosion */
+                              (!Deaf || !Blind) ? "KAABLAMM!!"
+                              /* use an alternate exclamation when feeling
+                                 the floor/ground/whatever shake (or maybe
+                                 a weak shockwave if levitating or flying) */
+                                                : "Gadzooks",
                               Tobjnam(otmp, "trigger"),
                               ttmp->madeby_u ? "your" : "a");
                         blow_up_landmine(ttmp);
@@ -199,7 +283,8 @@ moverock(void)
                         fill_pit(u.ux, u.uy);
                         if (cansee(rx, ry))
                             newsym(rx, ry);
-                        return sobj_at(BOULDER, sx, sy) ? -1 : 0;
+                        res = sobj_at(BOULDER, sx, sy) ? -1 : 0;
+                        goto moverock_done;
                     }
                     break;
                 case SPIKED_PIT:
@@ -215,7 +300,8 @@ moverock(void)
                     }
                     if (mtmp && !Blind)
                         newsym(rx, ry);
-                    return sobj_at(BOULDER, sx, sy) ? -1 : 0;
+                    res = sobj_at(BOULDER, sx, sy) ? -1 : 0;
+                    goto moverock_done;
                 case HOLE:
                 case TRAPDOOR:
                     if (Blind)
@@ -237,7 +323,8 @@ moverock(void)
                     levl[rx][ry].candig = 1;
                     if (cansee(rx, ry))
                         newsym(rx, ry);
-                    return sobj_at(BOULDER, sx, sy) ? -1 : 0;
+                    res = sobj_at(BOULDER, sx, sy) ? -1 : 0;
+                    goto moverock_done;
                 case LEVEL_TELEP:
                     /* 20% chance of picking current level; 100% chance for
                        that if in single-level branch (Knox) or in endgame */
@@ -253,6 +340,7 @@ moverock(void)
                     else
                         You("push %s and suddenly it disappears!",
                             the(xname(otmp)));
+                    otmp->next_boulder = 0; /* reset before moving it */
                     if (ttmp->ttyp == TELEP_TRAP) {
                         (void) rloco(otmp);
                     } else {
@@ -264,7 +352,8 @@ moverock(void)
                         otmp->owornmask = (long) MIGR_RANDOM;
                     }
                     seetrap(ttmp);
-                    return sobj_at(BOULDER, sx, sy) ? -1 : 0;
+                    res = sobj_at(BOULDER, sx, sy) ? -1 : 0;
+                    goto moverock_done;
                 default:
                     break; /* boulder not affected by this trap */
                 }
@@ -274,6 +363,7 @@ moverock(void)
                 goto nopushmsg;
             if (boulder_hits_pool(otmp, rx, ry, TRUE))
                 continue;
+
             /*
              * Re-link at top of fobj chain so that pile order is preserved
              * when level is restored.
@@ -292,16 +382,18 @@ moverock(void)
                 static NEARDATA long lastmovetime;
 #endif
  dopush:
+                what = the(xname(otmp));
                 if (!u.usteed) {
+                    /* FIXME: also remember boulder->o_id and override
+                       lastmovetime if this is a different boulder */
                     if (g.moves > lastmovetime + 2 || g.moves < lastmovetime)
                         pline("With %s effort you move %s.",
                               throws_rocks(g.youmonst.data) ? "little"
-                                                          : "great",
-                              the(xname(otmp)));
+                                                            : "great",
+                              what);
                     exercise(A_STR, TRUE);
                 } else
-                    pline("%s moves %s.", upstart(y_monnam(u.usteed)),
-                          the(xname(otmp)));
+                    pline("%s moves %s.", upstart(y_monnam(u.usteed)), what);
                 lastmovetime = g.moves;
             }
 
@@ -317,11 +409,12 @@ moverock(void)
             }
         } else {
  nopushmsg:
+            what = the(xname(otmp));
             if (u.usteed)
                 pline("%s tries to move %s, but cannot.",
-                      upstart(y_monnam(u.usteed)), the(xname(otmp)));
+                      upstart(y_monnam(u.usteed)), what);
             else
-                You("try to move %s, but in vain.", the(xname(otmp)));
+                You("try to move %s, but in vain.", what);
             if (Blind)
                 feel_location(sx, sy);
  cannot_push:
@@ -365,20 +458,25 @@ moverock(void)
                 break;
             }
 
-            if (!u.usteed
-                && (((!g.invent || inv_weight() <= -850)
-                     && (!u.dx || !u.dy || (IS_ROCK(levl[u.ux][sy].typ)
-                                            && IS_ROCK(levl[sx][u.uy].typ))))
-                    || verysmall(g.youmonst.data))) {
+            if (could_move_onto_boulder(sx, sy)) {
                 pline(
                    "However, you can squeeze yourself into a small opening.");
                 sokoban_guilt();
                 break;
-            } else
-                return -1;
+            } else {
+                res = -1;
+                goto moverock_done;
+            }
         }
     }
-    return 0;
+    res = 0;
+
+ moverock_done:
+    for (otmp = g.level.objects[sx][sy]; otmp; otmp = otmp->nexthere)
+        if (otmp->otyp == BOULDER)
+            otmp->next_boulder = 0; /* resume normal xname() for this obj */
+
+    return res;
 }
 
 /*
@@ -559,7 +657,7 @@ still_chewing(xchar x, xchar y)
 }
 
 void
-movobj(register struct obj *obj, register xchar ox, register xchar oy)
+movobj(struct obj *obj, xchar ox, xchar oy)
 {
     /* optimize by leaving on the fobj chain? */
     remove_object(obj);
@@ -569,12 +667,11 @@ movobj(register struct obj *obj, register xchar ox, register xchar oy)
     newsym(ox, oy);
 }
 
-static NEARDATA const char fell_on_sink[] = "fell onto a sink";
-
 static void
 dosinkfall(void)
 {
-    register struct obj *obj;
+    static const char fell_on_sink[] = "fell onto a sink";
+    struct obj *obj;
     int dmg;
     boolean lev_boots = (uarmf && uarmf->otyp == LEVITATION_BOOTS),
             innate_lev = ((HLevitation & (FROMOUTSIDE | FROMFORM)) != 0L),
@@ -729,7 +826,7 @@ test_move(int ux, int uy, int dx, int dy, int mode)
     int x = ux + dx;
     int y = uy + dy;
     register struct rm *tmpr = &levl[x][y];
-    register struct rm *ust;
+    struct rm *ust;
 
     g.context.door_opened = FALSE;
     /*
@@ -829,8 +926,7 @@ test_move(int ux, int uy, int dx, int dy, int mode)
                                we haven't opened a door but we're going to
                                return False and without having 'door_opened'
                                set, 'move' would get reset by caller */
-                            g.context.door_opened
-                                = g.context.move = TRUE;
+                            g.context.door_opened = g.context.move = TRUE;
                             /* since we've just lied about successfully
                                moving, we need to manually stop running */
                             nomul(0);
@@ -909,8 +1005,8 @@ test_move(int ux, int uy, int dx, int dy, int mode)
     }
 
     if (sobj_at(BOULDER, x, y) && (Sokoban || !Passes_walls)) {
-        if (!(Blind || Hallucination) && (g.context.run >= 2)
-            && mode != TEST_TRAV) {
+        if (mode != TEST_TRAV && g.context.run >= 2
+            && !(Blind || Hallucination) && !could_move_onto_boulder(x, y)) {
             if (mode == DO_MOVE && flags.mention_walls)
                 pline("A boulder blocks your path.");
             return FALSE;
@@ -933,7 +1029,9 @@ test_move(int ux, int uy, int dx, int dy, int mode)
             /* don't pick two boulders in a row, unless there's a way thru */
             if (sobj_at(BOULDER, ux, uy) && !Sokoban) {
                 if (!Passes_walls
-                    && !(tunnels(g.youmonst.data) && !needspick(g.youmonst.data))
+                    && !could_move_onto_boulder(ux, uy)
+                    && !(tunnels(g.youmonst.data)
+                         && !needspick(g.youmonst.data))
                     && !carrying(PICK_AXE) && !carrying(DWARVISH_MATTOCK)
                     && !((obj = carrying(WAN_DIGGING))
                          && !objects[obj->otyp].oc_name_known))
@@ -1062,10 +1160,14 @@ findtravelpath(int mode)
                         || ((mode == TRAVP_GUESS) && !couldsee(nx, ny)))
                         continue;
                     if ((!Passes_walls && !can_ooze(&g.youmonst)
-                         && closed_door(x, y)) || sobj_at(BOULDER, x, y)
+                         && closed_door(x, y))
+                        || (sobj_at(BOULDER, x, y)
+                            && !could_move_onto_boulder(x, y))
                         || test_move(x, y, nx - x, ny - y, TEST_TRAP)) {
-                        /* closed doors and boulders usually
-                         * cause a delay, so prefer another path */
+                        /* closed doors and boulders usually cause a delay,
+                           so prefer another path; however, giants and tiny
+                           creatures can use m<dir> to move onto a boulder's
+                           spot without pushing, so allow boulders for them */
                         if (travel[x][y] > radius - 3) {
                             if (!alreadyrepeated) {
                                 travelstepx[1 - set][nn] = x;
@@ -1371,6 +1473,25 @@ u_rooted(void)
     return FALSE;
 }
 
+/* reduce zombification timeout of buried zombies around px, py */
+static void
+check_buried_zombies(xchar x, xchar y)
+{
+    struct obj *otmp;
+    long t;
+
+    for (otmp = g.level.buriedobjlist; otmp; otmp = otmp->nobj) {
+        if (otmp->otyp == CORPSE && otmp->timed
+            && otmp->ox >= x - 1 && otmp->ox <= x + 1
+            && otmp->oy >= y - 1 && otmp->oy <= y + 1
+            && (t = peek_timer(ZOMBIFY_MON, obj_to_any(otmp))) > 0) {
+            t = stop_timer(ZOMBIFY_MON, obj_to_any(otmp));
+            (void) start_timer(max(1, t - rn2(10)), TIMER_OBJECT,
+                               ZOMBIFY_MON, obj_to_any(otmp));
+        }
+    }
+}
+
 void
 domove(void)
 {
@@ -1391,7 +1512,7 @@ domove_core(void)
     register struct rm *tmpr;
     register xchar x, y;
     struct trap *trap = NULL;
-    int wtcap;
+    int wtcap, glyph;
     boolean on_ice;
     xchar chainx = 0, chainy = 0,
           ballx = 0, bally = 0;         /* ball&chain new positions */
@@ -1609,6 +1730,7 @@ domove_core(void)
     g.bhitpos.x = x;
     g.bhitpos.y = y;
     tmpr = &levl[x][y];
+    glyph = glyph_at(x, y);
 
     /* attack monster */
     if (mtmp) {
@@ -1633,7 +1755,8 @@ domove_core(void)
          * different message and makes the player remember the monster.
          */
         if (g.context.nopick && !g.context.travel
-            && (canspotmon(mtmp) || glyph_is_invisible(levl[x][y].glyph))) {
+            && (canspotmon(mtmp) || glyph_is_invisible(glyph)
+                || glyph_is_warning(glyph))) {
             if (M_AP_TYPE(mtmp) && !Protection_from_shape_changers
                 && !sensemon(mtmp))
                 stumble_onto_mimic(mtmp);
@@ -1647,30 +1770,29 @@ domove_core(void)
         if (g.context.forcefight || !mtmp->mundetected || sensemon(mtmp)
             || ((hides_under(mtmp->data) || mtmp->data->mlet == S_EEL)
                 && !is_safemon(mtmp))) {
-
             /* target monster might decide to switch places with you... */
-            if (mtmp->data == &mons[PM_DISPLACER_BEAST] && !rn2(2)
-                && mtmp->mux == u.ux0 && mtmp->muy == u.uy0
-                && mtmp->mcanmove && !mtmp->msleeping && !mtmp->meating
-                && !mtmp->mtrapped && !u.utrap && !u.ustuck && !u.usteed
-                && !(u.dx && u.dy
-                     && (NODIAG(u.umonnum)
-                         || (bad_rock(mtmp->data, x, u.uy0)
-                             && bad_rock(mtmp->data, u.ux0, y))
-                         || (bad_rock(g.youmonst.data, u.ux0, y)
-                             && bad_rock(g.youmonst.data, x, u.uy0))))
-                && goodpos(u.ux0, u.uy0, mtmp, GP_ALLOW_U))
-                displaceu = TRUE;
-
-            /* try to attack; note that it might evade;
+            displaceu = (mtmp->data == &mons[PM_DISPLACER_BEAST] && !rn2(2)
+                         && mtmp->mux == u.ux0 && mtmp->muy == u.uy0
+                         && mtmp->mcanmove && !mtmp->msleeping
+                         && !mtmp->meating && !mtmp->mtrapped
+                         && !u.utrap && !u.ustuck && !u.usteed
+                         && !(u.dx && u.dy
+                              && (NODIAG(u.umonnum)
+                                  || (bad_rock(mtmp->data, x, u.uy0)
+                                      && bad_rock(mtmp->data, u.ux0, y))
+                                  || (bad_rock(g.youmonst.data, u.ux0, y)
+                                      && bad_rock(g.youmonst.data, x, u.uy0))))
+                         && goodpos(u.ux0, u.uy0, mtmp, GP_ALLOW_U));
+            /* if not displacing, try to attack; note that it might evade;
                also, we don't attack tame when _safepet_ */
-            else if (do_attack(mtmp))
+            if (!displaceu && do_attack(mtmp))
                 return;
         }
     }
 
     if (g.context.forcefight && levl[x][y].typ == IRONBARS && uwep) {
         struct obj *obj = uwep;
+        unsigned breakflags = (BRK_BY_HERO | BRK_FROM_INV);
 
         if (breaktest(obj)) {
             if (obj->quan > 1L)
@@ -1678,19 +1800,22 @@ domove_core(void)
             else
                 setuwep((struct obj *)0);
             freeinv(obj);
+            breakflags |= BRK_KNOWN2BREAK;
+        } else {
+            breakflags |= BRK_KNOWN2NOTBREAK;
         }
-        hit_bars(&obj, u.ux, u.uy, x, y, TRUE, TRUE);
+
+        hit_bars(&obj, u.ux, u.uy, x, y, breakflags);
         return;
     }
 
     /* specifying 'F' with no monster wastes a turn */
     if (g.context.forcefight
         /* remembered an 'I' && didn't use a move command */
-        || (glyph_is_invisible(levl[x][y].glyph) && !g.context.nopick)) {
+        || (glyph_is_invisible(glyph) && !g.context.nopick)) {
         struct obj *boulder = 0;
         boolean explo = (Upolyd && attacktype(g.youmonst.data, AT_EXPL)),
-                solid = !accessible(x, y);
-        int glyph = glyph_at(x, y); /* might be monster */
+                solid = (!accessible(x, y) || IS_FURNITURE(levl[x][y].typ));
         char buf[BUFSZ];
 
         if (!Underwater) {
@@ -1734,15 +1859,17 @@ domove_core(void)
                          : "nothing");
         } else if (solid) {
             /* glyph might indicate unseen terrain if hero is blind;
-               unlike searching, this won't reveal what that terrain is
-               (except for solid rock, where the glyph would otherwise
-               yield ludicrous "dark part of a room") */
-            Strcpy(buf, (levl[x][y].typ == STONE) ? "solid rock"
+               unlike searching, this won't reveal what that terrain is;
+               3.7: used to say "solid rock" for the stone case, but that
+               made it be different from unmapped walls outside of rooms */
+            Strcpy(buf, (levl[x][y].typ == STONE || levl[x][y].typ == SCORR)
+                         ? "stone"
                          : glyph_is_cmap(glyph)
                             ? the(defsyms[glyph_to_cmap(glyph)].explanation)
                             : (const char *) "an unknown obstacle");
             /* note: 'solid' is misleadingly named and catches pools
-               of water and lava as well as rock and walls */
+               of water and lava as well as rock and walls;
+               3.7: furniture too */
         } else {
             Strcpy(buf, "thin air");
         }
@@ -1969,6 +2096,9 @@ domove_core(void)
                 || IS_FURNITURE(tmpr->typ))
                 nomul(0);
     }
+
+    if (!Levitation && !Flying && !Stealth)
+        check_buried_zombies(u.ux, u.uy);
 
     if (hides_under(g.youmonst.data) || g.youmonst.data->mlet == S_EEL
         || u.dx || u.dy)
@@ -2775,7 +2905,7 @@ dopickup(void)
     return pickup(-count);
 }
 
-/* stop running if we see something interesting */
+/* stop running if we see something interesting next to us */
 /* turn around a corner if that is the only way we can proceed */
 /* do not turn left or right twice */
 void
@@ -2799,15 +2929,20 @@ lookaround(void)
         return;
     for (x = u.ux - 1; x <= u.ux + 1; x++)
         for (y = u.uy - 1; y <= u.uy + 1; y++) {
+            /* ignore out of bounds, and our own location */
             if (!isok(x, y) || (x == u.ux && y == u.uy))
                 continue;
+            /* (grid bugs) ignore diagonals */
             if (NODIAG(u.umonnum) && x != u.ux && y != u.uy)
                 continue;
 
+            /* can we see a monster there? */
             if ((mtmp = m_at(x, y)) != 0
                 && M_AP_TYPE(mtmp) != M_AP_FURNITURE
                 && M_AP_TYPE(mtmp) != M_AP_OBJECT
-                && (!mtmp->minvis || See_invisible) && !mtmp->mundetected) {
+                && mon_visible(mtmp)) {
+                /* running movement and not a tame monster */
+                /* OR it blocks our move direction and we're not traveling */
                 if ((g.context.run != 1 && !mtmp->mtame)
                     || (x == u.ux + u.dx && y == u.uy + u.dy
                         && !g.context.travel)) {
@@ -2817,15 +2952,20 @@ lookaround(void)
                 }
             }
 
+            /* stone is never interesting */
             if (levl[x][y].typ == STONE)
                 continue;
+            /* ignore the square we're moving away from */
             if (x == u.ux - u.dx && y == u.uy - u.dy)
                 continue;
 
+            /* more uninteresting terrain */
             if (IS_ROCK(levl[x][y].typ) || levl[x][y].typ == ROOM
-                || IS_AIR(levl[x][y].typ)) {
+                || IS_AIR(levl[x][y].typ) || levl[x][y].typ == ICE) {
                 continue;
             } else if (closed_door(x, y) || (mtmp && is_door_mappear(mtmp))) {
+                /* a closed door? */
+                /* ignore if diagonal */
                 if (x != u.ux && y != u.uy)
                     continue;
                 if (g.context.run != 1) {
@@ -2833,17 +2973,27 @@ lookaround(void)
                         You("stop in front of the door.");
                     goto stop;
                 }
+                /* we're orthonal to a closed door, consider it a corridor */
                 goto bcorr;
             } else if (levl[x][y].typ == CORR) {
+                /* corridor */
  bcorr:
                 if (levl[u.ux][u.uy].typ != ROOM) {
+                    /* running or traveling */
                     if (g.context.run == 1 || g.context.run == 3
                         || g.context.run == 8) {
+                        /* distance from x,y to location we're moving to */
                         i = dist2(x, y, u.ux + u.dx, u.uy + u.dy);
+                        /* ignore if not on or directly adjacent to it */
                         if (i > 2)
                             continue;
+                        /* x,y is (adjacent to) the location we're moving to */
+                        /* if we've seen one corridor, and x,y is not directly
+                           orthogonally next to it, mark noturn */
                         if (corrct == 1 && dist2(x, y, x0, y0) != 1)
                             noturn = 1;
+                        /* if previous x,y was diagonal, now x,y is orthogonal */
+                        /* (or this is the first time we're here) */
                         if (i < i0) {
                             i0 = i;
                             x0 = x;
@@ -2969,7 +3119,8 @@ crawl_destination(int x, int y)
         return FALSE;
     /* finally, are we trying to squeeze through a too-narrow gap? */
     return !(bad_rock(g.youmonst.data, u.ux, y)
-             && bad_rock(g.youmonst.data, x, u.uy));
+             && bad_rock(g.youmonst.data, x, u.uy)
+             && cant_squeeze_thru(&g.youmonst));
 }
 
 /* something like lookaround, but we are not running */
@@ -3179,8 +3330,6 @@ weight_cap(void)
             if (EWounded_legs & RIGHT_SIDE)
                 carrcap -= 100;
         }
-        if (carrcap < 0)
-            carrcap = 0;
     }
 
     if (ELevitation != save_ELev || BLevitation != save_BLev) {
@@ -3189,7 +3338,7 @@ weight_cap(void)
         float_vs_flight();
     }
 
-    return (int) carrcap;
+    return (int) max(carrcap, 1L); /* never return 0 */
 }
 
 /* returns how far beyond the normal capacity the player is currently. */
@@ -3284,4 +3433,27 @@ money_cnt(struct obj *otmp)
     return 0L;
 }
 
+void
+spot_checks(xchar x, xchar y, schar old_typ)
+{
+    schar new_typ = levl[x][y].typ;
+    boolean db_ice_now = FALSE;
+
+    switch (old_typ) {
+    case DRAWBRIDGE_UP:
+        db_ice_now = ((levl[x][y].drawbridgemask & DB_UNDER) == DB_ICE);
+        /*FALLTHRU*/
+    case ICE:
+        if ((new_typ != old_typ) 
+            || (old_typ == DRAWBRIDGE_UP && !db_ice_now)) {
+            /* make sure there's no MELT_ICE_AWAY timer */
+            if (spot_time_left(x, y, MELT_ICE_AWAY)) {
+                spot_stop_timers(x, y, MELT_ICE_AWAY);
+            }
+            /* adjust things affected by the ice */
+            obj_ice_effects(x, y, FALSE);
+        }
+        break;
+    }
+}
 /*hack.c*/

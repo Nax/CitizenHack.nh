@@ -1,4 +1,4 @@
-/* NetHack 3.7  decl.h  $NHDT-Date: 1607641577 2020/12/10 23:06:17 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.248 $ */
+/* NetHack 3.7  decl.h  $NHDT-Date: 1627408982 2021/07/27 18:03:02 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.265 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2007. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -105,6 +105,10 @@ struct sinfo {
     int in_paniclog;
 #endif
     int wizkit_wishing;
+    /* getting_a_command:  only used for ALTMETA config to process ESC, but
+       present and updated unconditionally; set by parse() when requesting
+       next command keystroke, reset by readchar() as it returns a key */
+    int getting_a_command;
 };
 
 /* Flags for controlling uptodate */
@@ -115,7 +119,7 @@ struct sinfo {
 
 /* NetHack ftypes */
 #define NHF_LEVELFILE       1
-#define NHF_SAVEFILE        2 
+#define NHF_SAVEFILE        2
 #define NHF_BONESFILE       3
 /* modes */
 #define READING  0x0
@@ -133,7 +137,7 @@ struct fieldlevel_content {
     boolean binary;       /* binary rather than text */
     boolean json;         /* JSON */
 };
-    
+
 typedef struct {
     int fd;               /* for traditional structlevel binary writes */
     int mode;             /* holds READING, WRITING, or FREEING modes  */
@@ -171,6 +175,15 @@ struct kinfo {
 #define KILLED_BY 1
 #define NO_KILLER_PREFIX 2
     char name[BUFSZ]; /* actual killer name */
+};
+
+enum movemodes {
+    MV_ANY = -1,
+    MV_WALK,
+    MV_RUN,
+    MV_RUSH,
+
+    N_MOVEMODES
 };
 
 enum movementdirs {
@@ -211,11 +224,6 @@ E const int shield_static[];
 
 #include "spell.h"
 
-#include "color.h"
-#ifdef TEXTCOLOR
-E const int zapcolors[];
-#endif
-
 E const struct class_sym def_oc_syms[MAXOCLASSES]; /* default class symbols */
 E uchar oc_syms[MAXOCLASSES];                      /* current class symbols */
 E const struct class_sym def_monsyms[MAXMCLASSES]; /* default class symbols */
@@ -236,11 +244,6 @@ E struct engr *head_engr;
 E NEARDATA struct you u;
 E NEARDATA time_t ubirthday;
 E NEARDATA struct u_realtime urealtime;
-
-#include "onames.h"
-#ifndef PM_H /* (pm.h has already been included via youprop.h) */
-#include "pm.h"
-#endif
 
 struct mvitals {
     uchar born;
@@ -307,13 +310,14 @@ E char emptystr[];
 #define ARTICLE_A 2
 #define ARTICLE_YOUR 3
 
-/* Monster name suppress masks */
+/* x_monnam() monster name suppress masks */
 #define SUPPRESS_IT 0x01
 #define SUPPRESS_INVISIBLE 0x02
 #define SUPPRESS_HALLUCINATION 0x04
 #define SUPPRESS_SADDLE 0x08
 #define EXACT_NAME 0x0F
 #define SUPPRESS_NAME 0x10
+#define AUGMENT_IT 0x20 /* use "someone" or "something" instead of "it" */
 
 /* Window system stuff */
 E NEARDATA winid WIN_MESSAGE;
@@ -421,6 +425,9 @@ E const char *ARGV0;
 #endif
 
 enum earlyarg {ARG_DEBUG, ARG_VERSION, ARG_SHOWPATHS
+#ifndef NODUMPENUMS
+    , ARG_DUMPENUMS
+#endif
 #ifdef WIN32
     ,ARG_WINDOWS
 #endif
@@ -449,9 +456,6 @@ enum nh_keyfunc {
     NHKF_FIGHT2,       /* '-' */
     NHKF_NOPICKUP,     /* 'm' */
     NHKF_RUN_NOPICKUP, /* 'M' */
-    NHKF_DOINV,        /* '0' */
-    NHKF_TRAVEL,       /* via mouse */
-    NHKF_CLICKLOOK,
 
     NHKF_REDRAW,
     NHKF_REDRAW2,
@@ -500,6 +504,8 @@ struct cmd {
     boolean phone_layout;  /* inverted keypad:  1,2,3 above, 7,8,9 below */
     boolean swap_yz;       /* QWERTZ keyboards; use z to move NW, y to zap */
     char move[N_DIRS];     /* char used for moving one step in direction */
+    char rush[N_DIRS];
+    char run[N_DIRS];
     const char *dirchars;      /* current movement/direction characters */
     const char *alphadirchars; /* same as dirchars if !numpad */
     const struct ext_func_tab *commands[256]; /* indexed by input character */
@@ -545,14 +551,6 @@ struct trapinfo {
     int time_needed;
     boolean force_bungle;
 };
-
-typedef struct {
-    xchar gnew; /* perhaps move this bit into the rm structure. */
-    int glyph;
-#ifndef UNBUFFERED_GLYPHINFO
-    glyph_info glyphinfo;
-#endif
-} gbuf_entry;
 
 enum vanq_order_modes {
     VANQ_MLVL_MNDX = 0,
@@ -775,7 +773,6 @@ struct instance_globals {
     stairway *stairs;
     int smeq[MAXNROFROOMS + 1];
     int doorindex;
-    char *save_cm;
     long done_money;
     long domove_attempting;
     long domove_succeeded;
@@ -824,10 +821,9 @@ struct instance_globals {
     struct mkroom rooms[(MAXNROFROOMS + 1) * 2];
     struct mkroom *subrooms;
     dlevel_t level; /* level map */
-    long moves;
-    long monstermoves; /* moves and monstermoves diverge when player is Fast */
+    long moves; /* turn counter */
     long wailmsg;
-    struct obj *migrating_objs; /* objects moving to another dungeon level */    
+    struct obj *migrating_objs; /* objects moving to another dungeon level */
     struct obj *billobjs; /* objects not yet paid for */
 #if defined(MICRO) || defined(WIN32)
     char hackdir[PATHLEN]; /* where rumors, help, record are */
@@ -837,12 +833,12 @@ struct instance_globals {
     struct context_info context;
     char *fqn_prefix[PREFIX_COUNT];
     /* Windowing stuff that's really tty oriented, but present for all ports */
-    struct tc_gbl_data tc_gbl_data; /* AS,AE, LI,CO */     
+    struct tc_gbl_data tc_gbl_data; /* AS,AE, LI,CO */
 #if defined(UNIX) || defined(VMS)
     int locknum; /* max num of simultaneous users */
 #endif
 #ifdef DEF_PAGER
-    char *catmore; /* default pager */
+    const char *catmore; /* external pager; from getenv() or DEF_PAGER */
 #endif
 #ifdef MICRO
     char levels[PATHLEN]; /* where levels are */
@@ -888,7 +884,7 @@ struct instance_globals {
     char dogname[PL_PSIZ];
     char catname[PL_PSIZ];
     char horsename[PL_PSIZ];
-    char preferred_pet; /* '\0', 'c', 'd', 'n' (none) */    
+    char preferred_pet; /* '\0', 'c', 'd', 'n' (none) */
     struct monst *mydogs; /* monsters that went down/up together with @ */
     struct monst *migrating_mons; /* monsters moving to another level */
     struct autopickup_exception *apelist;
@@ -954,7 +950,7 @@ struct instance_globals {
 
     /* invent.c */
     int lastinvnr;  /* 0 ... 51 (never saved&restored) */
-    unsigned sortlootmode; /* set by sortloot() for use by sortloot_cmp(); 
+    unsigned sortlootmode; /* set by sortloot() for use by sortloot_cmp();
                             * reset by sortloot when done */
     char *invbuf;
     unsigned invbufsiz;
@@ -995,13 +991,12 @@ struct instance_globals {
     int min_rx; /* rectangle bounds for regions */
     int max_rx;
     int min_ry;
-    int max_ry; 
+    int max_ry;
     int n_loc_filled;
 
     /* mkmaze.c */
     lev_region bughack; /* for preserving the insect legs when wallifying
                          * baalz level */
-    boolean was_waterlevel; /* ugh... this shouldn't be needed */
     struct bubble *bbubbles;
     struct bubble *ebubbles;
     struct trap *wportal;
@@ -1046,6 +1041,7 @@ struct instance_globals {
 
     /* o_init.c */
     short disco[NUM_OBJECTS];
+    short oclass_prob_totals[MAXOCLASSES];
 
     /* objname.c */
     /* distantname used by distant_name() to pass extra information to
@@ -1064,6 +1060,7 @@ struct instance_globals {
     boolean opt_initial;
     boolean opt_from_file;
     boolean opt_need_redraw; /* for doset() */
+    boolean opt_need_glyph_reset;
     /* use menucolors to show colors in the pick-a-color menu */
     boolean save_menucolors; /* copy of iflags.use_menu_colors */
     struct menucoloring *save_colorings; /* copy of g.menu_colorings */
@@ -1084,6 +1081,8 @@ struct instance_globals {
     boolean class_filter;
     boolean bucx_filter;
     boolean shop_filter;
+    boolean picked_filter;
+    boolean loot_reset_justpicked;
 
     /* pline.c */
     unsigned pline_flags;
@@ -1131,7 +1130,6 @@ struct instance_globals {
     /* restore.c */
     int n_ids_mapped;
     struct bucket *id_map;
-    boolean restoring;
     struct fruit *oldfruit;
     long omoves;
 
@@ -1263,8 +1261,6 @@ struct const_globals {
 };
 
 E const struct const_globals cg;
-
-E const glyph_info nul_glyphinfo;
 
 #undef E
 

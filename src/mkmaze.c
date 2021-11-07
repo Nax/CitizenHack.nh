@@ -1,4 +1,4 @@
-/* NetHack 3.7	mkmaze.c	$NHDT-Date: 1596498182 2020/08/03 23:43:02 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.114 $ */
+/* NetHack 3.7	mkmaze.c	$NHDT-Date: 1627951223 2021/08/03 00:40:23 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.122 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Pasi Kallinen, 2018. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -404,9 +404,17 @@ baalz_fixup(void)
                     g.bughack.delarea.x2 = x, g.bughack.delarea.y2 = y;
             } else if (levl[x][y].typ == IRONBARS) {
                 /* novelty effect; allowing digging in front of 'eyes' */
-                levl[x - 1][y].wall_info &= ~W_NONDIGGABLE;
-                if (isok(x - 2, y))
-                    levl[x - 2][y].wall_info &= ~W_NONDIGGABLE;
+                if (isok(x - 1, y)
+                    && (levl[x - 1][y].wall_info & W_NONDIGGABLE) != 0) {
+                    levl[x - 1][y].wall_info &= ~W_NONDIGGABLE;
+                    if (isok(x - 2, y))
+                        levl[x - 2][y].wall_info &= ~W_NONDIGGABLE;
+                } else if (isok(x + 1, y)
+                    && (levl[x + 1][y].wall_info & W_NONDIGGABLE) != 0) {
+                    levl[x + 1][y].wall_info &= ~W_NONDIGGABLE;
+                    if (isok(x + 2, y))
+                        levl[x + 2][y].wall_info &= ~W_NONDIGGABLE;
+                }
             }
 
     wallification(max(g.bughack.inarea.x1 - 2, 1),
@@ -418,17 +426,18 @@ baalz_fixup(void)
        both top and bottom gets a bogus extra connection to room area,
        producing unwanted rectangles; change back to separated legs */
     x = g.bughack.delarea.x1, y = g.bughack.delarea.y1;
-    if (isok(x, y) && levl[x][y].typ == TLWALL
+    if (isok(x, y) && (levl[x][y].typ == TLWALL || levl[x][y].typ == TRWALL)
         && isok(x, y + 1) && levl[x][y + 1].typ == TUWALL) {
-        levl[x][y].typ = BRCORNER;
+        levl[x][y].typ = (levl[x][y].typ == TLWALL) ? BRCORNER : BLCORNER;
         levl[x][y + 1].typ = HWALL;
         if ((mtmp = m_at(x, y)) != 0) /* something at temporary pool... */
             (void) rloc(mtmp, FALSE);
     }
+
     x = g.bughack.delarea.x2, y = g.bughack.delarea.y2;
-    if (isok(x, y) && levl[x][y].typ == TLWALL
+    if (isok(x, y) && (levl[x][y].typ == TLWALL || levl[x][y].typ == TRWALL)
         && isok(x, y - 1) && levl[x][y - 1].typ == TDWALL) {
-        levl[x][y].typ = TRCORNER;
+        levl[x][y].typ = (levl[x][y].typ == TLWALL) ? TRCORNER : TLCORNER;
         levl[x][y - 1].typ = HWALL;
         if ((mtmp = m_at(x, y)) != 0) /* something at temporary pool... */
             (void) rloc(mtmp, FALSE);
@@ -1315,7 +1324,7 @@ fumaroles(void)
         xchar y = rn1(ROWNO - 4, 3);
 
         if (levl[x][y].typ == LAVAPOOL) {
-            NhRegion *r = create_gas_cloud(x, y, 4 + rn2(5), rn1(10, 5));
+            NhRegion *r = create_gas_cloud(x, y, rn1(30, 20), rn1(10, 5));
 
             clear_heros_fault(r);
             snd = TRUE;
@@ -1616,7 +1625,10 @@ waterbody_name(xchar x, xchar y)
         ; /* fall through to default return value */
     else if (Is_juiblex_level(&u.uz))
         return "swamp";
-    else if (ltyp == MOAT && !Is_medusa_level(&u.uz))
+    else if (ltyp == MOAT && !Is_medusa_level(&u.uz)
+             /* samurai has two moat spots on quest home level that seem
+                silly if described as such (maybe change them to pools?) */
+             && !(Role_if(PM_SAMURAI) && Is_qstart(&u.uz)))
         return "moat";
 
     return hliquid("water");
