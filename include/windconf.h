@@ -24,7 +24,7 @@
 #define SYSCF                /* Use a global configuration */
 #define SYSCF_FILE "sysconf" /* Use a file to hold the SYSCF configuration */
 
-#define DUMPLOG      /* Enable dumplog files */
+/* #define DUMPLOG */      /* Enable dumplog files */
 /*#define DUMPLOG_FILE "nethack-%n-%d.log"*/
 #define DUMPLOG_MSG_COUNT 50
 
@@ -45,7 +45,7 @@
 /* #define SHORT_FILENAMES */ /* All NT filesystems support long names now
  */
 
-#define VERSION_IN_DLB_FILENAME     /* Append version digits to nhdat */
+/* #define VERSION_IN_DLB_FILENAME      Append version digits to nhdat */
 
 #ifdef MICRO
 #undef MICRO /* never define this! */

@@ -170,11 +170,11 @@ static void build_bmptile(pixel(*) [TILE_X]);
 
 const char *tilefiles[] = {
 #if (TILE_X == 32)
-    "../win/share/mon32.txt", "../win/share/obj32.txt",
-    "../win/share/oth32.txt",
+    "mon32.txt", "obj32.txt",
+    "oth32.txt",
 #else
-    "../win/share/monsters.txt", "../win/share/objects.txt",
-    "../win/share/other.txt",
+    "monsters.txt", "objects.txt",
+    "other.txt",
 #endif
 };
 

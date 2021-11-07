@@ -58,9 +58,8 @@ struct conditionals_t {
 #endif
     /* commented out in monst.c at present */
     { MON_GLYPH, PM_SHOCKING_SPHERE, "beholder" },
-    { MON_GLYPH, PM_BABY_SILVER_DRAGON, "baby shimmering dragon" },
-    { MON_GLYPH, PM_SILVER_DRAGON, "shimmering dragon" },
-    { MON_GLYPH, PM_JABBERWOCK, "vorpal jabberwock" },
+    { MON_GLYPH, PM_BABY_PURPLE_DRAGON, "baby shimmering dragon" },
+    { MON_GLYPH, PM_PURPLE_DRAGON, "shimmering dragon" },
     { MON_GLYPH, PM_VAMPIRE_LEADER, "vampire mage" },
 #ifndef CHARON /* not supported yet */
     { MON_GLYPH, PM_CROESUS, "Charon" },
@@ -255,6 +254,7 @@ tilename(int set, int file_entry, int gend)
 #ifndef TILETEXT
 #define TILE_FILE "tile.c"
 
+#if 0
 #ifdef AMIGA
 #define SOURCE_TEMPLATE "NH:src/%s"
 #else
@@ -264,6 +264,8 @@ tilename(int set, int file_entry, int gend)
 #define SOURCE_TEMPLATE "../src/%s"
 #endif
 #endif
+#endif
+#define SOURCE_TEMPLATE "%s"
 
 struct tilemap_t {
     short tilenum;

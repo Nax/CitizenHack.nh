@@ -1,58 +1,76 @@
 cmake_minimum_required(VERSION 3.10)
 project(CitizenHack)
 
-find_package(Curses REQUIRED)
-find_package(ZLIB REQUIRED)
-find_package(Lua REQUIRED)
+#find_package(Curses REQUIRED)
+#find_package(ZLIB REQUIRED)
+#find_package(Lua REQUIRED)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-set(GAME "citizenhack")
-set(GAME_ARCHIVE "nhdat")
+set(GAME            "citizenhack")
+set(GAMEW           "citizenhackw")
+set(GAME_ARCHIVE    "nhdat")
+
+# Dependencies
+add_subdirectory(vendor)
 
 # Config
 set(HACK_DIRECTORY      "${CMAKE_INSTALL_PREFIX}/lib/citizenhack"   CACHE PATH      "The HACKDIR")
 set(HACK_DUMPLOG        ON                                          CACHE BOOL      "Enable the dumplog feature")
 set(HACK_DUMPLOG_FILE   "/tmp/citizenhack.%n.%d.log"                CACHE STRING    "The dumplog file template")
 set(HACK_DATABASE       ON                                          CACHE BOOL      "Enable the database file")
-set(HACK_WIN_CURSES     ON                                          CACHE BOOL      "Enable ncurses graphics")
 
-if (HACK_WIN_CURSES)
-    set(SUGGESTED_HACK_WIN_DEFAULT "curses")
-else()
-    set(SUGGESTED_HACK_WIN_DEFAULT "tty")
+if (NOT WIN32)
+    # WIN32 has two executables
+    set(HACK_WIN_CURSES     ON                                          CACHE BOOL      "Enable ncurses graphics")
+    if (HACK_WIN_CURSES)
+        set(SUGGESTED_HACK_WIN_DEFAULT "curses")
+    else()
+        set(SUGGESTED_HACK_WIN_DEFAULT "tty")
+    endif()
+    set(HACK_WIN_DEFAULT     ${SUGGESTED_HACK_WIN_DEFAULT}          CACHE STRING    "The default window system to use")
 endif()
 
-set(HACK_WIN_DEFAULT     ${SUGGESTED_HACK_WIN_DEFAULT}          CACHE STRING    "The default window system to use")
+set(HACK_DUMPLOG_FILE2 "${HACK_DUMPLOG_FILE}")
+if (WIN32)
+    string(REPLACE "%" "%%" HACK_DUMPLOG_FILE2 ${HACK_DUMPLOG_FILE2})
+endif()
 
-macro(inject_config tgt)
-    target_compile_definitions(${tgt} PRIVATE
-        HACKDIR="${HACK_DIRECTORY}"
-        DUMPLOG_FILE="${HACK_DUMPLOG_FILE}"
-        DEFAULT_WINDOW_SYS="${HACK_WIN_DEFAULT}"
-        $<$<BOOL:${HACK_DATABASE}>:DLB>
-        $<$<BOOL:${HACK_DUMPLOG}>:DUMPLOG>
-        $<$<BOOL:${HACK_WIN_CURSES}>:CURSES_GRAPHICS>
-        SCORE_ON_BOTL
-        SECURE
-        ZLIB_COMP
-    )
-endmacro()
-
-# Makedefs
-add_executable(
-    makedefs
-    "${CMAKE_SOURCE_DIR}/src/monst.c"
-    "${CMAKE_SOURCE_DIR}/src/objects.c"
-    "${CMAKE_SOURCE_DIR}/util/makedefs.c"
+add_compile_definitions(
+    DUMPLOG_FILE="${HACK_DUMPLOG_FILE2}"
+    SCORE_ON_BOTL
+    SECURE
+    ZLIB_COMP
 )
-inject_config(makedefs)
-target_compile_definitions(makedefs PRIVATE FILE_PREFIX=1)
-target_include_directories(makedefs PRIVATE "${CMAKE_SOURCE_DIR}/include" ${LUA_INCLUDE_DIR})
-target_link_libraries(makedefs ${LUA_LIBRARIES})
 
+if (HACK_DATABASE)
+    add_compile_definitions(DLB)
+endif()
+
+if (HACK_DUMPLOG)
+    add_compile_definitions(DUMPLOG)
+endif()
+
+if (HACK_WIN_CURSES)
+    add_compile_definitions(CURSES_GRAPHICS)
+endif()
+
+if (WIN32)
+    add_compile_definitions(
+        SAFEPROCS
+        MSWIN_GRAPHICS
+        WIN32CON
+    )
+else()
+    add_compile_definitions(
+        HACKDIR="${HACK_DIRECTORY}"
+        DEFAULT_WINDOW_SYS="${HACK_WIN_DEFAULT}"
+    )
+endif()
+
+# Generated files structure
 set(GENERATED_DIR           "${CMAKE_BINARY_DIR}/gen")
 set(GENERATED_DIR_DUMMY     "${GENERATED_DIR}/dummy")
 set(HACKDIR                 "${CMAKE_BINARY_DIR}/hackdir")
@@ -61,8 +79,67 @@ if (HACK_DATABASE)
 else()
     set(HACKDIR_DATA "${HACKDIR}")
 endif()
+file(MAKE_DIRECTORY ${HACKDIR} ${HACKDIR_DATA} ${GENERATED_DIR_DUMMY} "${GENERATED_DIR}/include" "${GENERATED_DIR}/src" "${GENERATED_DIR}/dat" "${GENERATED_DIR}/rc")
 
-file(MAKE_DIRECTORY ${HACKDIR} ${HACKDIR_DATA} ${GENERATED_DIR_DUMMY} "${GENERATED_DIR}/include" "${GENERATED_DIR}/src" "${GENERATED_DIR}/dat")
+include_directories("${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include" "${CMAKE_BINARY_DIR}/_vendor/include")
+
+# Utils
+add_subdirectory(util)
+
+set(RC_FILES  "")
+set(RC_FILESW "")
+if (WIN32)
+    # uudecode
+    add_executable(uudecode "${CMAKE_SOURCE_DIR}/sys/share/uudecode.c")
+    macro(rc_uudecode _gfx _name _path)
+        set(_fullpath "${GENERATED_DIR}/rc/${_name}")
+        list(APPEND RC_FILESW "${_fullpath}")
+        if (NOT _gfx)
+            list(APPEND RC_FILES "${_fullpath}")
+        endif()
+        add_custom_command(
+            OUTPUT "${_fullpath}"
+            DEPENDS uudecode "${_path}"
+            COMMAND uudecode "${_path}"
+            WORKING_DIRECTORY "${GENERATED_DIR}/rc"
+            VERBATIM
+        )
+    endmacro()
+    include_directories("${GENERATED_DIR}/rc")
+
+    rc_uudecode(NO  nethack.ico  "${CMAKE_SOURCE_DIR}/sys/windows/nhico.uu")
+    rc_uudecode(YES petmark.bmp  "${CMAKE_SOURCE_DIR}/win/win32/petmark.uu")
+    rc_uudecode(YES pilemark.bmp "${CMAKE_SOURCE_DIR}/win/win32/pilemark.uu")
+    rc_uudecode(YES mnsel.bmp    "${CMAKE_SOURCE_DIR}/win/win32/mnsel.uu")
+    rc_uudecode(YES mnselcnt.bmp "${CMAKE_SOURCE_DIR}/win/win32/mnselcnt.uu")
+    rc_uudecode(YES mnunsel.bmp  "${CMAKE_SOURCE_DIR}/win/win32/mnunsel.uu")
+    rc_uudecode(YES splash.bmp   "${CMAKE_SOURCE_DIR}/win/win32/splash.uu")
+    rc_uudecode(YES rip.bmp      "${CMAKE_SOURCE_DIR}/win/win32/rip.uu")
+
+    # tile2bmp
+    add_executable(tile2bmp
+        "${CMAKE_SOURCE_DIR}/win/share/tile2bmp.c"
+        "${CMAKE_SOURCE_DIR}/win/share/tiletext.c"
+        "${CMAKE_SOURCE_DIR}/win/share/tilemap.c"
+        "${CMAKE_SOURCE_DIR}/src/monst.c"
+        "${CMAKE_SOURCE_DIR}/src/objects.c"
+        "${CMAKE_SOURCE_DIR}/src/drawing.c"
+    )
+    target_include_directories(tile2bmp PRIVATE "${CMAKE_SOURCE_DIR}/sys/windows")
+    target_compile_definitions(tile2bmp PRIVATE TILETEXT=1)
+    list(APPEND RC_FILESW "${GENERATED_DIR}/rc/tiles.bmp")
+    add_custom_command(
+        OUTPUT "${GENERATED_DIR}/rc/tiles.bmp"
+        DEPENDS
+            tile2bmp
+            "${CMAKE_SOURCE_DIR}/win/share/monsters.txt"
+            "${CMAKE_SOURCE_DIR}/win/share/objects.txt"
+            "${CMAKE_SOURCE_DIR}/win/share/other.txt"
+        COMMAND tile2bmp "${GENERATED_DIR}/rc/tiles.bmp"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/win/share"
+        VERBATIM
+    )
+endif()
 
 function(add_makedef flag)
     cmake_parse_arguments(ADD_MAKEDEF "" "" "OUTPUT;DEPENDS" ${ARGN})
@@ -113,6 +190,23 @@ add_makedef(r
     DEPENDS
         "${CMAKE_SOURCE_DIR}/dat/rumors.fal"
         "${CMAKE_SOURCE_DIR}/dat/rumors.tru"
+)
+
+# Tilemap
+add_executable(
+    tilemap
+    "${CMAKE_SOURCE_DIR}/win/share/tilemap.c"
+    "${GENERATED_DIR}/include/date.h"
+    "${GENERATED_DIR}/include/pm.h"
+    "${GENERATED_DIR}/include/onames.h"
+)
+target_include_directories(tilemap PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include")
+target_link_libraries(tilemap)
+add_custom_command(
+    OUTPUT "${GENERATED_DIR}/src/tile.c"
+    COMMAND tilemap
+    DEPENDS tilemap
+    WORKING_DIRECTORY "${GENERATED_DIR}/src"
 )
 
 # Hackdir data
@@ -169,9 +263,7 @@ if (HACK_DATABASE)
         "${CMAKE_SOURCE_DIR}/src/dlb.c"
         "${CMAKE_SOURCE_DIR}/util/panic.c"
     )
-    target_include_directories(dlb PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include" ${LUA_INCLUDE_DIR})
-    target_link_libraries(dlb ${LUA_LIBRARY})
-    inject_config(dlb)
+    target_link_libraries(dlb)
     set(GENERATED_ARCHIVE "${HACKDIR}/nhdat")
     add_custom_command(
         OUTPUT "${GENERATED_ARCHIVE}"
@@ -212,19 +304,40 @@ endif()
 
 # Hack
 file(GLOB_RECURSE SOURCES "src/*.c" "src/*.h" "include/*.h")
+file(GLOB_RECURSE SOURCES_UNIX "sys/unix/*.c")
+file(GLOB_RECURSE SOURCES_WIN_WIN32 "win/win32/*.c")
+
+set(SOURCES_WINDOWS
+    "sys/windows/windmain.c"
+    "sys/windows/consoletty.c"
+    "sys/windows/windsys.c"
+    "sys/windows/win10.c"
+    "sys/windows/ntsound.c"
+    "${GENERATED_DIR}/src/tile.c"
+    "sys/share/cppregex.cpp"
+    "win/share/safeproc.c"
+)
+
 list(APPEND SOURCES
     "${GENERATED_DIR}/include/date.h"
     "${GENERATED_DIR}/include/pm.h"
     "${GENERATED_DIR}/include/onames.h"
 )
 
-file(GLOB_RECURSE SOURCES_UNIX "sys/unix/*.c")
-list(APPEND SOURCES ${SOURCES_UNIX})
-list(APPEND SOURCES
-    "sys/share/posixregex.c"
-    "sys/share/ioctl.c"
-    "sys/share/unixtty.c"
-)
+if (UNIX)
+    list(APPEND SOURCES ${SOURCES_UNIX})
+    list(APPEND SOURCES
+        "sys/share/posixregex.c"
+        "sys/share/ioctl.c"
+        "sys/share/unixtty.c"
+    )
+endif()
+
+if (WIN32)
+    list(APPEND SOURCES ${SOURCES_WINDOWS} ${SOURCES_WIN_WIN32})
+    set(SOURCES_EXTRA_GAME  "${CMAKE_SOURCE_DIR}/win/win32/nethack.rc")
+    set(SOURCES_EXTRA_GAMEW "${CMAKE_SOURCE_DIR}/win/win32/NetHackW.rc")
+endif()
 
 file(GLOB_RECURSE SOURCES_WIN_TTY "win/tty/*.c")
 list(APPEND SOURCES ${SOURCES_WIN_TTY})
@@ -234,11 +347,31 @@ if (HACK_WIN_CURSES)
     list(APPEND SOURCES ${SOURCES_WIN_CURSES})
 endif()
 
-add_executable(${GAME} ${SOURCES})
-inject_config(${GAME})
-target_include_directories(${GAME} PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include" ${CURSES_INCLUDE_DIRS} ${LUA_INCLUDE_DIR})
-target_link_libraries(${GAME} ${CURSES_LIBRARIES} ZLIB::ZLIB ${LUA_LIBRARY})
+add_executable(${GAME} ${SOURCES} ${SOURCES_EXTRA_GAME} ${RC_FILES})
+if (WIN32)
+    target_include_directories(${GAME} PRIVATE "sys/windows")
+endif()
+target_link_libraries(${GAME} ${CURSES_LIBRARIES} ZLIB::ZLIB Lua::Lua)
+if (WIN32)
+    target_link_libraries(${GAME} bcrypt winmm comctl32)
+endif()
 add_dependencies(${GAME} data)
+
+# Win32 graphical executable
+if (WIN32)
+    add_executable(${GAMEW} WIN32 ${SOURCES} ${SOURCES_EXTRA_GAMEW} ${RC_FILESW})
+    target_include_directories(${GAMEW} PRIVATE "sys/windows")
+    target_link_libraries(${GAMEW} ZLIB::ZLIB Lua::Lua)
+    target_link_libraries(${GAMEW} bcrypt winmm comctl32)
+    add_dependencies(${GAMEW} data)
+endif()
+
+# Win32 Key Handlers
+if (WIN32)
+    add_library(nhraykey SHARED "${CMAKE_SOURCE_DIR}/sys/windows/nhraykey.c")
+    add_library(nhdefkey SHARED "${CMAKE_SOURCE_DIR}/sys/windows/nhdefkey.c")
+    add_library(nh340key SHARED "${CMAKE_SOURCE_DIR}/sys/windows/nh340key.c")
+endif()
 
 # Install
 install(

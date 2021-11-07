@@ -148,8 +148,10 @@ mswin_display_splash_window(BOOL show_ver)
 
     /* Fill the text control */
     strbuf_reserve(&strbuf, BUFSIZ);
-    Sprintf(strbuf.str, "%s\n%s\n%s\n%s\n\n", COPYRIGHT_BANNER_A,
-            COPYRIGHT_BANNER_B, COPYRIGHT_BANNER_C, COPYRIGHT_BANNER_D);
+    Sprintf(strbuf.str, "%s\n%s\n%s\n%s\n%s\n%s\n\n", COPYRIGHT_BANNER_A,
+            COPYRIGHT_BANNER_B, COPYRIGHT_BANNER_C,
+            COPYRIGHT2_BANNER_A, COPYRIGHT2_BANNER_B,
+            COPYRIGHT3_BANNER_A);
 
     if (show_ver) {
         /* Show complete version information */
