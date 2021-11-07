@@ -2147,8 +2147,7 @@ get_bk_glyph(xchar x, xchar y)
                          ? DARKROOMSYM : S_stone;
         }
 
-        if (idx != S_room)
-            bkglyph = cmap_to_glyph(idx);
+        bkglyph = cmap_to_glyph(idx);
     }
     return bkglyph;
 }
