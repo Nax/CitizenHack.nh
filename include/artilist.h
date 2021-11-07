@@ -3,7 +3,7 @@
 /*-Copyright (c) Robert Patrick Rankin, 2017. */
 /* NetHack may be freely redistributed.  See license for details. */
 
-#if defined(MAKEDEFS_C) || defined (MDLIB_C)
+#if defined(MAKEDEFS_C) || defined (MDLIB_C) || defined(TILEMAP_C)
 /* in makedefs.c, all we care about is the list of names */
 
 #define A(nam, typ, s1, s2, mt, atk, dfn, cry, inv, al, cl, rac, \

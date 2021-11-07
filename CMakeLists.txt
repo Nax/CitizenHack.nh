@@ -131,6 +131,7 @@ if (WIN32)
             tile2bmp
             "${CMAKE_SOURCE_DIR}/win/share/monsters.txt"
             "${CMAKE_SOURCE_DIR}/win/share/objects.txt"
+            "${CMAKE_SOURCE_DIR}/win/share/artifacts.txt"
             "${CMAKE_SOURCE_DIR}/win/share/other.txt"
         COMMAND tile2bmp "${GENERATED_DIR}/rc/tiles.bmp"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/win/share"

@@ -23,7 +23,7 @@ static const char *text_sets[] = { "monthin.txt", "objthin.txt",
                                    "oththin.txt" };
 #else
 static const char *text_sets[] = { "monsters.txt", "objects.txt",
-                                   "other.txt" };
+                                   "artifacts.txt", "other.txt" };
 #endif
 
 extern const char *tilename(int, int, int);
@@ -33,7 +33,7 @@ static boolean write_text_colormap(FILE *);
 static boolean read_txttile(FILE *, pixel (*)[TILE_X]);
 static void write_txttile(FILE *, pixel (*)[TILE_X]);
 
-enum { MONSTER_SET, OBJECT_SET, OTHER_SET};
+enum { MONSTER_SET, OBJECT_SET, ARTIFACT_SET, OTHER_SET};
 
 /* Ugh.  DICE doesn't like %[A-Z], so we have to spell it out... */
 #define FORMAT_STRING                                                       \

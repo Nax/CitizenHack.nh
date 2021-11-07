@@ -453,6 +453,9 @@ enum glyphmap_change_triggers { gm_nochange, gm_newgame, gm_levelchange,
  * objects piletop        Represents the top of a pile as well as
  *                        the object.
  *                        Count: NUM_OBJECTS
+ * artifacts piletop      Represents the top of a pile as well as
+ *                        the artifact.
+ *                        Count: NROFARTIFACTS
  *
  * bodies piletop         Represents the top of a pile as well as
  *                        the object, corpse in this case.
@@ -488,7 +491,8 @@ enum glyph_offsets {
     GLYPH_RIDDEN_MALE_OFF = (GLYPH_RIDDEN_OFF),
     GLYPH_RIDDEN_FEM_OFF = (NUMMONS + GLYPH_RIDDEN_MALE_OFF),
     GLYPH_OBJ_OFF = (NUMMONS + GLYPH_RIDDEN_FEM_OFF),
-    GLYPH_CMAP_OFF = (NUM_OBJECTS + GLYPH_OBJ_OFF),
+    GLYPH_ART_OFF = (NUM_OBJECTS + GLYPH_OBJ_OFF),
+    GLYPH_CMAP_OFF = (NROFARTIFACTS + GLYPH_ART_OFF),
     GLYPH_CMAP_STONE_OFF = (GLYPH_CMAP_OFF),
     GLYPH_CMAP_MAIN_OFF = (1 + GLYPH_CMAP_STONE_OFF),
     GLYPH_CMAP_MINES_OFF = (((S_trwall - S_vwall) + 1) + GLYPH_CMAP_MAIN_OFF),
@@ -515,7 +519,8 @@ enum glyph_offsets {
     GLYPH_STATUE_FEM_OFF = (NUMMONS + GLYPH_STATUE_MALE_OFF),
     GLYPH_PILETOP_OFF = (NUMMONS + GLYPH_STATUE_FEM_OFF),
     GLYPH_OBJ_PILETOP_OFF = (GLYPH_PILETOP_OFF),
-    GLYPH_BODY_PILETOP_OFF = (NUM_OBJECTS + GLYPH_OBJ_PILETOP_OFF),
+    GLYPH_ART_PILETOP_OFF = (NUM_OBJECTS + GLYPH_OBJ_PILETOP_OFF),
+    GLYPH_BODY_PILETOP_OFF = (NROFARTIFACTS + GLYPH_ART_PILETOP_OFF),
     GLYPH_STATUE_MALE_PILETOP_OFF = (NUMMONS + GLYPH_BODY_PILETOP_OFF),
     GLYPH_STATUE_FEM_PILETOP_OFF = (NUMMONS + GLYPH_STATUE_MALE_PILETOP_OFF),
     GLYPH_UNEXPLORED_OFF = (NUMMONS + GLYPH_STATUE_FEM_PILETOP_OFF),
@@ -903,6 +908,12 @@ enum glyph_offsets {
                                 ? GLYPH_OBJ_PILETOP_OFF             \
                                 : GLYPH_OBJ_OFF)))
 
+#define artifact_obj_to_glyph(obj) \
+    ((int) (((obj)->oartifact - 1) + \
+            ((obj_is_piletop(obj))          \
+                ? GLYPH_ART_PILETOP_OFF     \
+                : GLYPH_ART_OFF)))
+
 /* MRKR: Statues now have glyphs corresponding to the monster they    */
 /*       represent and look like monsters when you are hallucinating. */
 
@@ -920,13 +931,15 @@ enum glyph_offsets {
                           : GLYPH_STATUE_MALE_OFF))))
 
 #define obj_to_glyph(obj, rng) \
-           (((obj)->otyp == STATUE)                   \
-               ? statue_to_glyph(obj, rng)            \
-               : ((Hallucination)                     \
-                    ? random_obj_to_glyph(rng)        \
-                    : (((obj)->otyp == CORPSE)        \
-                        ? corpse_to_glyph(obj)        \
-                        : normal_obj_to_glyph(obj))))
+           (((obj)->otyp == STATUE)                         \
+               ? statue_to_glyph(obj, rng)                  \
+               : ((Hallucination)                           \
+                    ? random_obj_to_glyph(rng)              \
+                    : (((obj)->otyp == CORPSE)              \
+                        ? corpse_to_glyph(obj)              \
+                        : (((obj)->oartifact)               \
+                            ? artifact_obj_to_glyph(obj)    \
+                            : normal_obj_to_glyph(obj)))))
 
 #define GLYPH_TRAP_OFF \
     (GLYPH_CMAP_B_OFF + (S_arrow_trap - S_grave))

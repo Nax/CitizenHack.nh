@@ -55,8 +55,8 @@ extern char *tilename(int, int);
 
 /* The numbers in the following calculation are the
    count of tiles present in:
-   monsters.txt objects.txt other.txt monsters.txt */
-#define MAGICTILENO (788 + 459 + 237 + 788)
+   monsters.txt objects.txt artifacts.txt other.txt monsters.txt */
+#define MAGICTILENO (788 + 459 + 100 + 237 + 788)
 
 #if BITCOUNT == 4
 #define MAX_X 320 /* 2 per byte, 4 bits per pixel */
@@ -177,7 +177,7 @@ const char *tilefiles[] = {
     "oth32.txt",
 #else
     "monsters.txt", "objects.txt",
-    "other.txt",
+    "artifacts.txt", "other.txt",
 #endif
 };
 
@@ -227,7 +227,7 @@ main(int argc, char *argv[])
         printf("Error creating tile file %s, aborting.\n", bmpname);
         exit(1);
     }
-    while (pass < 4) {
+    while (pass < 5) {
         filenum = pass % (sizeof(tilefiles) / sizeof(char *));
         if (!fopen_text_file(tilefiles[filenum], RDTMODE)) {
             Fprintf(stderr, "usage: tile2bmp (from the util directory)\n");
@@ -255,7 +255,7 @@ main(int argc, char *argv[])
             }
             initflag = 1;
         }
-        set_grayscale(pass == 3);
+        set_grayscale(pass == 4);
         /*		printf("Colormap initialized\n"); */
         while (read_text_tile(tilepixels)) {
             build_bmptile(tilepixels);
