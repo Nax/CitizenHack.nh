@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 project(CitizenHack)
 
-#find_package(Curses REQUIRED)
-#find_package(ZLIB REQUIRED)
-#find_package(Lua REQUIRED)
+if (UNIX)
+    find_package(Curses REQUIRED)
+endif()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
@@ -149,6 +149,7 @@ add_executable(
 )
 target_compile_definitions(makedefs PRIVATE FILE_PREFIX=1)
 target_link_libraries(makedefs)
+add_dependencies(makedefs ep_zlib ep_lua)
 
 function(add_makedef flag)
     cmake_parse_arguments(ADD_MAKEDEF "" "" "OUTPUT;DEPENDS" ${ARGN})
@@ -202,6 +203,7 @@ add_executable(
 )
 target_include_directories(tilemap PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include")
 target_link_libraries(tilemap)
+add_dependencies(tilemap ep_zlib ep_lua)
 add_custom_command(
     OUTPUT
         "${GENERATED_DIR}/src/tile.c"
@@ -265,6 +267,7 @@ if (HACK_DATABASE)
         "${CMAKE_SOURCE_DIR}/util/panic.c"
     )
     target_link_libraries(dlb)
+    add_dependencies(dlb ep_zlib ep_lua)
     set(GENERATED_ARCHIVE "${HACKDIR}/nhdat")
     add_custom_command(
         OUTPUT "${GENERATED_ARCHIVE}"
