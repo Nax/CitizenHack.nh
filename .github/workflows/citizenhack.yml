@@ -1,0 +1,72 @@
+name: CitizenHack
+
+on:
+  push:
+    branches:
+      - "*"
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        name:
+          - win64
+          - win32
+        include:
+          - name: win64
+            os: windows-2019
+            cmake_opts: -A x64
+          - name: win32
+            os: windows-2019
+            cmake_opts: -A Win32
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Setup
+      run: |
+        mkdir build
+    - name: Build
+      run: |
+        cmake .. ${{ matrix.cmake_opts }}
+        cmake --build . --config Release
+      working-directory: ./build
+    - name: Package
+      run: |
+        cmake --build . --config Release --target package
+        cmake -E remove_directory ./pkg/_CPack_Packages
+      working-directory: ./build
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v1
+      with:
+        name: ${{ matrix.name }}
+        path: build/pkg
+  pre-release:
+    if: startsWith(github.ref, 'refs/heads/master')
+    name: "Pre Release"
+    runs-on: "ubuntu-latest"
+    needs: [build]
+    steps:
+      - name: Download win64
+        uses: actions/download-artifact@v1
+        with:
+          name: win64
+          path: pkg
+      - name: Download win32
+        uses: actions/download-artifact@v1
+        with:
+          name: win32
+          path: pkg
+      - name: Pre Release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Development Build"
+          files: |
+            pkg/*
+
