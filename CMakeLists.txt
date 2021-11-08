@@ -383,17 +383,36 @@ if (WIN32)
 endif()
 
 # Install
-install(
-    TARGETS ${GAME}
-    RUNTIME DESTINATION bin
-    PERMISSIONS
-        OWNER_READ OWNER_WRITE OWNER_EXECUTE
-        GROUP_READ GROUP_EXECUTE
-        WORLD_READ WORLD_EXECUTE
-        SETGID
-)
-
-install(
+if (WIN32)
+    install(
+        TARGETS "${GAME}" "${GAMEW}" nhdefkey nhraykey nh340key
+        RUNTIME DESTINATION .
+    )
+    install(
+        FILES
+            "$<TARGET_FILE:Lua::Lua>"
+            "$<TARGET_FILE:ZLIB::ZLIB>"
+            "${HACKDIR}/nhdat"
+            "${CMAKE_SOURCE_DIR}/dat/opthelp"
+            "${CMAKE_SOURCE_DIR}/doc/Guidebook.txt"
+            "${CMAKE_SOURCE_DIR}/sys/windows/.nethackrc.template"
+            "${CMAKE_SOURCE_DIR}/sys/windows/sysconf.template"
+        DESTINATION .
+    )
+    install(FILES "${CMAKE_SOURCE_DIR}/dat/symbols" DESTINATION . RENAME "symbols.template")
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ".")
+    include(InstallRequiredSystemLibraries)
+else()
+    install(
+        TARGETS ${GAME}
+        RUNTIME DESTINATION bin
+        PERMISSIONS
+            OWNER_READ OWNER_WRITE OWNER_EXECUTE
+            GROUP_READ GROUP_EXECUTE
+            WORLD_READ WORLD_EXECUTE
+            SETGID
+    )
+    install(
     DIRECTORY "${HACKDIR}/"
     DESTINATION "${HACK_DIRECTORY}"
     FILE_PERMISSIONS
@@ -404,4 +423,29 @@ install(
         OWNER_READ OWNER_WRITE OWNER_EXECUTE
         GROUP_READ GROUP_WRITE GROUP_EXECUTE
         WORLD_READ WORLD_EXECUTE
+    )
+endif()
+
+# CPack
+execute_process(
+    COMMAND git describe --always
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+set(CPACK_PACKAGE_NAME "CitizenHack")
+set(CPACK_PACKAGE_VENDOR "Maxime Bacoux")
+set(CPACK_PACKAGE_CONTACT "Maxime Bacoux")
+set(CPACK_PACKAGE_VERSION "${GIT_VERSION}")
+set(CPACK_PACKAGE_DIRECTORY "${CMAKE_BINARY_DIR}/pkg")
+
+if (WIN32)
+    set(CPACK_GENERATOR "ZIP")
+elseif(APPLE)
+    set(CPACK_GENERATOR "DragNDrop")
+    set(CPACK_SYSTEM_NAME "mac")
+elseif(UNIX)
+    set(CPACK_GENERATOR "DEB")
+endif()
+include(CPack)
