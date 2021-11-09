@@ -404,7 +404,7 @@ extern struct nomakedefs_s nomakedefs;
 /* see end.c */
 #if !defined(CROSS_TO_WASM)
 #ifndef PANICTRACE
-#define PANICTRACE
+/* #define PANICTRACE */
 #endif  /* PANICTRACE */
 #endif  /* CROSS_TO_WASM */
 #endif  /* NH_DEVEL_STATUS != NH_STATUS_RELEASED */
