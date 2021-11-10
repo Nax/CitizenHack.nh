@@ -27,13 +27,18 @@ dungeon = {
             branchtype = "portal"
          },
          {
+            name = "The Forge",
+            base = 10,
+            range = 2
+         },
+         {
             name = "Fort Ludios",
             base = 18,
             range = 4,
             branchtype = "portal"
          },
          {
-            name = "Black Market",
+            name = "The Black Market",
             base = 22,
             range = 4,
             branchtype = "portal"
@@ -325,7 +330,7 @@ dungeon = {
       }
    },
    {
-      name = "Black Market",
+      name = "The Black Market",
       base = 1,
       bonetag = "M",
       flags = { "mazelike" },
@@ -334,6 +339,19 @@ dungeon = {
          {
             name = "market",
             bonetag = "M",
+            base = -1
+         }
+      }
+   },
+   {
+      name = "The Forge",
+      base = 4,
+      flags = { "mazelike" },
+      alignment = "unaligned",
+      lvlfill = "forgefill",
+      levels = {
+         {
+            name = "forge",
             base = -1
          }
       }
