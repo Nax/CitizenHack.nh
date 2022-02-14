@@ -1,4 +1,4 @@
-/* NetHack 3.7	apply.c	$NHDT-Date: 1623807747 2021/06/16 01:42:27 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.345 $ */
+/* NetHack 3.7	apply.c	$NHDT-Date: 1629242800 2021/08/17 23:26:40 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.347 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -674,8 +674,15 @@ use_leash(struct obj *obj)
             pline("%s has no extremities the leash would fit.",
                   Monnam(mtmp));
         } else if (!leashable(mtmp)) {
+            char lmonbuf[BUFSZ];
+            char *lmonnam = l_monnam(mtmp);
+
+            if (cc.x != mtmp->mx || cc.y != mtmp->my) {
+                Sprintf(lmonbuf, "%s tail", s_suffix(lmonnam));
+                lmonnam = lmonbuf;
+            }
             pline("The leash won't fit onto %s%s.", spotmon ? "your " : "",
-                  l_monnam(mtmp));
+                  lmonnam);
         } else {
             You("slip the leash around %s%s.", spotmon ? "your " : "",
                 l_monnam(mtmp));
@@ -2144,7 +2151,7 @@ fig_transform(anything *arg, long timeout)
         impossible("null figurine in fig_transform()");
         return;
     }
-    silent = (timeout != g.monstermoves); /* happened while away */
+    silent = (timeout != g.moves); /* happened while away */
     okay_spot = get_obj_location(figurine, &cc.x, &cc.y, 0);
     if (figurine->where == OBJ_INVENT || figurine->where == OBJ_MINVENT)
         okay_spot = enexto(&cc, cc.x, cc.y, &mons[figurine->corpsenm]);
@@ -3047,6 +3054,7 @@ display_polearm_positions(int state)
 static int
 use_pole(struct obj *obj)
 {
+    const char thump[] = "Thump!  Your blow bounces harmlessly off the %s.";
     int res = 0, typ, max_range, min_range, glyph;
     coord cc;
     struct monst *mtmp;
@@ -3060,8 +3068,7 @@ use_pole(struct obj *obj)
     if (obj != uwep) {
         if (!wield_tool(obj, "swing"))
             return 0;
-        else
-            res = 1;
+        res = 1;
     }
     /* assert(obj == uwep); */
 
@@ -3151,13 +3158,31 @@ use_pole(struct obj *obj)
                Note:  we only do this when a statue is displayed here,
                because the player is probably attempting to attack it;
                other statues obscured by anything are just ignored. */
-            pline("Thump!  Your blow bounces harmlessly off the statue.");
+            pline(thump, "statue");
             wake_nearto(g.bhitpos.x, g.bhitpos.y, 25);
         }
     } else {
         /* no monster here and no statue seen or remembered here */
         (void) unmap_invisible(g.bhitpos.x, g.bhitpos.y);
-        You("miss; there is no one there to hit.");
+
+        if (glyph_to_obj(glyph) == BOULDER
+            && sobj_at(BOULDER, g.bhitpos.x, g.bhitpos.y)) {
+            pline(thump, "boulder");
+            wake_nearto(g.bhitpos.x, g.bhitpos.y, 25);
+        } else if (!accessible(g.bhitpos.x, g.bhitpos.y)
+                   || IS_FURNITURE(levl[g.bhitpos.x][g.bhitpos.y].typ)) {
+            /* similar to 'F'orcefight with a melee weapon; we know that
+               the spot can be seen or we wouldn't have gotten this far */
+            You("uselessly attack %s.",
+                (levl[g.bhitpos.x][g.bhitpos.y].typ == STONE
+                 || levl[g.bhitpos.x][g.bhitpos.y].typ == SCORR)
+                ? "stone"
+                : glyph_is_cmap(glyph)
+                  ? the(defsyms[glyph_to_cmap(glyph)].explanation)
+                  : (const char *) "an unknown obstacle");
+        } else {
+            You("miss; there is no one there to hit.");
+        }
     }
     u_wipe_engr(2); /* same as for melee or throwing */
     return 1;

@@ -83,9 +83,6 @@ file(MAKE_DIRECTORY ${HACKDIR} ${HACKDIR_DATA} ${GENERATED_DIR_DUMMY} "${GENERAT
 
 include_directories("${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include" "${CMAKE_BINARY_DIR}/_vendor/include")
 
-# Utils
-add_subdirectory(util)
-
 set(RC_FILES  "")
 set(RC_FILESW "")
 if (WIN32)
@@ -141,6 +138,17 @@ if (WIN32)
     )
 endif()
 
+# Makedefs
+add_executable(
+    makedefs
+    "${CMAKE_SOURCE_DIR}/src/monst.c"
+    "${CMAKE_SOURCE_DIR}/src/objects.c"
+    "${CMAKE_SOURCE_DIR}/src/date.c"
+    "${CMAKE_SOURCE_DIR}/util/makedefs.c"
+)
+target_compile_definitions(makedefs PRIVATE FILE_PREFIX=1)
+target_link_libraries(makedefs)
+
 function(add_makedef flag)
     cmake_parse_arguments(ADD_MAKEDEF "" "" "OUTPUT;DEPENDS" ${ARGN})
     set(outputs "")
@@ -155,18 +163,9 @@ function(add_makedef flag)
     )
 endfunction()
 
-add_makedef(p OUTPUT "include/pm.h")
-add_makedef(o OUTPUT "include/onames.h")
-add_makedef(v OUTPUT "include/date.h" "dat/options")
-
 add_makedef(d
     OUTPUT "dat/data"
     DEPENDS "${CMAKE_SOURCE_DIR}/dat/data.base"
-)
-
-add_makedef(e
-    OUTPUT "dat/dungeon.pdf"
-    DEPENDS "${CMAKE_SOURCE_DIR}/dat/dungeon.def"
 )
 
 add_makedef(h
@@ -196,17 +195,18 @@ add_makedef(r
 add_executable(
     tilemap
     "${CMAKE_SOURCE_DIR}/win/share/tilemap.c"
-    "${GENERATED_DIR}/include/date.h"
-    "${GENERATED_DIR}/include/pm.h"
-    "${GENERATED_DIR}/include/onames.h"
+    "${CMAKE_SOURCE_DIR}/src/monst.c"
+    "${CMAKE_SOURCE_DIR}/src/objects.c"
+    "${CMAKE_SOURCE_DIR}/src/drawing.c"
 )
 target_include_directories(tilemap PRIVATE "${CMAKE_SOURCE_DIR}/include" "${GENERATED_DIR}/include")
 target_link_libraries(tilemap)
 add_custom_command(
-    OUTPUT "${GENERATED_DIR}/src/tile.c"
+    OUTPUT
+        "${GENERATED_DIR}/src/tile.c"
     COMMAND tilemap
     DEPENDS tilemap
-    WORKING_DIRECTORY "${GENERATED_DIR}/src"
+    WORKING_DIRECTORY "${GENERATED_DIR}"
 )
 
 # Hackdir data
@@ -234,7 +234,7 @@ copy_nhdat("${GENERATED_DIR}/dat/bogusmon")
 copy_nhdat("${GENERATED_DIR}/dat/data")
 copy_nhdat("${GENERATED_DIR}/dat/engrave")
 copy_nhdat("${GENERATED_DIR}/dat/epitaph")
-copy_nhdat("${GENERATED_DIR}/dat/options")
+# copy_nhdat("${GENERATED_DIR}/dat/options")
 copy_nhdat("${GENERATED_DIR}/dat/oracles")
 copy_nhdat("${GENERATED_DIR}/dat/rumors")
 
@@ -318,12 +318,6 @@ set(SOURCES_WINDOWS
     "win/share/safeproc.c"
 )
 
-list(APPEND SOURCES
-    "${GENERATED_DIR}/include/date.h"
-    "${GENERATED_DIR}/include/pm.h"
-    "${GENERATED_DIR}/include/onames.h"
-)
-
 if (UNIX)
     list(APPEND SOURCES ${SOURCES_UNIX})
     list(APPEND SOURCES
@@ -371,6 +365,20 @@ if (WIN32)
     add_library(nhraykey SHARED "${CMAKE_SOURCE_DIR}/sys/windows/nhraykey.c")
     add_library(nhdefkey SHARED "${CMAKE_SOURCE_DIR}/sys/windows/nhdefkey.c")
     add_library(nh340key SHARED "${CMAKE_SOURCE_DIR}/sys/windows/nh340key.c")
+endif()
+
+# DLLs & files
+if (WIN32)
+    add_custom_command(
+        TARGET ${GAME} POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy "$<TARGET_FILE:Lua::Lua>" "$<TARGET_FILE:ZLIB::ZLIB>" "$<TARGET_FILE_DIR:${GAME}>"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/sys/windows/sysconf.template" "$<TARGET_FILE_DIR:${GAME}>"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/sys/windows/.nethackrc.template" "$<TARGET_FILE_DIR:${GAME}>"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/doc/Guidebook.txt" "$<TARGET_FILE_DIR:${GAME}>"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/dat/symbols" "$<TARGET_FILE_DIR:${GAME}>/symbols.template"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/dat/opthelp" "$<TARGET_FILE_DIR:${GAME}>"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${HACKDIR}/nhdat" "$<TARGET_FILE_DIR:${GAME}>"
+    )
 endif()
 
 # Install

@@ -1,4 +1,4 @@
-/* NetHack 3.7	obj.h	$NHDT-Date: 1611097668 2021/01/19 23:07:48 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.85 $ */
+/* NetHack 3.7	obj.h	$NHDT-Date: 1633802062 2021/10/09 17:54:22 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.94 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2006. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -53,6 +53,9 @@ struct obj {
                 * Schroedinger's Box (1) or royal coffers for a court (2);
                 * named fruit index;
                 * candy bar wrapper index;
+                * scroll of scare monster (when uncursed: never picked up==0,
+                *   has been picked up==1, turns to dust if picked up again;
+                *   when blessed|cursed: flag not checked, set, or cleared);
                 * scroll of mail (normal==0, bones or wishing==1, written==2);
                 * splash of venom (normal==0, wishing==1);
                 * gender for corpses, statues, and figurines (0..3,
@@ -114,13 +117,17 @@ struct obj {
     Bitfield(cknown, 1); /* for containers (including statues): the contents
                           * are known; also applicable to tins */
     Bitfield(lknown, 1); /* locked/unlocked status is known */
-    /* 4 free bits */
+    Bitfield(pickup_prev, 1); /* was picked up previously */
+    /* 3 free bits */
 
     int corpsenm;         /* type of corpse is mons[corpsenm] */
 #define leashmon corpsenm /* gets m_id of attached pet */
 #define fromsink corpsenm /* a potion from a sink */
 #define novelidx corpsenm /* 3.6 tribute - the index of the novel title */
 #define migr_species corpsenm /* species to endow for MIGR_TO_SPECIES */
+#define next_boulder corpsenm /* flag for xname() when pushing a pile of
+                               * boulders, 0 for first (top of pile),
+                               * 1 for others (format as "next boulder") */
     int usecount;           /* overloaded for various things that tally */
 #define spestudied usecount /* # of times a spellbook has been studied */
     unsigned oeaten;        /* nutrition left in food, if partly eaten */
@@ -252,7 +259,7 @@ struct obj {
 /* Eggs and other food */
 #define MAX_EGG_HATCH_TIME 200 /* longest an egg can remain unhatched */
 #define stale_egg(egg) \
-    ((g.monstermoves - (egg)->age) > (2 * MAX_EGG_HATCH_TIME))
+    ((g.moves - (egg)->age) > (2 * MAX_EGG_HATCH_TIME))
 #define ofood(o) ((o)->otyp == CORPSE || (o)->otyp == EGG || (o)->otyp == TIN)
     /* note: sometimes eggs and tins have special corpsenm values that
        shouldn't be used as an index into mons[]                       */
@@ -345,7 +352,7 @@ struct obj {
      || (otmp)->otyp == ALCHEMY_SMOCK || (otmp)->otyp == CREDIT_CARD         \
      || (otmp)->otyp == CAN_OF_GREASE || (otmp)->otyp == MAGIC_MARKER        \
      || (otmp)->oclass == COIN_CLASS || (otmp)->oartifact == ART_ORB_OF_FATE \
-     || (otmp)->otyp == CANDY_BAR)
+     || (otmp)->otyp == CANDY_BAR || (otmp)->otyp == HAWAIIAN_SHIRT)
 
 /* special stones */
 #define is_graystone(obj)                                 \

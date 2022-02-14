@@ -181,7 +181,12 @@ m_initweap(register struct monst *mtmp)
             case PM_WATCHMAN:
             case PM_SOLDIER:
                 if (!rn2(3)) {
-                    w1 = rn1(BEC_DE_CORBIN - PARTISAN + 1, PARTISAN);
+                    /* lance and dwarvish mattock used to be in midst of
+                       the polearms but use different skills from polearms
+                       and aren't appropriates choices for human soliders */
+                    do {
+                        w1 = rn1(BEC_DE_CORBIN - PARTISAN + 1, PARTISAN);
+                    } while (objects[w1].oc_skill != P_POLEARMS);
                     w2 = rn2(2) ? DAGGER : KNIFE;
                 } else
                     w1 = rn2(2) ? SPEAR : SHORT_SWORD;
@@ -850,9 +855,7 @@ clone_mon(struct monst *mon,
     m2->mextra = (struct mextra *) 0;
     m2->nmon = fmon;
     fmon = m2;
-    m2->m_id = g.context.ident++;
-    if (!m2->m_id)
-        m2->m_id = g.context.ident++; /* ident overflowed */
+    m2->m_id = next_ident();
     m2->mx = mm.x;
     m2->my = mm.y;
 
@@ -1136,6 +1139,9 @@ makemon(register struct permonst *ptr,
     fakemon = cg.zeromonst;
     cc.x = cc.y = 0;
 
+    if (iflags.debug_mongen)
+        return (struct monst *) 0;
+
     /* if caller wants random location, do it here */
     if (x == 0 && y == 0) {
         fakemon.data = ptr; /* set up for goodpos */
@@ -1215,9 +1221,7 @@ makemon(register struct permonst *ptr,
         mtmp->msleeping = 1;
     mtmp->nmon = fmon;
     fmon = mtmp;
-    mtmp->m_id = g.context.ident++;
-    if (!mtmp->m_id)
-        mtmp->m_id = g.context.ident++; /* ident overflowed */
+    mtmp->m_id = next_ident();
     set_mon_data(mtmp, ptr); /* mtmp->data = ptr; */
     if (ptr->msound == MS_LEADER && quest_info(MS_LEADER) == mndx)
         g.quest_status.leader_m_id = mtmp->m_id;

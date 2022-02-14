@@ -1,4 +1,4 @@
-# NetHack 3.7  macOS.2020 $NHDT-Date: 1599687615 2020/09/09 21:40:15 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.73 $
+# NetHack 3.7  macOS.2020 $NHDT-Date: 1633401749 2021/10/05 02:42:29 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.88 $
 # Copyright (c) Kenneth Lorber, Kensington, Maryland, 2015.
 # NetHack may be freely redistributed.  See license for details.
 #
@@ -56,7 +56,7 @@ endif
 # NetHack sources control
 NHCFLAGS+=-DDLB
 NHCFLAGS+=-DHACKDIR=\"$(HACKDIR)\"
-NHCFLAGS+=-DDEFAULT_WINDOW_SYS=\"$(WANT_DEFAULT)\" -DDLB
+NHCFLAGS+=-DDEFAULT_WINDOW_SYS=\"$(WANT_DEFAULT)\"
 NHCFLAGS+=-DSYSCF -DSYSCF_FILE=\"$(HACKDIR)/sysconf\" -DSECURE
 #NHCFLAGS+=-DTIMED_DELAY
 #NHCFLAGS+=-DDUMPLOG
@@ -138,6 +138,16 @@ endif	# !WANT_WIN_QT
 WINOBJ = $(sort $(WINOBJ0))
 # prevent duplicates in VARDATND if both X11 and Qt are being supported
 VARDATND += $(sort $(VARDATND0))
+
+GIT_HASH := $(shell echo `git rev-parse --verify HEAD` 2>&1)
+GIT_BRANCH := $(shell echo `git rev-parse --abbrev-ref HEAD` 2>&1)
+
+ifdef GIT_HASH
+GITHASH = -DNETHACK_GIT_SHA=\"$(GIT_HASH)\"
+endif
+ifdef GIT_BRANCH
+GITBRANCH = -DNETHACK_GIT_BRANCH=\"$(GIT_BRANCH)\"
+endif 
 
 ifdef WANT_LIBNH
 CFLAGS += -DSHIM_GRAPHICS -DNOTTYGRAPHICS -DNOSHELL -DLIBNH

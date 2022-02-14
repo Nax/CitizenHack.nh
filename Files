@@ -47,19 +47,19 @@ Val-strt.lua  Wiz-fila.lua  Wiz-filb.lua  Wiz-goal.lua  Wiz-loca.lua
 Wiz-strt.lua  air.lua       asmodeus.lua  astral.lua    baalz.lua
 bigrm-1.lua   bigrm-2.lua   bigrm-3.lua   bigrm-4.lua   bigrm-5.lua
 bigrm-6.lua   bigrm-7.lua   bigrm-8.lua   bigrm-9.lua   bigrm-10.lua
-bogusmon.txt  castle.lua    cmdhelp       data.base     dungeon.lua
-earth.lua     engrave.txt   epitaph.txt   fakewiz1.lua  fakewiz2.lua
-fire.lua      help          hh            history       juiblex.lua
-keyhelp       knox.lua      license       medusa-1.lua  medusa-2.lua
-medusa-3.lua  medusa-4.lua  minefill.lua  minend-1.lua  minend-2.lua
-minend-3.lua  minetn-1.lua  minetn-2.lua  minetn-3.lua  minetn-4.lua
-minetn-5.lua  minetn-6.lua  minetn-7.lua  nhcore.lua    nhlib.lua
-opthelp       oracle.lua    oracles.txt   orcus.lua     quest.lua
-rumors.fal    rumors.tru    sanctum.lua   soko1-1.lua   soko1-2.lua
-soko2-1.lua   soko2-2.lua   soko3-1.lua   soko3-2.lua   soko4-1.lua
-soko4-2.lua   symbols       themerms.lua  tower1.lua    tower2.lua
-tower3.lua    tribute       valley.lua    water.lua     wizard1.lua
-wizard2.lua   wizard3.lua   wizhelp
+bigrm-11.lua  bogusmon.txt  castle.lua    cmdhelp       data.base
+dungeon.lua   earth.lua     engrave.txt   epitaph.txt   fakewiz1.lua
+fakewiz2.lua  fire.lua      help          hh            history
+juiblex.lua   keyhelp       knox.lua      license       medusa-1.lua
+medusa-2.lua  medusa-3.lua  medusa-4.lua  minefill.lua  minend-1.lua
+minend-2.lua  minend-3.lua  minetn-1.lua  minetn-2.lua  minetn-3.lua
+minetn-4.lua  minetn-5.lua  minetn-6.lua  minetn-7.lua  nhcore.lua
+nhlib.lua     opthelp       oracle.lua    oracles.txt   orcus.lua
+quest.lua     rumors.fal    rumors.tru    sanctum.lua   soko1-1.lua
+soko1-2.lua   soko2-1.lua   soko2-2.lua   soko3-1.lua   soko3-2.lua
+soko4-1.lua   soko4-2.lua   symbols       themerms.lua  tower1.lua
+tower2.lua    tower3.lua    tribute       valley.lua    water.lua
+wizard1.lua   wizard2.lua   wizard3.lua   wizhelp
 
 doc:
 (files for all versions)
@@ -87,18 +87,18 @@ tile2x11.h  winX.h      xwindow.h   xwindowp.h
 (files for all versions)
 align.h       artifact.h    artilist.h    attrib.h      botl.h
 color.h       config.h      config1.h     context.h     coord.h
-decl.h        dgn_file.h    display.h     dlb.h         dungeon.h
-engrave.h     extern.h      flag.h        fnamesiz.h    func_tab.h
-global.h      hack.h        integer.h     isaac64.h     lint.h
-mail.h        mextra.h      mfndpos.h     micro.h       mkroom.h
-monattk.h     mondata.h     monflag.h     monst.h       monsym.h
-obj.h         objclass.h    optlist.h     patchlevel.h  pcconf.h
-permonst.h    prop.h        quest.h       rect.h        region.h
-rm.h          skills.h      sp_lev.h      spell.h       sys.h
-system.h      tcap.h        tileset.h     timeout.h     tradstdc.h
-trap.h        unixconf.h    vision.h      vmsconf.h     warnings.h
-winami.h      wincurs.h     windconf.h    winprocs.h    wintype.h
-you.h         youprop.h
+decl.h        defsym.h      dgn_file.h    display.h     dlb.h
+dungeon.h     engrave.h     extern.h      flag.h        fnamesiz.h
+func_tab.h    global.h      hack.h        integer.h     isaac64.h
+lint.h        mail.h        mextra.h      mfndpos.h     micro.h
+mkroom.h      monattk.h     mondata.h     monflag.h     monst.h
+monsters.h    obj.h         objclass.h    objects.h     optlist.h
+patchlevel.h  pcconf.h      permonst.h    prop.h        quest.h
+rect.h        region.h      rm.h          skills.h      sp_lev.h
+spell.h       sym.h         sys.h         system.h      tcap.h
+tileset.h     timeout.h     tradstdc.h    trap.h        unixconf.h
+vision.h      vmsconf.h     warnings.h    winami.h      wincurs.h
+windconf.h    winprocs.h    wintype.h     you.h         youprop.h
 
 (file for tty versions)
 wintty.h
@@ -201,24 +201,25 @@ gnyesno.h   mapbg.xpm
 src:
 (files for all versions)
 allmain.c   alloc.c     apply.c     artifact.c  attrib.c    ball.c
-bones.c     botl.c      cmd.c       dbridge.c   decl.c      detect.c
-dig.c       display.c   dlb.c       do.c        do_name.c   do_wear.c
-dog.c       dogmove.c   dokick.c    dothrow.c   drawing.c   dungeon.c
-eat.c       end.c       engrave.c   exper.c     explode.c   extralev.c
-files.c     fountain.c  hack.c      hacklib.c   insight.c   invent.c
-isaac64.c   light.c     lock.c      mail.c      makemon.c   mcastu.c
-mdlib.c     mhitm.c     mhitu.c     minion.c    mklev.c     mkmap.c
-mkmaze.c    mkobj.c     mkroom.c    mon.c       mondata.c   monmove.c
-monst.c     mplayer.c   mthrowu.c   muse.c      music.c     nhlobj.c
-nhlsel.c    nhlua.c     o_init.c    objects.c   objnam.c    options.c
-pager.c     pickup.c    pline.c     polyself.c  potion.c    pray.c
-priest.c    quest.c     questpgr.c  read.c      rect.c      region.c
-restore.c   rip.c       rnd.c       role.c      rumors.c    save.c
-sfstruct.c  shk.c       shknam.c    sit.c       sounds.c    sp_lev.c
-spell.c     steal.c     steed.c     symbols.c   sys.c       teleport.c
-timeout.c   topten.c    track.c     trap.c      u_init.c    uhitm.c
-vault.c     version.c   vision.c    weapon.c    were.c      wield.c
-windows.c   wizard.c    worm.c      worn.c      write.c     zap.c
+bones.c     botl.c      cmd.c       date.c      dbridge.c   decl.c
+detect.c    dig.c       display.c   dlb.c       do.c        do_name.c
+do_wear.c   dog.c       dogmove.c   dokick.c    dothrow.c   drawing.c
+dungeon.c   eat.c       end.c       engrave.c   exper.c     explode.c
+extralev.c  files.c     fountain.c  hack.c      hacklib.c   insight.c
+invent.c    isaac64.c   light.c     lock.c      mail.c      makemon.c
+mcastu.c    mdlib.c     mhitm.c     mhitu.c     minion.c    mklev.c
+mkmap.c     mkmaze.c    mkobj.c     mkroom.c    mon.c       mondata.c
+monmove.c   monst.c     mplayer.c   mthrowu.c   muse.c      music.c
+nhlobj.c    nhlsel.c    nhlua.c     o_init.c    objects.c   objnam.c
+options.c   pager.c     pickup.c    pline.c     polyself.c  potion.c
+pray.c      priest.c    quest.c     questpgr.c  read.c      rect.c
+region.c    restore.c   rip.c       rnd.c       role.c      rumors.c
+save.c      sfstruct.c  shk.c       shknam.c    sit.c       sounds.c
+sp_lev.c    spell.c     steal.c     steed.c     symbols.c   sys.c
+teleport.c  timeout.c   topten.c    track.c     trap.c      u_init.c
+uhitm.c     vault.c     version.c   vision.c    weapon.c    were.c
+wield.c     windows.c   wizard.c    worm.c      worn.c      write.c
+zap.c
 
 submodules:
 (files in top directory)
@@ -465,9 +466,9 @@ sys/windows/vs/uudecode:
 afteruudecode.proj  uudecode.vcxproj
 
 test:
-(files in top directory)
+(files for testing)
 test_cnf.lua  test_des.lua  test_lev.lua  test_obj.lua  test_sel.lua
-test_src.lua  testwish.lua
+test_shk.lua  test_src.lua  testmove.lua  testwish.lua
 
 util:
 (files for all versions)
@@ -573,11 +574,8 @@ tile.h
 (file for win32 that are moved into include at compile time)
 win32api.h
 
-(files generated by makedefs at compile time)
-date.h    onames.h  pm.h
-
-(files generated by yacc (or copied from sys/share) at compile time)
-dgn_comp.h  lev_comp.h
+(file generated by makedefs at compile time)
+date.h
 
 src:
 (files for win32 that are moved into src at compile time)

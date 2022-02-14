@@ -34,7 +34,7 @@ static void do_room_or_subroom(struct mkroom *, int, int, int, int, boolean,
                                schar, boolean, boolean);
 static void makerooms(void);
 static boolean door_into_nonjoined(xchar, xchar);
-static void finddpos(coord *, xchar, xchar, xchar, xchar);
+static boolean finddpos(coord *, xchar, xchar, xchar, xchar);
 static void mkinvpos(xchar, xchar, int);
 static void mk_knox_portal(xchar, xchar);
 
@@ -90,7 +90,7 @@ door_into_nonjoined(xchar x, xchar y)
     return FALSE;
 }
 
-static void
+static boolean
 finddpos(coord *cc, xchar xl, xchar yl, xchar xh, xchar yh)
 {
     register xchar x, y;
@@ -112,12 +112,11 @@ finddpos(coord *cc, xchar xl, xchar yl, xchar xh, xchar yh)
     /* cannot find something reasonable -- strange */
     x = xl;
     y = yh;
-    impossible("finddpos: couldn't find door pos within (%d,%d,%d,%d)",
-               xl, yl, xh, yh);
+    return FALSE;
  gotit:
     cc->x = x;
     cc->y = y;
-    return;
+    return TRUE;
 }
 
 /* Sort rooms on the level so they're ordered from left to right on the map.
@@ -347,29 +346,37 @@ join(register int a, register int b, boolean nxcor)
         dy = 0;
         xx = croom->hx + 1;
         tx = troom->lx - 1;
-        finddpos(&cc, xx, croom->ly, xx, croom->hy);
-        finddpos(&tt, tx, troom->ly, tx, troom->hy);
+        if (!finddpos(&cc, xx, croom->ly, xx, croom->hy))
+            return;
+        if (!finddpos(&tt, tx, troom->ly, tx, troom->hy))
+            return;
     } else if (troom->hy < croom->ly) {
         dy = -1;
         dx = 0;
         yy = croom->ly - 1;
-        finddpos(&cc, croom->lx, yy, croom->hx, yy);
         ty = troom->hy + 1;
-        finddpos(&tt, troom->lx, ty, troom->hx, ty);
+        if (!finddpos(&cc, croom->lx, yy, croom->hx, yy))
+            return;
+        if (!finddpos(&tt, troom->lx, ty, troom->hx, ty))
+            return;
     } else if (troom->hx < croom->lx) {
         dx = -1;
         dy = 0;
         xx = croom->lx - 1;
         tx = troom->hx + 1;
-        finddpos(&cc, xx, croom->ly, xx, croom->hy);
-        finddpos(&tt, tx, troom->ly, tx, troom->hy);
+        if (!finddpos(&cc, xx, croom->ly, xx, croom->hy))
+            return;
+        if (!finddpos(&tt, tx, troom->ly, tx, troom->hy))
+            return;
     } else {
         dy = 1;
         dx = 0;
         yy = croom->hy + 1;
         ty = troom->ly - 1;
-        finddpos(&cc, croom->lx, yy, croom->hx, yy);
-        finddpos(&tt, troom->lx, ty, troom->hx, ty);
+        if (!finddpos(&cc, croom->lx, yy, croom->hx, yy))
+            return;
+        if (!finddpos(&tt, troom->lx, ty, troom->hx, ty))
+            return;
     }
     xx = cc.x;
     yy = cc.y;
@@ -541,10 +548,12 @@ place_niche(register struct mkroom *aroom, int *dy, int *xx, int *yy)
 
     if (rn2(2)) {
         *dy = 1;
-        finddpos(&dd, aroom->lx, aroom->hy + 1, aroom->hx, aroom->hy + 1);
+        if (!finddpos(&dd, aroom->lx, aroom->hy + 1, aroom->hx, aroom->hy + 1))
+            return FALSE;
     } else {
         *dy = -1;
-        finddpos(&dd, aroom->lx, aroom->ly - 1, aroom->hx, aroom->ly - 1);
+        if (!finddpos(&dd, aroom->lx, aroom->ly - 1, aroom->hx, aroom->ly - 1))
+            return FALSE;
     }
     *xx = dd.x;
     *yy = dd.y;
@@ -836,6 +845,7 @@ makelevel(void)
 {
     register struct mkroom *croom;
     branch *branchp;
+    stairway *prevstairs;
     int room_threshold;
     register s_level *slev = Is_special(&u.uz);
     int i;
@@ -950,8 +960,16 @@ makelevel(void)
             do_mkroom(COCKNEST);
 
  skip0:
+        prevstairs = g.stairs; /* used to test for place_branch() success */
         /* Place multi-dungeon branch. */
         place_branch(branchp, 0, 0);
+
+        /* for main dungeon level 1, the stairs up where the hero starts
+           are branch stairs; treat them as if hero had just come down
+           them by marking them as having been traversed; most recently
+           created stairway is held in 'g.stairs' */
+        if (u.uz.dnum == 0 && u.uz.dlevel == 1 && g.stairs != prevstairs)
+            g.stairs->u_traversed = TRUE;
 
         /* for each room: put things inside */
         for (croom = g.rooms; croom->hx > 0; croom++) {
@@ -1067,20 +1085,11 @@ mineralize(int kelp_pool, int kelp_moat, int goldprob, int gemprob,
 }
 
 void
-mklev(void)
+level_finalize_topology(void)
 {
     struct mkroom *croom;
     int ridx;
 
-    reseed_random(rn2);
-    reseed_random(rn2_on_display_rng);
-
-    init_mapseen(&u.uz);
-    if (getbones())
-        return;
-
-    g.in_mklev = TRUE;
-    makelevel();
     bound_digging();
     mineralize(-1, -1, -1, -1, FALSE);
     g.in_mklev = FALSE;
@@ -1102,6 +1111,22 @@ mklev(void)
        entered; g.rooms[].orig_rtype always retains original rtype value */
     for (ridx = 0; ridx < SIZE(g.rooms); ridx++)
         g.rooms[ridx].orig_rtype = g.rooms[ridx].rtype;
+}
+
+void
+mklev(void)
+{
+    reseed_random(rn2);
+    reseed_random(rn2_on_display_rng);
+
+    init_mapseen(&u.uz);
+    if (getbones())
+        return;
+
+    g.in_mklev = TRUE;
+    makelevel();
+
+    level_finalize_topology();
 
     reseed_random(rn2);
     reseed_random(rn2_on_display_rng);
@@ -1245,7 +1270,7 @@ place_branch(branch *br,       /* branch to place */
         boolean goes_up = on_level(&br->end1, &u.uz) ? br->end1_up
                                                      : !br->end1_up;
 
-        stairway_add(x,y, goes_up, FALSE, dest);
+        stairway_add(x, y, goes_up, FALSE, dest);
         levl[x][y].ladder = goes_up ? LA_UP : LA_DOWN;
         levl[x][y].typ = STAIRS;
     }

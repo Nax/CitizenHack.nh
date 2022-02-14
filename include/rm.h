@@ -107,214 +107,6 @@ enum levl_typ_types {
 #define IS_SOFT(typ) ((typ) == AIR || (typ) == CLOUD || IS_POOL(typ))
 
 /*
- * The screen symbols may be the default or defined at game startup time.
- * See drawing.c for defaults.
- * Note: {ibm|dec|curses}_graphics[] arrays (also in drawing.c) must be kept in
- * synch.
- */
-
-/* begin dungeon characters */
-enum screen_symbols {
-    S_stone     =  0,
-    S_vwall     =  1,
-    S_hwall     =  2,
-    S_tlcorn    =  3,
-    S_trcorn    =  4,
-    S_blcorn    =  5,
-    S_brcorn    =  6,
-    S_crwall    =  7,
-    S_tuwall    =  8,
-    S_tdwall    =  9,
-    S_tlwall    = 10,
-    S_trwall    = 11,
-    S_ndoor     = 12,
-    S_vodoor    = 13,
-    S_hodoor    = 14,
-    S_vcdoor    = 15, /* closed door, vertical wall */
-    S_hcdoor    = 16, /* closed door, horizontal wall */
-    S_bars      = 17, /* KMH -- iron bars */
-    S_tree      = 18, /* KMH */
-    S_room      = 19,
-    S_darkroom  = 20,
-    S_corr      = 21,
-    S_litcorr   = 22,
-    S_upstair   = 23,
-    S_dnstair   = 24,
-    S_upladder  = 25,
-    S_dnladder  = 26,
-    S_altar     = 27,
-    S_grave     = 28,
-    S_throne    = 29,
-    S_sink      = 30,
-    S_fountain  = 31,
-    S_pool      = 32,
-    S_ice       = 33,
-    S_lava      = 34,
-    S_vodbridge = 35,
-    S_hodbridge = 36,
-    S_vcdbridge = 37, /* closed drawbridge, vertical wall */
-    S_hcdbridge = 38, /* closed drawbridge, horizontal wall */
-    S_air       = 39,
-    S_cloud     = 40,
-    S_water     = 41,
-
-/* end dungeon characters, begin traps */
-
-    S_arrow_trap           = 42,
-    S_dart_trap            = 43,
-    S_falling_rock_trap    = 44,
-    S_squeaky_board        = 45,
-    S_bear_trap            = 46,
-    S_land_mine            = 47,
-    S_rolling_boulder_trap = 48,
-    S_sleeping_gas_trap    = 49,
-    S_rust_trap            = 50,
-    S_fire_trap            = 51,
-    S_pit                  = 52,
-    S_spiked_pit           = 53,
-    S_hole                 = 54,
-    S_trap_door            = 55,
-    S_teleportation_trap   = 56,
-    S_level_teleporter     = 57,
-    S_magic_portal         = 58,
-    S_web                  = 59,
-    S_statue_trap          = 60,
-    S_magic_trap           = 61,
-    S_anti_magic_trap      = 62,
-    S_polymorph_trap       = 63,
-    S_vibrating_square     = 64, /* for display rather than any trap effect */
-
-/* end traps, begin special effects */
-
-    S_vbeam     = 65, /* The 4 zap beam symbols.  Do NOT separate. */
-    S_hbeam     = 66, /* To change order or add, see function      */
-    S_lslant    = 67, /* zapdir_to_glyph() in display.c.           */
-    S_rslant    = 68,
-    S_digbeam   = 69, /* dig beam symbol */
-    S_flashbeam = 70, /* camera flash symbol */
-    S_boomleft  = 71, /* thrown boomerang, open left, e.g ')'    */
-    S_boomright = 72, /* thrown boomerang, open right, e.g. '('  */
-    S_ss1       = 73, /* 4 magic shield ("resistance sparkle") glyphs */
-    S_ss2       = 74,
-    S_ss3       = 75,
-    S_ss4       = 76,
-    S_poisoncloud = 77,
-    S_goodpos   = 78, /* valid position for targeting via getpos() */
-
-/* The 8 swallow symbols.  Do NOT separate.  To change order or add, */
-/* see the function swallow_to_glyph() in display.c.                 */
-    S_sw_tl     = 79, /* swallow top left [1]             */
-    S_sw_tc     = 80, /* swallow top center [2]    Order: */
-    S_sw_tr     = 81, /* swallow top right [3]            */
-    S_sw_ml     = 82, /* swallow middle left [4]   1 2 3  */
-    S_sw_mr     = 83, /* swallow middle right [6]  4 5 6  */
-    S_sw_bl     = 84, /* swallow bottom left [7]   7 8 9  */
-    S_sw_bc     = 85, /* swallow bottom center [8]        */
-    S_sw_br     = 86, /* swallow bottom right [9]         */
-
-    S_explode1  = 87, /* explosion top left               */
-    S_explode2  = 88, /* explosion top center             */
-    S_explode3  = 89, /* explosion top right        Ex.   */
-    S_explode4  = 90, /* explosion middle left            */
-    S_explode5  = 91, /* explosion middle center    /-\   */
-    S_explode6  = 92, /* explosion middle right     |@|   */
-    S_explode7  = 93, /* explosion bottom left      \-/   */
-    S_explode8  = 94, /* explosion bottom center          */
-    S_explode9  = 95, /* explosion bottom right           */
-
-/* end effects */
-
-    MAXPCHARS   = 96  /* maximum number of mapped characters */
-};
-
-#define MAXDCHARS (S_water - S_stone + 1) /* mapped dungeon characters */
-#define MAXTCHARS (S_vibrating_square - S_arrow_trap + 1) /* trap chars */
-#define MAXECHARS (S_explode9 - S_vbeam + 1) /* mapped effects characters */
-#define MAXEXPCHARS 9 /* number of explosion characters */
-
-#define DARKROOMSYM (Is_rogue_level(&u.uz) ? S_stone : S_darkroom)
-
-#define is_cmap_trap(i) ((i) >= S_arrow_trap && (i) <= S_polymorph_trap)
-#define is_cmap_drawbridge(i) ((i) >= S_vodbridge && (i) <= S_hcdbridge)
-#define is_cmap_door(i) ((i) >= S_vodoor && (i) <= S_hcdoor)
-#define is_cmap_wall(i) ((i) >= S_stone && (i) <= S_trwall)
-#define is_cmap_room(i) ((i) >= S_room && (i) <= S_darkroom)
-#define is_cmap_corr(i) ((i) >= S_corr && (i) <= S_litcorr)
-#define is_cmap_furniture(i) ((i) >= S_upstair && (i) <= S_fountain)
-#define is_cmap_water(i) ((i) == S_pool || (i) == S_water)
-#define is_cmap_lava(i) ((i) == S_lava)
-#define is_cmap_stairs(i) ((i) == S_upstair || (i) == S_dnstair || \
-                           (i) == S_upladder || (i) == S_dnladder)
-
-
-struct symdef {
-    uchar sym;
-    const char *explanation;
-#ifdef TEXTCOLOR
-    uchar color;
-#endif
-};
-
-struct symparse {
-    unsigned range;
-#define SYM_CONTROL 1 /* start/finish markers */
-#define SYM_PCHAR 2   /* index into showsyms  */
-#define SYM_OC 3      /* index into oc_syms   */
-#define SYM_MON 4     /* index into monsyms   */
-#define SYM_OTH 5     /* misc                 */
-    int idx;
-    const char *name;
-};
-
-/* misc symbol definitions */
-#define SYM_NOTHING 0
-#define SYM_UNEXPLORED 1
-#define SYM_BOULDER 2
-#define SYM_INVISIBLE 3
-#define SYM_PET_OVERRIDE 4
-#define SYM_HERO_OVERRIDE 5
-#define MAXOTHER 6
-
-/* linked list of symsets and their characteristics */
-struct symsetentry {
-    struct symsetentry *next; /* next in list                         */
-    char *name;               /* ptr to symset name                   */
-    char *desc;               /* ptr to description                   */
-    int idx;                  /* an index value                       */
-    int handling;             /* known handlers value                 */
-    Bitfield(nocolor, 1);     /* don't use color if set               */
-    Bitfield(primary, 1);     /* restricted for use as primary set    */
-    Bitfield(rogue, 1);       /* restricted for use as rogue lev set  */
-    Bitfield(explicitly, 1);  /* explicit symset set                  */
-                              /* 4 free bits */
-};
-
-/*
- * Graphics sets for display symbols
- */
-#define DEFAULT_GRAPHICS 0 /* regular characters: '-', '+', &c */
-#define PRIMARY 0          /* primary graphics set        */
-#define ROGUESET 1         /* rogue graphics set          */
-#define NUM_GRAPHICS 2
-
-/*
- * special symbol set handling types ( for invoking callbacks, etc.)
- * Must match the order of the known_handlers strings
- * in drawing.c
- */
-#define H_UNK     0
-#define H_IBM     1
-#define H_DEC     2
-#define H_CURS    3
-#define H_MAC     4 /* obsolete; needed so that the listing of available
-                     * symsets by 'O' can skip it for !MAC_GRAPHICS_ENV */
-
-extern const struct symdef defsyms[MAXPCHARS]; /* defaults */
-#define WARNCOUNT 6 /* number of different warning levels */
-extern const struct symdef def_warnsyms[WARNCOUNT];
-#define SYMHANDLING(ht) (g.symset[g.currentgraphics].handling == (ht))
-
-/*
  *      Note:  secret doors (SDOOR) want to use both rm.doormask and
  *      rm.wall_info but those both overload rm.flags.  SDOOR only
  *      has 2 states (closed or locked).  However, it can't specify
@@ -322,20 +114,27 @@ extern const struct symdef def_warnsyms[WARNCOUNT];
  *      a secret door is revealed, the door gets set to D_CLOSED iff
  *      it isn't set to D_LOCKED (see cvt_sdoor_to_door() in detect.c).
  *
- *      D_TRAPPED conflicts with W_NONDIGGABLE but the latter is not
- *      expected to be used on door locations.
+ *      D_LOCKED conflicts with W_NONDIGGABLE but the latter is not
+ *      expected to be used on door locations.  D_TRAPPED conflicts
+ *      with W_NONPASSWALL but secret doors aren't trapped.
+ *      D_SECRET would not fit within struct rm's 5-bit 'flags' field.
  */
 
 /*
  * The 5 possible states of doors.
+ * For historical reasons they are numbered as mask bits rather than 0..4.
+ * The trapped flag is OR'd onto the state and only valid if that state
+ * is closed or locked.
+ * The no-door state allows egress when moving diagonally, others do not.
  */
-#define D_NODOOR 0
-#define D_BROKEN 1
-#define D_ISOPEN 2
-#define D_CLOSED 4
-#define D_LOCKED 8
-#define D_TRAPPED 16
-#define D_SECRET 32 /* only used by sp_lev.c, NOT in rm-struct */
+#define D_NODOOR  0x00
+#define D_BROKEN  0x01
+#define D_ISOPEN  0x02
+#define D_CLOSED  0x04
+#define D_LOCKED  0x08
+
+#define D_TRAPPED 0x10
+#define D_SECRET  0x20 /* only used by sp_lev.c, NOT in rm-struct */
 
 /*
  * Thrones should only be looted once.
@@ -421,7 +220,7 @@ extern const struct symdef def_warnsyms[WARNCOUNT];
  */
 struct rm {
     int glyph;               /* what the hero thinks is there */
-    schar typ;               /* what is really there */
+    schar typ;               /* what is really there  [why is this signed?] */
     uchar seenv;             /* seen vector */
     Bitfield(flags, 5);      /* extra information for typ */
     Bitfield(horizontal, 1); /* wall/door/etc is horiz. (more typ info) */
@@ -530,7 +329,8 @@ struct damage {
     struct damage *next;
     long when, cost;
     coord place;
-    schar typ;
+    schar typ; /* from struct rm */
+    uchar flags; /* also from struct rm; an unsigned 5-bit field there */
 };
 
 /* for bones levels:  identify the dead character, who might have died on

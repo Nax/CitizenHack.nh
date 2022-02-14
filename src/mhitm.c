@@ -1,4 +1,4 @@
-/* NetHack 3.7	mhitm.c	$NHDT-Date: 1614910020 2021/03/05 02:07:00 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.192 $ */
+/* NetHack 3.7	mhitm.c	$NHDT-Date: 1627412283 2021/07/27 18:58:03 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.199 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -243,13 +243,22 @@ mdisplacem(register struct monst *magr, register struct monst *mdef,
     }
 
     remove_monster(fx, fy); /* pick up from orig position */
-    remove_monster(tx, ty);
+    if (mdef->wormno)
+        remove_worm(mdef);
+    else
+        remove_monster(tx, ty);
     place_monster(magr, tx, ty); /* put down at target spot */
     place_monster(mdef, fx, fy);
+    if (mdef->wormno) /* now put down tail */
+        place_worm_tail_randomly(mdef, fx, fy);
+    /* either creature might move into or out of a poison gas cloud */
+    update_monster_region(magr);
+    update_monster_region(mdef);
+
     if (g.vis && !quietly)
         pline("%s moves %s out of %s way!", Monnam(magr), mon_nam(mdef),
               is_rider(pa) ? "the" : mhis(magr));
-    newsym(fx, fy);  /* see it */
+    newsym(fx, fy);  /* see it       */
     newsym(tx, ty);  /*   all happen */
     flush_screen(0); /* make sure it shows up */
 
@@ -341,7 +350,7 @@ mattackm(register struct monst *magr, register struct monst *mdef)
      * some cases, in which case this still counts as its move for the round
      * and it shouldn't move again.
      */
-    magr->mlstmv = g.monstermoves;
+    magr->mlstmv = g.moves;
 
     /* controls whether a mind flayer uses all of its tentacle-for-DRIN
        attacks; when fighting a headless monster, stop after the first
@@ -636,9 +645,13 @@ gazemm(struct monst *magr, struct monst *mdef, struct attack *mattk)
                       && mattk->adtyp == AD_BLND),
             altmesg = (archon && !magr->mcansee);
 
+    /* bring target out of hiding even if hero doesn't see it happen (this
+       is already done in pre_mm_attack() and shouldn't be needed here) */
+    if (mdef->data->mlet == S_MIMIC && M_AP_TYPE(mdef) != M_AP_NOTHING)
+        seemimic(mdef);
+    mdef->mundetected = 0;
+
     if (g.vis) {
-        if (mdef->data->mlet == S_MIMIC && M_AP_TYPE(mdef) != M_AP_NOTHING)
-            seemimic(mdef);
         Sprintf(buf, "%s gazes %s",
                 altmesg ? Adjmonnam(magr, "blinded") : Monnam(magr),
                 altmesg ? "toward" : "at");
@@ -744,8 +757,10 @@ gulpmm(register struct monst *magr, register struct monst *mdef,
         Sprintf(buf, "%s swallows", Monnam(magr));
         pline("%s %s.", buf, mon_nam(mdef));
     }
-    for (obj = mdef->minvent; obj; obj = obj->nobj)
-        (void) snuff_lit(obj);
+    if (!flaming(magr->data)) {
+        for (obj = mdef->minvent; obj; obj = obj->nobj)
+            (void) snuff_lit(obj);
+    }
 
     if (is_vampshifter(mdef)
         && newcham(mdef, &mons[mdef->cham], FALSE, FALSE)) {

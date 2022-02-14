@@ -1,4 +1,4 @@
-/* NetHack 3.7	trap.c	$NHDT-Date: 1615759958 2021/03/14 22:12:38 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.403 $ */
+/* NetHack 3.7	trap.c	$NHDT-Date: 1627951430 2021/08/03 00:43:50 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.416 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2013. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -187,6 +187,8 @@ erode_obj(
 
     switch (type) {
     case ERODE_BURN:
+        if (uvictim && u_adtyp_resistance_obj(AD_FIRE) && rn2(100))
+            return ER_NOTHING;
         vulnerable = is_flammable(otmp);
         check_grease = FALSE;
         cost_type = COST_BURN;
@@ -202,6 +204,8 @@ erode_obj(
         cost_type = COST_ROT;
         break;
     case ERODE_CORRODE:
+        if (uvictim && u_adtyp_resistance_obj(AD_ACID) && rn2(100))
+            return ER_NOTHING;
         vulnerable = is_corrodeable(otmp);
         is_primary = FALSE;
         cost_type = COST_CORRODE;
@@ -592,7 +596,7 @@ fall_through(
 struct monst *
 animate_statue(
     struct obj *statue,
-    xchar x, 
+    xchar x,
     xchar y,
     int cause,
     int *fail_reason)
@@ -772,7 +776,7 @@ animate_statue(
 struct monst *
 activate_statue_trap(
     struct trap *trap,
-    xchar x, 
+    xchar x,
     xchar y,
     boolean shatter)
 {
@@ -2567,8 +2571,9 @@ blow_up_landmine(struct trap* trap)
 {
     int x = trap->tx, y = trap->ty, dbx, dby;
     struct rm *lev = &levl[x][y];
-    schar typ;
+    schar old_typ, typ;
 
+    old_typ = lev->typ;
     (void) scatter(x, y, 4,
                    MAY_DESTROY | MAY_HIT | MAY_FRACTURE | VIS_EFFECTS,
                    (struct obj *) 0);
@@ -2604,6 +2609,7 @@ blow_up_landmine(struct trap* trap)
             }
         }
     }
+    spot_checks(x, y, old_typ);
 }
 
 static void
@@ -2947,7 +2953,7 @@ feeltrap(struct trap* trap)
 static int
 mkroll_launch(
     struct trap *ttmp,
-    xchar x, 
+    xchar x,
     xchar y,
     short otyp,
     long ocount)
@@ -3793,7 +3799,7 @@ fire_damage(
 int
 fire_damage_chain(
     struct obj *chain,
-    boolean force, 
+    boolean force,
     boolean here,
     xchar x,
     xchar y)
@@ -3871,6 +3877,9 @@ acid_damage(struct obj* obj)
 
     victim = carried(obj) ? &g.youmonst : mcarried(obj) ? obj->ocarry : NULL;
     vismon = victim && (victim != &g.youmonst) && canseemon(victim);
+
+    if (victim == &g.youmonst && u_adtyp_resistance_obj(AD_ACID) && rn2(100))
+        return;
 
     if (obj->greased) {
         grease_protect(obj, (char *) 0, victim);
@@ -4230,6 +4239,7 @@ drown(void)
     if (g.multi < 0 || (Upolyd && !g.youmonst.data->mmove))
         goto crawl;
     /* look around for a place to crawl to */
+#if 0
     for (i = 0; i < 100; i++) {
         x = rn1(3, u.ux - 1);
         y = rn1(3, u.uy - 1);
@@ -4245,6 +4255,31 @@ drown(void)
                 crawl_ok = TRUE;
                 goto crawl;
             }
+#else
+    {
+        int j, k, dirs[N_DIRS];
+
+        /* instead of picking a random direction up to 100 times, try each
+           of the eight directions at most once after shuffling their order */
+        for (i = 0; i < N_DIRS; ++i)
+            dirs[i] = i;
+        for (i = N_DIRS; i > 0; --i) {
+            j = rn2(i);
+            k = dirs[j];
+            dirs[j] = dirs[i - 1];
+            dirs[i - 1] = k;
+        }
+        for (i = 0; i < N_DIRS; ++i) {
+            x = u.ux + xdir[dirs[i]];
+            y = u.uy + ydir[dirs[i]];
+            /* note: crawl_dest calls goodpos() which performs isok() check */
+            if (crawl_destination(x, y)) {
+                crawl_ok = TRUE;
+                break;
+            }
+        }
+    }
+#endif
  crawl:
     if (crawl_ok) {
         boolean lost = FALSE;
@@ -4653,18 +4688,15 @@ disarm_shooting_trap(struct trap* ttmp, int otyp)
     return 1;
 }
 
-/* Is the weight too heavy?
- * Formula as in near_capacity() & check_capacity() */
+/* trying to #untrap a monster from a pit; is the weight too heavy? */
 static int
 try_lift(
-    struct monst *mtmp,
-    struct trap *ttmp,
-    int wt,
-    boolean stuff)
+    struct monst *mtmp, /* trapped monster */
+    struct trap *ttmp, /* pit, possibly made by hero, or spiked pit */
+    int xtra_wt, /* monster (corpse weight) + (stuff ? minvent weight : 0) */
+    boolean stuff) /* False: monster w/o minvent; True: w/ minvent */
 {
-    int wc = weight_cap();
-
-    if (((wt * 2) / wc) >= HVY_ENCUMBER) {
+    if (calc_capacity(xtra_wt) >= HVY_ENCUMBER) {
         pline("%s is %s for you to lift.", Monnam(mtmp),
               stuff ? "carrying too much" : "too heavy");
         if (!ttmp->madeby_u && !mtmp->mpeaceful && mtmp->mcanmove
@@ -4685,7 +4717,7 @@ help_monster_out(
     struct monst *mtmp,
     struct trap *ttmp)
 {
-    int wt;
+    int xtra_wt;
     struct obj *otmp;
     boolean uprob;
 
@@ -4754,15 +4786,18 @@ help_monster_out(
     }
 
     /* is the monster too heavy? */
-    wt = inv_weight() + mtmp->data->cwt;
-    if (!try_lift(mtmp, ttmp, wt, FALSE))
+    xtra_wt = mtmp->data->cwt;
+    if (!try_lift(mtmp, ttmp, xtra_wt, FALSE))
         return 1;
 
-    /* is the monster with inventory too heavy? */
-    for (otmp = mtmp->minvent; otmp; otmp = otmp->nobj)
-        wt += otmp->owt;
-    if (!try_lift(mtmp, ttmp, wt, TRUE))
-        return 1;
+    /* monster without its inventory isn't too heavy; if it carries
+       anything, include that minvent weight and check again */
+    if (mtmp->minvent) {
+        for (otmp = mtmp->minvent; otmp; otmp = otmp->nobj)
+            xtra_wt += otmp->owt;
+        if (!try_lift(mtmp, ttmp, xtra_wt, TRUE))
+            return 1;
+    }
 
     You("pull %s out of the pit.", mon_nam(mtmp));
     mtmp->mtrapped = 0;
@@ -5964,4 +5999,20 @@ ignite_items(struct obj* objchn)
     }
 }
 
+void
+trap_ice_effects(xchar x, xchar y, boolean ice_is_melting)
+{
+    struct trap *ttmp = t_at(x, y);
+
+    if (ttmp && ice_is_melting) {
+        if (ttmp->ttyp == LANDMINE || ttmp->ttyp == BEAR_TRAP) {
+            /* landmine or bear trap set on top of the ice falls
+               into the water */
+            int otyp = (ttmp->ttyp == LANDMINE) ? LAND_MINE : BEARTRAP;
+            cnv_trap_obj(otyp, 1, ttmp, TRUE);
+        } else {
+            deltrap(ttmp);
+        }
+    }
+}
 /*trap.c*/

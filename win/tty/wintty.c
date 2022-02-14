@@ -36,11 +36,24 @@ extern void msmsg(const char *, ...);
 #endif
 #endif
 
+#ifdef DEF_PAGER
+    /* DEF_PAGER implies UNIX; when dlb is in use, the only file accessible
+       to an external pager is 'license'; override 'DEF_PAGER' for that
+       situation rather than using code to fallback to DLB plus internal
+       pager after open() failure */
+#ifdef DLB
+#undef DEF_PAGER
+#else
+#ifndef O_RDONLY /* (same logic as unixmain.c) */
+#include <fcntl.h>
+#endif
+#endif /* DLB */
+#endif /* DEF_PAGER */
+
 #if defined(TTY_TILES_ESCCODES) || defined(TTY_SOUND_ESCCODES)
 #define VT_ANSI_COMMAND 'z'
 #endif
 #ifdef TTY_TILES_ESCCODES
-extern short glyph2tile[];
 #define AVTC_GLYPH_START   0
 #define AVTC_GLYPH_END     1
 #define AVTC_SELECT_WINDOW 2
@@ -205,7 +218,8 @@ static void setup_gendmenu(winid, boolean, int, int, int);
 static void setup_algnmenu(winid, boolean, int, int, int);
 static boolean reset_role_filtering(void);
 #ifdef STATUS_HILITES
-static boolean check_fields(boolean, int *);
+#define MAX_STATUS_ROWS 3
+static boolean check_fields(boolean forcefields, int sz[MAX_STATUS_ROWS]);
 static void render_status(void);
 static void tty_putstatusfield(const char *, int, int);
 static boolean check_windowdata(void);
@@ -232,9 +246,8 @@ static const char default_menu_cmds[] = {
 #ifdef TTY_TILES_ESCCODES
 static int vt_tile_current_window = -2;
 
-void
-print_vt_code(i, c, d)
-int i, c, d;
+static void
+print_vt_code(int i, int c, int d)
 {
     HUPSKIP();
     if (iflags.vt_tiledata) {
@@ -260,8 +273,8 @@ int i, c, d;
 #define print_vt_code2(i,c)   print_vt_code((i), (c), -1)
 #define print_vt_code3(i,c,d) print_vt_code((i), (c), (d))
 
-#ifdef TTY_SOUND_ESCCODES
-void
+#if defined(USER_SOUNDS) && defined(TTY_SOUND_ESCCODES)
+static void
 print_vt_soundcode_idx(int idx, int v)
 {
     HUPSKIP();
@@ -2793,7 +2806,7 @@ tty_display_file(const char *fname, boolean complain)
 #ifdef DEF_PAGER /* this implies that UNIX is defined */
     {
         /* use external pager; this may give security problems */
-        register int fd = open(fname, 0);
+        int fd = open(fname, O_RDONLY);
 
         if (fd < 0) {
             if (complain)
@@ -3359,9 +3372,6 @@ tty_print_glyph(winid window, xchar x, xchar y,
 {
     boolean inverse_on = FALSE;
     int ch, color;
-#if defined(TTY_TILES_ESCCODES) || defined(MSDOS)
-    int glyph;
-#endif
     unsigned special;
 
     HUPSKIP();
@@ -3372,19 +3382,16 @@ tty_print_glyph(winid window, xchar x, xchar y,
     }
 #endif
     /* get glyph ttychar, color, and special flags */
-#if defined(TTY_TILES_ESCCODES) || defined(MSDOS)
-    glyph = glyphinfo->glyph;
-#endif
     ch = glyphinfo->ttychar;
-    color = glyphinfo->color;
-    special = glyphinfo->glyphflags;
+    color = glyphinfo->gm.color;
+    special = glyphinfo->gm.glyphflags;
 
     print_vt_code2(AVTC_SELECT_WINDOW, window);
 
     /* Move the cursor. */
     tty_curs(window, x, y);
 
-    print_vt_code3(AVTC_GLYPH_START, glyph2tile[glyph], special);
+    print_vt_code3(AVTC_GLYPH_START, glyphinfo->gm.tileidx, special);
 
 #ifndef NO_TERMS
     if (ul_hack && ch == '_') { /* non-destructive underscore */
@@ -3424,7 +3431,7 @@ tty_print_glyph(winid window, xchar x, xchar y,
 
 #if defined(USE_TILES) && defined(MSDOS)
     if (iflags.grmode && iflags.tile_view)
-        xputg(glyph, ch, special);
+        xputg(glyphinfo);
     else
 #endif
         g_putch(ch); /* print the character */
@@ -3846,7 +3853,7 @@ tty_status_enablefield(int fieldidx, const char *nm, const char *fmt,
  */
 
 DISABLE_WARNING_FORMAT_NONLITERAL
- 
+
 void
 tty_status_update(int fldidx, genericptr_t ptr, int chg UNUSED, int percent,
                   int color, unsigned long *colormasks)
@@ -3974,9 +3981,10 @@ static int
 make_things_fit(boolean force_update)
 {
     int trycnt, fitting = 0, requirement;
-    int rowsz[3], num_rows, condrow, otheroptions = 0;
+    int rowsz[MAX_STATUS_ROWS], num_rows, condrow, otheroptions = 0;
 
-    num_rows = (iflags.wc2_statuslines < 3) ? 2 : 3;
+    num_rows = (iflags.wc2_statuslines < MAX_STATUS_ROWS)
+                    ? 2 : MAX_STATUS_ROWS;
     condrow = num_rows - 1; /* always last row, 1 for 0..1 or 2 for 0..2 */
     cond_shrinklvl = 0;
     if (enc_shrinklvl > 0 && num_rows == 2)
@@ -4034,7 +4042,7 @@ make_things_fit(boolean force_update)
  * This is now done at an individual field case-by-case level.
  */
 static boolean
-check_fields(boolean forcefields, int sz[3])
+check_fields(boolean forcefields, int sz[MAX_STATUS_ROWS])
 {
     int c, i, row, col, num_rows, idx;
     boolean valid = TRUE, matchprev, update_right;
@@ -4042,7 +4050,8 @@ check_fields(boolean forcefields, int sz[3])
     if (!windowdata_init && !check_windowdata())
         return FALSE;
 
-    num_rows = (iflags.wc2_statuslines < 3) ? 2 : 3;
+    num_rows = (iflags.wc2_statuslines < MAX_STATUS_ROWS)
+                    ? 2 : MAX_STATUS_ROWS;
 
     for (row = 0; row < num_rows; ++row) {
         sz[row] = 0;
@@ -4146,7 +4155,7 @@ status_sanity_check(void)
         "BL_TIME", "BL_HUNGER", "BL_HP", "BL_HPMAX",           /* 16.. 19 */
         "BL_LEVELDESC", "BL_EXP", "BL_CONDITION"              /* 20.. 22 */
     };
-   
+
     if (in_sanity_check)
         return;
     in_sanity_check = TRUE;
@@ -4386,7 +4395,7 @@ render_status(void)
         return;
     }
 
-    num_rows = (iflags.wc2_statuslines < 3) ? 2 : 3;
+    num_rows = (iflags.wc2_statuslines < MAX_STATUS_ROWS) ? 2 : MAX_STATUS_ROWS;
     for (row = 0; row < num_rows; ++row) {
         HUPSKIP();
         y = row;
@@ -4412,7 +4421,7 @@ render_status(void)
                     /* if no bits are set, we can fall through condition
                        rendering code to finalx[] handling (and subsequent
                        rest-of-line erasure if line is shorter than before) */
-                    if (num_rows == 3 && bits != 0L) {
+                    if (num_rows == MAX_STATUS_ROWS && bits != 0L) {
                         int k;
                         char *dat = &cw->data[y][0];
 

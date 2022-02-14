@@ -123,7 +123,7 @@ panictrace_handler(int sig_unused UNUSED)
         curses_uncurse_terminal();
     }
 #endif
-    
+
     f2 = (int) write(2, SIG_MSG, sizeof SIG_MSG - 1);
     nhUse(f2);  /* what could we do if write to fd#2 (stderr) fails  */
     NH_abort(); /* ... and we're already in the process of quitting? */
@@ -327,8 +327,6 @@ done1(int sig_unused UNUSED)
 int
 done2(void)
 {
-    if (iflags.debug_fuzzer)
-        return 0;
     if (!paranoid_query(ParanoidQuit, "Really quit?")) {
 #ifndef NO_SIGNAL
         (void) signal(SIGINT, (SIG_RET_TYPE) done1);
@@ -1289,7 +1287,7 @@ really_done(int how)
        topten figure it out separately and possibly getting different
        time or even day if player is slow responding to --More-- */
     urealtime.finish_time = endtime = getnow();
-    urealtime.realtime += (long) (endtime - urealtime.start_timing);
+    urealtime.realtime += timet_delta(endtime, urealtime.start_timing);
     /* collect these for end of game disclosure (not used during play) */
     iflags.at_night = night();
     iflags.at_midnight = midnight();
@@ -1779,6 +1777,7 @@ nh_terminate(int status)
         dlb_cleanup();
         l_nhcore_done();
     }
+    free_nomakedefs();
 
 #ifdef VMS
     /*

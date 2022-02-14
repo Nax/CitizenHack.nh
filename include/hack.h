@@ -183,8 +183,20 @@ typedef struct {
 
 #include "align.h"
 #include "dungeon.h"
-#include "monsym.h"
+#include "sym.h"
 #include "mkroom.h"
+
+enum artifacts_nums {
+#define ARTI_ENUM
+#include "artilist.h"
+#undef ARTI_ENUM
+    AFTER_LAST_ARTIFACT
+};
+
+enum misc_arti_nums {
+    NROFARTIFACTS = (AFTER_LAST_ARTIFACT - 1)
+};
+
 #include "objclass.h"
 #include "youprop.h"
 #include "wintype.h"
@@ -194,17 +206,15 @@ typedef struct {
 
 /* Symbol offsets */
 #define SYM_OFF_P (0)
-#define SYM_OFF_O (SYM_OFF_P + MAXPCHARS)   /* MAXPCHARS from rm.h */
+#define SYM_OFF_O (SYM_OFF_P + MAXPCHARS)   /* MAXPCHARS from sym.h */
 #define SYM_OFF_M (SYM_OFF_O + MAXOCLASSES) /* MAXOCLASSES from objclass.h */
-#define SYM_OFF_W (SYM_OFF_M + MAXMCLASSES) /* MAXMCLASSES from monsym.h*/
+#define SYM_OFF_W (SYM_OFF_M + MAXMCLASSES) /* MAXMCLASSES from sym.h*/
 #define SYM_OFF_X (SYM_OFF_W + WARNCOUNT)
 #define SYM_MAX (SYM_OFF_X + MAXOTHER)
 
-/* glyphmod entries */
-enum { GM_FLAGS, GM_TTYCHAR, GM_COLOR, NUM_GLYPHMOD };
-
 #include "rect.h"
 #include "region.h"
+#include "display.h"
 #include "decl.h"
 #include "timeout.h"
 
@@ -256,7 +266,6 @@ typedef struct sortloot_item Loot;
 #include "trap.h"
 #include "flag.h"
 #include "vision.h"
-#include "display.h"
 #include "engrave.h"
 
 #include "extern.h"
@@ -354,6 +363,7 @@ typedef struct sortloot_item Loot;
 #define BUC_CURSED        0x0200
 #define BUC_UNCURSED      0x0400
 #define BUC_UNKNOWN       0x0800
+#define JUSTPICKED        0x1000
 #define BUC_ALLBKNOWN (BUC_BLESSED | BUC_CURSED | BUC_UNCURSED)
 #define BUCX_TYPES (BUC_ALLBKNOWN | BUC_UNKNOWN)
 #define ALL_TYPES_SELECTED -2
@@ -480,6 +490,7 @@ enum bodypart_types {
 /* Some misc definitions */
 #define POTION_OCCUPANT_CHANCE(n) (13 + 2 * (n))
 #define WAND_BACKFIRE_CHANCE 100
+#define WAND_WREST_CHANCE 121
 #define BALL_IN_MON (u.uswallow && uball && uball->where == OBJ_FREE)
 #define CHAIN_IN_MON (u.uswallow && uchain && uchain->where == OBJ_FREE)
 #define NODIAG(monnum) ((monnum) == PM_GRID_BUG)
@@ -510,6 +521,15 @@ enum bodypart_types {
 #define GETOBJ_PROMPT   0x2 /* should it force a prompt for input? (prevents it
                                exiting early with "You don't have anything to
                                foo" if nothing in inventory is valid) */
+
+/* flags for hero_breaks() and hits_bars(); BRK_KNOWN* let callers who have
+   already called breaktest() prevent it from being called again since it
+   has a random factor which makes it be non-deterministic */
+#define BRK_BY_HERO        1
+#define BRK_FROM_INV       2
+#define BRK_KNOWN2BREAK    4
+#define BRK_KNOWN2NOTBREAK 8
+#define BRK_KNOWN_OUTCOME  (BRK_KNOWN2BREAK | BRK_KNOWN2NOTBREAK)
 
 /* values returned from getobj() callback functions */
 enum getobj_callback_returns {

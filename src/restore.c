@@ -1,4 +1,4 @@
-/* NetHack 3.7	restore.c	$NHDT-Date: 1606765214 2020/11/30 19:40:14 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.173 $ */
+/* NetHack 3.7	restore.c	$NHDT-Date: 1629818407 2021/08/24 15:20:07 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.183 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Michael Allison, 2009. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -9,10 +9,6 @@
 #if defined(MICRO)
 extern int dotcnt; /* shared with save */
 extern int dotrow; /* shared with save */
-#endif
-
-#ifdef USE_TILES
-extern void substitute_tiles(d_level *); /* from tile.c */
 #endif
 
 #ifdef ZEROCOMP
@@ -162,7 +158,7 @@ restdamage(NHFILE* nhfp)
             mread(nhfp->fd, (genericptr_t) tmp_dam, sizeof(*tmp_dam));
 
         if (ghostly)
-            tmp_dam->when += (g.monstermoves - g.omoves);
+            tmp_dam->when += (g.moves - g.omoves);
         Strcpy(damaged_shops,
                in_rooms(tmp_dam->place.x, tmp_dam->place.y, SHOPBASE));
         if (u.uz.dlevel) {
@@ -267,7 +263,8 @@ restobjchn(NHFILE* nhfp, boolean frozen)
             otmp2->nobj = otmp;
 
         if (ghostly) {
-            unsigned nid = g.context.ident++;
+            unsigned nid = next_ident();
+
             add_id_mapping(otmp->o_id, nid);
             otmp->o_id = nid;
         }
@@ -278,7 +275,7 @@ restobjchn(NHFILE* nhfp, boolean frozen)
          * immediately after old player died.
          */
         if (ghostly && !frozen && !age_is_relative(otmp))
-            otmp->age = g.monstermoves - g.omoves + otmp->age;
+            otmp->age = g.moves - g.omoves + otmp->age;
 
         /* get contents of a container or statue */
         if (Has_contents(otmp)) {
@@ -335,12 +332,12 @@ restmon(NHFILE* nhfp, struct monst* mtmp)
         }
         /* egd - vault guard */
         if (nhfp->structlevel)
-            mread(nhfp->fd, (genericptr_t) &buflen, sizeof(buflen));
+            mread(nhfp->fd, (genericptr_t) &buflen, sizeof buflen);
 
         if (buflen > 0) {
             newegd(mtmp);
             if (nhfp->structlevel)
-                mread(nhfp->fd, (genericptr_t) EGD(mtmp), sizeof(struct egd));
+                mread(nhfp->fd, (genericptr_t) EGD(mtmp), sizeof (struct egd));
         }
         /* epri - temple priest */
         if (nhfp->structlevel)
@@ -348,7 +345,8 @@ restmon(NHFILE* nhfp, struct monst* mtmp)
         if (buflen > 0) {
             newepri(mtmp);
             if (nhfp->structlevel)
-                mread(nhfp->fd, (genericptr_t) EPRI(mtmp), sizeof(struct epri));
+                mread(nhfp->fd, (genericptr_t) EPRI(mtmp),
+                      sizeof (struct epri));
         }
         /* eshk - shopkeeper */
         if (nhfp->structlevel)
@@ -356,7 +354,8 @@ restmon(NHFILE* nhfp, struct monst* mtmp)
         if (buflen > 0) {
             neweshk(mtmp);
             if (nhfp->structlevel)
-                mread(nhfp->fd, (genericptr_t) ESHK(mtmp), sizeof(struct eshk));
+                mread(nhfp->fd, (genericptr_t) ESHK(mtmp),
+                      sizeof (struct eshk));
         }
         /* emin - minion */
         if (nhfp->structlevel)
@@ -364,7 +363,8 @@ restmon(NHFILE* nhfp, struct monst* mtmp)
         if (buflen > 0) {
             newemin(mtmp);
             if (nhfp->structlevel)
-                mread(nhfp->fd, (genericptr_t) EMIN(mtmp), sizeof(struct emin));
+                mread(nhfp->fd, (genericptr_t) EMIN(mtmp),
+                      sizeof (struct emin));
         }
         /* edog - pet */
         if (nhfp->structlevel)
@@ -372,12 +372,14 @@ restmon(NHFILE* nhfp, struct monst* mtmp)
         if (buflen > 0) {
             newedog(mtmp);
             if (nhfp->structlevel)
-                mread(nhfp->fd, (genericptr_t) EDOG(mtmp), sizeof(struct edog));
+                mread(nhfp->fd, (genericptr_t) EDOG(mtmp),
+                      sizeof (struct edog));
         }
         /* mcorpsenm - obj->corpsenm for mimic posing as corpse or
            statue (inline int rather than pointer to something) */
         if (nhfp->structlevel)
-            mread(nhfp->fd, (genericptr_t) &MCORPSENM(mtmp), sizeof MCORPSENM(mtmp));
+            mread(nhfp->fd, (genericptr_t) &MCORPSENM(mtmp),
+                  sizeof MCORPSENM(mtmp));
     } /* mextra */
 }
 
@@ -403,7 +405,8 @@ restmonchn(NHFILE* nhfp)
             mtmp2->nmon = mtmp;
 
         if (ghostly) {
-            unsigned nid = g.context.ident++;
+            unsigned nid = next_ident();
+
             add_id_mapping(mtmp->m_id, nid);
             mtmp->m_id = nid;
         }
@@ -522,7 +525,7 @@ restgamestate(NHFILE* nhfp, unsigned int* stuckid, unsigned int* steedid)
 
     if (nhfp->structlevel)
         mread(nhfp->fd, (genericptr_t) &uid, sizeof uid);
-      
+
     if (SYSOPT_CHECK_SAVE_UID
         && uid != (unsigned long) getuid()) { /* strange ... */
         /* for wizard mode, issue a reminder; for others, treat it
@@ -577,7 +580,7 @@ restgamestate(NHFILE* nhfp, unsigned int* stuckid, unsigned int* steedid)
     if (nhfp->structlevel)
         mread(nhfp->fd, (genericptr_t) &u, sizeof(struct you));
     g.youmonst.cham = u.mcham;
-        
+
     if (nhfp->structlevel)
         mread(nhfp->fd, (genericptr_t) timebuf, 14);
     timebuf[14] = '\0';
@@ -667,7 +670,6 @@ restgamestate(NHFILE* nhfp, unsigned int* stuckid, unsigned int* steedid)
     restlevchn(nhfp);
     if (nhfp->structlevel) {
         mread(nhfp->fd, (genericptr_t) &g.moves, sizeof g.moves);
-        mread(nhfp->fd, (genericptr_t) &g.monstermoves, sizeof g.monstermoves);
         mread(nhfp->fd, (genericptr_t) &g.quest_status, sizeof (struct q_score));
         mread(nhfp->fd, (genericptr_t) g.spl_book, (MAXSPELL + 1) * sizeof (struct spell));
     }
@@ -687,7 +689,7 @@ restgamestate(NHFILE* nhfp, unsigned int* stuckid, unsigned int* steedid)
     }
     freefruitchn(g.ffruit); /* clean up fruit(s) made by initoptions() */
     g.ffruit = loadfruitchn(nhfp);
-  
+
     restnames(nhfp);
     restore_waterlevel(nhfp);
     restore_msghistory(nhfp);
@@ -754,7 +756,9 @@ dorecover(NHFILE* nhfp)
     int rtmp;
     struct obj *otmp;
 
+    /* suppress map display if some part of the code tries to update that */
     g.program_state.restoring = 1;
+
     get_plname_from_file(nhfp, g.plname);
     getlev(nhfp, 0, (xchar) 0);
     if (!restgamestate(nhfp, &stuckid, &steedid)) {
@@ -848,10 +852,9 @@ dorecover(NHFILE* nhfp)
         (void) delete_savefile();
     if (Is_rogue_level(&u.uz))
         assign_graphics(ROGUESET);
-#ifdef USE_TILES
-    substitute_tiles(&u.uz);
-#endif
+    reset_glyphmap(gm_levelchange);
     max_rank_sz(); /* to recompute g.mrank_sz (botl.c) */
+    init_oclass_probs(); /* recompute g.oclass_prob_totals[] */
     /* take care of iron ball & chain */
     for (otmp = fobj; otmp; otmp = otmp->nobj)
         if (otmp->owornmask)
@@ -894,6 +897,7 @@ rest_stairs(NHFILE* nhfp)
     int buflen = 0;
     stairway stway = UNDEFINED_VALUES;
     int len = 0;
+    stairway *newst;
 
     stairway_free_all();
     while (1) {
@@ -915,6 +919,9 @@ rest_stairs(NHFILE* nhfp)
         }
         stairway_add(stway.sx, stway.sy, stway.up, stway.isladder,
                      &(stway.tolev));
+        newst = stairway_at(stway.sx, stway.sy);
+        if (newst)
+            newst->u_traversed = stway.u_traversed;
     }
 }
 
@@ -1055,7 +1062,7 @@ getlev(NHFILE* nhfp, int pid, xchar lev)
         mread(nhfp->fd, (genericptr_t) g.lastseentyp, sizeof(g.lastseentyp));
         mread(nhfp->fd, (genericptr_t) &g.omoves, sizeof(g.omoves));
     }
-    elapsed = g.monstermoves - g.omoves;
+    elapsed = g.moves - g.omoves;
 
     if (nhfp->structlevel) {
         rest_stairs(nhfp);
@@ -1069,7 +1076,7 @@ getlev(NHFILE* nhfp, int pid, xchar lev)
         g.doorindex = g.rooms[g.nroom - 1].fdoor + g.rooms[g.nroom - 1].doorct;
     else
         g.doorindex = 0;
-  
+
     restore_timers(nhfp, RANGE_LEVEL, elapsed);
     restore_light_sources(nhfp);
     fmon = restmonchn(nhfp);
@@ -1118,11 +1125,10 @@ getlev(NHFILE* nhfp, int pid, xchar lev)
             /* reset peaceful/malign relative to new character;
                shopkeepers will reset based on name */
             if (!mtmp->isshk)
-                mtmp->mpeaceful =
-                    (is_unicorn(mtmp->data)
-                     && sgn(u.ualign.type) == sgn(mtmp->data->maligntyp))
-                        ? TRUE
-                        : peace_minded(mtmp->data);
+                mtmp->mpeaceful = (is_unicorn(mtmp->data)
+                                   && (sgn(u.ualign.type)
+                                       == sgn(mtmp->data->maligntyp))) ? 1
+                                  : peace_minded(mtmp->data);
             set_malign(mtmp);
         } else if (elapsed > 0L) {
             mon_catchup_elapsed_time(mtmp, elapsed);

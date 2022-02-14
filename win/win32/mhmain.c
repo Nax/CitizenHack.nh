@@ -4,11 +4,7 @@
 
 #include "winMS.h"
 #include <commdlg.h>
-#if !defined(CROSSCOMPILE)
-#include "date.h"
-#else
 #include "config.h"
-#endif
 #if !defined(PATCHLEVEL_H)
 #include "patchlevel.h"
 #endif
@@ -1071,7 +1067,7 @@ About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 
         Sprintf(buf, "%s\n%s\n%s\n%s\n%s\n%s\n",
                 COPYRIGHT_BANNER_A, COPYRIGHT_BANNER_B,
-                COPYRIGHT_BANNER_C, COPYRIGHT2_BANNER_A,
+                nomakedefs.copyright_banner_c, COPYRIGHT2_BANNER_A,
                 COPYRIGHT2_BANNER_B, COPYRIGHT3_BANNER_A);
         SetDlgItemText(hDlg, IDC_ABOUT_COPYRIGHT,
                        NH_A2W(buf, wbuf, sizeof(wbuf)));

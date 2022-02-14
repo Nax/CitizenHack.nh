@@ -142,7 +142,7 @@ enexto(
 boolean
 enexto_core(
     coord *cc,
-    xchar xx, 
+    xchar xx,
     xchar yy,
     struct permonst *mdat,
     long entflags)
@@ -697,7 +697,7 @@ dotele(
         } else
             trap = 0;
     }
-    if (!trap) {
+    if (!trap && !break_the_rules) {
         boolean castit = FALSE;
         register int sp_no = 0, energy = 0;
 
@@ -737,7 +737,7 @@ dotele(
                the extra energy is spent even if that results in not
                having enough to cast (which also uses the move) */
             else if (u.uen < energy)
-                u.uen = energy;
+                energy = u.uen;
         } else if (u.uhunger <= 10) {
             cantdoit = "are too weak from hunger";
         } else if (ACURR(A_STR) < 4) {
@@ -1135,7 +1135,7 @@ level_tele_trap(struct trap* trap, unsigned int trflags)
 /* check whether monster can arrive at location <x,y> via Tport (or fall) */
 static boolean
 rloc_pos_ok(
-    register int x, 
+    register int x,
     register int y, /* x,y - coordinates of candidate location */
     struct monst *mtmp)
 {
