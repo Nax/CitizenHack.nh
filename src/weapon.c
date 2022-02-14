@@ -159,8 +159,7 @@ hitval(struct obj *otmp, struct monst *mon)
     /* Put weapon vs. monster type "to hit" bonuses in below: */
 
     /* Blessed weapons used against undead or demons */
-    if (Is_weapon && otmp->blessed
-        && (is_demon(ptr) || is_undead(ptr) || is_vampshifter(mon)))
+    if (Is_weapon && otmp->blessed && mon_hates_blessings(mon))
         tmp += 2;
 
     if (is_spear(otmp) && index(kebabable, ptr->mlet))
@@ -322,8 +321,7 @@ dmgval(struct obj *otmp, struct monst *mon)
         || otmp->oclass == CHAIN_CLASS) {
         int bonus = 0;
 
-        if (otmp->blessed
-            && (is_undead(ptr) || is_demon(ptr) || is_vampshifter(mon)))
+        if (otmp->blessed && mon_hates_blessings(mon))
             bonus += rnd(4);
         if (is_axe(otmp) && is_wooden(ptr))
             bonus += rnd(4);
@@ -357,15 +355,15 @@ dmgval(struct obj *otmp, struct monst *mon)
 /* check whether blessed and/or silver damage applies for *non-weapon* hit;
    return value is the amount of the extra damage */
 int
-special_dmgval(struct monst *magr,
-               struct monst *mdef,
-               long armask,       /* armor mask, multiple bits accepted for
-                                     W_ARMC|W_ARM|W_ARMU or
-                                     W_ARMG|W_RINGL|W_RINGR only */
-               long *silverhit_p) /* output flag mask for silver bonus */
+special_dmgval(
+    struct monst *magr, /* attacker */
+    struct monst *mdef, /* defender */
+    long armask,        /* armor mask, multiple bits accepted for
+                         * W_ARMC|W_ARM|W_ARMU or
+                         * W_ARMG|W_RINGL|W_RINGR only */
+    long *silverhit_p)  /* output flag mask for silver bonus */
 {
     struct obj *obj;
-    struct permonst *ptr = mdef->data;
     boolean left_ring = (armask & W_RINGL) ? TRUE : FALSE,
             right_ring = (armask & W_RINGR) ? TRUE : FALSE;
     long silverhit = 0L;
@@ -391,8 +389,7 @@ special_dmgval(struct monst *magr,
     }
 
     if (obj) {
-        if (obj->blessed
-            && (is_undead(ptr) || is_demon(ptr) || is_vampshifter(mdef)))
+        if (obj->blessed && mon_hates_blessings(mdef))
             bonus += rnd(4);
         /* the only silver armor is shield of reflection (silver dragon
            scales refer to color, not material) and the only way to hit
@@ -990,10 +987,10 @@ wet_a_towel(struct obj *obj,
 
 /* decrease a towel's wetness; unlike when wetting, 0 is not a no-op */
 void
-dry_a_towel(struct obj *obj,
-            int amt, /* positive or zero: new value;
-                        negative: decrement by abs(amt) */
-            boolean verbose)
+dry_a_towel(
+    struct obj *obj,
+    int amt, /* positive or zero: new value; negative: decrement by abs(amt) */
+    boolean verbose)
 {
     int newspe = (amt < 0) ? obj->spe + amt : amt;
 
@@ -1004,7 +1001,7 @@ dry_a_towel(struct obj *obj,
                 pline("%s dries%s.", Yobjnam2(obj, (const char *) 0),
                       !newspe ? " out" : "");
             else if (mcarried(obj) && canseemon(obj->ocarry))
-                pline("%s %s drie%s.", s_suffix(Monnam(obj->ocarry)),
+                pline("%s %s dries%s.", s_suffix(Monnam(obj->ocarry)),
                       xname(obj), !newspe ? " out" : "");
         }
     }
@@ -1289,7 +1286,7 @@ enhance_weapon_skill(void)
             }
         }
     } while (speedy && n > 0);
-    return 0;
+    return ECMD_OK;
 }
 
 /*
@@ -1363,6 +1360,8 @@ drain_weapon_skill(int n) /* number of skills to drain */
 {
     int skill;
     int i;
+    int curradv;
+    int prevadv;
     int tmpskills[P_NUM_SKILLS];
 
     (void) memset((genericptr_t) tmpskills, 0, sizeof(tmpskills));
@@ -1382,9 +1381,11 @@ drain_weapon_skill(int n) /* number of skills to drain */
             P_SKILL(skill)--;   /* drop skill one level */
             /* refund slots used for skill */
             u.weapon_slots += slots_required(skill);
-            /* drain a random proportion of skill training */
-            if (P_ADVANCE(skill))
-                P_ADVANCE(skill) = rn2(P_ADVANCE(skill));
+            /* drain skill training to a value appropriate for new level */
+            curradv = practice_needed_to_advance(P_SKILL(skill));
+            prevadv = practice_needed_to_advance(P_SKILL(skill) - 1);
+            if (P_ADVANCE(skill) >= curradv)
+                P_ADVANCE(skill) = prevadv + rn2(curradv - prevadv);
         }
     }
 

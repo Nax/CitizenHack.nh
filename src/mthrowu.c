@@ -37,17 +37,18 @@ m_has_launcher_and_ammo(struct monst* mtmp)
     return FALSE;
 }
 
-/* hero is hit by something other than a monster */
+/* hero is hit by something other than a monster (though it could be a
+   missile thrown or shot by a monster) */
 int
 thitu(
-    int tlev,
+    int tlev, /* pseudo-level used when deciding whether to hit hero's AC */
     int dam,
     struct obj **objp,
     const char *name) /* if null, then format `*objp' */
 {
     struct obj *obj = objp ? *objp : 0;
     const char *onm, *knm;
-    boolean is_acid;
+    boolean is_acid, named = (name != 0);
     int kprefix = KILLED_BY_AN, dieroll;
     char onmbuf[BUFSZ], knmbuf[BUFSZ];
 
@@ -90,6 +91,13 @@ thitu(
         if (is_acid && Acid_resistance) {
             pline("It doesn't seem to hurt you.");
             monstseesu(M_SEEN_ACID);
+        } else if (stone_missile(obj) && passes_rocks(g.youmonst.data)) {
+            /* use 'named' as an approximation for "hitting from above";
+               we avoid "passes through you" for horizontal flight path
+               because missile stops and that wording would suggest that
+               it should keep going */
+            pline("It %s you.",
+                  named ? "passes harmlessly through" : "doesn't harm");
         } else if (obj && obj->oclass == POTION_CLASS) {
             /* an explosion which scatters objects might hit hero with one
                (potions deliberately thrown at hero are handled by m_throw) */
@@ -280,8 +288,8 @@ ohitmon(
     struct monst *mtmp, /* accidental target, located at <g.bhitpos.x,.y> */
     struct obj *otmp,   /* missile; might be destroyed by drop_throw */
     int range,          /* how much farther will object travel if it misses;
-                           use -1 to signify to keep going even after hit,
-                           unless it's gone (used for rolling_boulder_traps) */
+                         * use -1 to signify to keep going even after hit,
+                         * unless it's gone (used for rolling_boulder_traps) */
     boolean verbose)/* give message(s) even when you can't see what happened */
 {
     int damage, tmp;
@@ -325,6 +333,9 @@ ohitmon(
         potionhit(mtmp, otmp, POTHIT_OTHER_THROW);
         return 1;
     } else {
+        int material = objects[otmp->otyp].oc_material;
+        boolean harmless = (stone_missile(otmp) && passes_rocks(mtmp->data));
+
         damage = dmgval(otmp, mtmp);
         if (otmp->otyp == ACID_VENOM && resists_acid(mtmp))
             damage = 0;
@@ -336,12 +347,20 @@ ohitmon(
             seemimic(mtmp);
         mtmp->msleeping = 0;
         if (vis) {
-            if (otmp->otyp == EGG)
+            if (otmp->otyp == EGG) {
                 pline("Splat!  %s is hit with %s egg!", Monnam(mtmp),
                       otmp->known ? an(mons[otmp->corpsenm].pmnames[NEUTRAL])
                                   : "an");
-            else
-                hit(distant_name(otmp, mshot_xname), mtmp, exclam(damage));
+            } else {
+                char how[BUFSZ];
+
+                if (!harmless)
+                    Strcpy(how, exclam(damage)); /* "!" or "." */
+                else
+                    Sprintf(how, " but passes harmlessly through %.9s.",
+                            mhim(mtmp));
+                hit(distant_name(otmp, mshot_xname), mtmp, how);
+            }
         } else if (verbose && !g.mtarget)
             pline("%s%s is hit%s", (otmp->otyp == EGG) ? "Splat!  " : "",
                   Monnam(mtmp), exclam(damage));
@@ -361,8 +380,7 @@ ohitmon(
                 }
             }
         }
-        if (objects[otmp->otyp].oc_material == SILVER
-            && mon_hates_silver(mtmp)) {
+        if (material == SILVER && mon_hates_silver(mtmp)) {
             boolean flesh = (!noncorporeal(mtmp->data)
                              && !amorphous(mtmp->data));
 
@@ -395,7 +413,8 @@ ohitmon(
                 damage = 0;
         }
 
-        if (!DEADMONSTER(mtmp)) { /* might already be dead (if petrified) */
+        /* might already be dead (if petrified) */
+        if (!harmless && !DEADMONSTER(mtmp)) {
             mtmp->mhp -= damage;
             if (DEADMONSTER(mtmp)) {
                 if (vis || (verbose && !g.mtarget))
@@ -909,17 +928,34 @@ thrwmu(struct monst* mtmp)
         return;
 
     if (is_pole(otmp)) {
-        int dam, hitv;
+        int dam, hitv, rang;
 
         if (otmp != MON_WEP(mtmp))
             return; /* polearm must be wielded */
-        if (dist2(mtmp->mx, mtmp->my, mtmp->mux, mtmp->muy) > MON_POLE_DIST
-            || !couldsee(mtmp->mx, mtmp->my))
+
+        /*
+         * MON_POLE_DIST encompasses knight's move range (5): two spots
+         * away provided it's not on a straight diagonal, same as skilled
+         * hero.  Using polearm while adjacent is allowed but the verb
+         * is adjusted from "thrusts" to "bashes", where the hero would
+         * have to switch from applying a polearm to ordinary melee attack
+         * to accomplish that.
+         *
+         *  .545.
+         *  52125
+         *  41014
+         *  52125
+         *  .545.
+         */
+        rang = dist2(mtmp->mx, mtmp->my, mtmp->mux, mtmp->muy);
+        if (rang > MON_POLE_DIST || !couldsee(mtmp->mx, mtmp->my))
             return; /* Out of range, or intervening wall */
 
         if (canseemon(mtmp)) {
             onm = xname(otmp);
-            pline("%s thrusts %s.", Monnam(mtmp),
+            pline("%s %s %s.", Monnam(mtmp),
+                  /* "thrusts" or "swings", or "bashes with" if adjacent */
+                  mswings_verb(otmp, (rang <= 2) ? TRUE : FALSE),
                   obj_is_pname(otmp) ? the(onm) : an(onm));
         }
 
@@ -1001,7 +1037,8 @@ linedup_callback(
             bx += dx, by += dy;
             if (!isok(bx, by))
                 return FALSE;
-            if (IS_ROCK(levl[bx][by].typ) || closed_door(bx, by))
+            if (IS_ROCK(levl[bx][by].typ) || closed_door(bx, by)
+                || levl[bx][by].typ == WATER)
                 return FALSE;
             if ((*fnc)(bx, by))
                 return TRUE;
@@ -1044,7 +1081,8 @@ linedup(
         do {
             /* <bx,by> is guaranteed to eventually converge with <ax,ay> */
             bx += dx, by += dy;
-            if (IS_ROCK(levl[bx][by].typ) || closed_door(bx, by))
+            if (IS_ROCK(levl[bx][by].typ) || closed_door(bx, by)
+                || levl[bx][by].typ == WATER)
                 return FALSE;
             if (sobj_at(BOULDER, bx, by))
                 ++boulderspots;

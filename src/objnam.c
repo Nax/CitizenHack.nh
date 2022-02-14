@@ -1,4 +1,4 @@
-/* NetHack 3.7	objnam.c	$NHDT-Date: 1634584224 2021/10/18 19:10:24 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.336 $ */
+/* NetHack 3.7	objnam.c	$NHDT-Date: 1644347179 2022/02/08 19:06:19 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.343 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -502,10 +502,7 @@ xname_flags(
     if (!Blind && !g.distantname)
         obj->dknown = 1;
     if (Role_if(PM_CLERIC))
-        obj->bknown = 1; /* actively avoid set_bknown();
-                          * we mustn't call update_inventory() now because
-                          * it would call xname() (via doname()) recursively
-                          * and could end up clobbering all the obufs... */
+        obj->bknown = 1; /* avoid set_bknown() to bypass update_inventory() */
 
     if (iflags.override_ID) {
         known = dknown = bknown = TRUE;
@@ -604,6 +601,7 @@ xname_flags(
             Strcat(buf, dn);
         break;
     case FOOD_CLASS:
+        /* we could include partly-eaten-hack on fruit but don't need to */
         if (typ == SLIME_MOLD) {
             struct fruit *f = fruit_from_indx(obj->spe);
 
@@ -630,15 +628,22 @@ xname_flags(
             }
             break;
         }
+        if (iflags.partly_eaten_hack && obj->oeaten) {
+            /* normally "partly eaten" is supplied by doname() when
+               appropriate and omitted by xname(); shrink_glob() wants
+               it but uses Yname2() -> yname() -> xname() rather than
+               doname() so we've added an external flag to request it */
+            Strcat(buf, "partly eaten ");
+        }
         if (obj->globby) {
-            Sprintf(buf, "%s%s",
+            Sprintf(eos(buf), "%s%s",
                     (obj->owt <= 100)
                        ? "small "
                        : (obj->owt > 500)
                           ? "very large "
                           : (obj->owt > 300)
                              ? "large "
-                             : "",
+                             : "medium ",
                     actualn);
             break;
         }
@@ -1011,18 +1016,23 @@ erosion_matters(struct obj* obj)
 #define DONAME_WITH_PRICE 1
 #define DONAME_VAGUE_QUAN 2
 
+/* core of doname() */
 static char *
-doname_base(struct obj* obj, unsigned int doname_flags)
+doname_base(
+    struct obj* obj,       /* object to format */
+    unsigned doname_flags) /* special case requests */
 {
     boolean ispoisoned = FALSE,
             with_price = (doname_flags & DONAME_WITH_PRICE) != 0,
             vague_quan = (doname_flags & DONAME_VAGUE_QUAN) != 0;
-    boolean known, dknown, cknown, bknown, lknown;
-    int omndx = obj->corpsenm;
+    boolean known, dknown, cknown, bknown, lknown,
+            fake_arti, force_the;
     char prefix[PREFIX];
     char tmpbuf[PREFIX + 1]; /* for when we have to add something at
-                                the start of prefix instead of the
-                                end (Strcat is used on the end) */
+                              * the start of prefix instead of the
+                              * end (Strcat is used on the end) */
+    const char *aname = 0;
+    int omndx = obj->corpsenm;
     register char *bp = xname(obj);
 
     if (iflags.override_ID) {
@@ -1046,6 +1056,14 @@ doname_base(struct obj* obj, unsigned int doname_flags)
         ispoisoned = TRUE;
     }
 
+    /* fruits are allowed to be given artifact names; when that happens,
+       format the name like the corresponding artifact, which may or may not
+       want "the" prefix and when it doesn't, avoid "a"/"an" prefix too */
+    fake_arti = (obj->otyp == SLIME_MOLD
+                 && (aname = artifact_name(bp, (short *) 0)) != 0);
+    force_the = (fake_arti && !strncmpi(aname, "the ", 4));
+
+    prefix[0] = '\0';
     if (obj->quan != 1L) {
         if (dknown || !vague_quan)
             Sprintf(prefix, "%ld ", obj->quan);
@@ -1054,12 +1072,13 @@ doname_base(struct obj* obj, unsigned int doname_flags)
     } else if (obj->otyp == CORPSE) {
         /* skip article prefix for corpses [else corpse_xname()
            would have to be taught how to strip it off again] */
-        *prefix = '\0';
-    } else if (obj_is_pname(obj) || the_unique_obj(obj)) {
+        ;
+    } else if (force_the || obj_is_pname(obj) || the_unique_obj(obj)) {
         if (!strncmpi(bp, "the ", 4))
             bp += 4;
         Strcpy(prefix, "the ");
-    } else {
+    } else if (!fake_arti) {
+        /* default prefix */
         Strcpy(prefix, "a ");
     }
 
@@ -1519,6 +1538,9 @@ corpse_xname(
        to precede capitalized unique monsters (pnames are handled above) */
     if (the_prefix)
         Strcat(nambuf, "the ");
+    /* note: over time, various instances of the(mon_name()) have crept
+       into the code, so the() has been modified to deal with capitalized
+       monster names; we could switch to using it below like an() */
 
     if (!adjective || !*adjective) {
         /* normal case:  newt corpse */
@@ -1805,6 +1827,7 @@ An(const char* str)
 char *
 the(const char* str)
 {
+    const char *aname;
     char *buf = nextobuf();
     boolean insert_the = FALSE;
 
@@ -1817,9 +1840,14 @@ the(const char* str)
         Strcpy(&buf[1], str + 1);
         return buf;
     } else if (*str < 'A' || *str > 'Z'
+               /* some capitalized monster names want "the", others don't */
+               || CapitalMon(str)
                /* treat named fruit as not a proper name, even if player
-                  has assigned a capitalized proper name as his/her fruit */
-               || fruit_from_name(str, TRUE, (int *) 0)) {
+                  has assigned a capitalized proper name as his/her fruit,
+                  unless it matches an artifact name */
+               || (fruit_from_name(str, TRUE, (int *) 0)
+                   && ((aname = artifact_name(str, (short *) 0)) == 0
+                       || strncmpi(aname, "the ", 4) == 0))) {
         /* not a proper name, needs an article */
         insert_the = TRUE;
     } else {
@@ -2084,7 +2112,7 @@ bare_artifactname(struct obj* obj)
     return outbuf;
 }
 
-static const char *wrp[] = {
+static const char *const wrp[] = {
     "wand",   "ring",      "potion",     "scroll", "gem",
     "amulet", "spellbook", "spell book",
     /* for non-specific wishes */
@@ -2728,7 +2756,7 @@ ch_ksound(const char *basestr)
 {
     /* these are some *ch words/suffixes that make a k-sound. They pluralize by
        adding 's' rather than 'es' */
-    static const char *ch_k[] = {
+    static const char *const ch_k[] = {
         "monarch",     "poch",    "tech",     "mech",      "stomach", "psych",
         "amphibrach",  "anarch",  "atriarch", "azedarach", "broch",
         "gastrotrich", "isopach", "loch",     "oligarch",  "peritrich",
@@ -2755,7 +2783,7 @@ badman(
     boolean to_plural)  /* True: makeplural, False: makesingular */
 {
     /* these are all the prefixes for *man that don't have a *men plural */
-    static const char *no_men[] = {
+    static const char *const no_men[] = {
         "albu", "antihu", "anti", "ata", "auto", "bildungsro", "cai", "cay",
         "ceru", "corner", "decu", "des", "dura", "fir", "hanu", "het",
         "infrahu", "inhu", "nonhu", "otto", "out", "prehu", "protohu",
@@ -2763,7 +2791,7 @@ badman(
         "hu", "un", "le", "re", "so", "to", "at", "a",
     };
     /* these are all the prefixes for *men that don't have a *man singular */
-    static const char *no_man[] = {
+    static const char *const no_man[] = {
         "abdo", "acu", "agno", "ceru", "cogno", "cycla", "fleh", "grava",
         "hegu", "preno", "sonar", "speci", "dai", "exa", "fla", "sta", "teg",
         "tegu", "vela", "da", "hy", "lu", "no", "nu", "ra", "ru", "se", "vi",
@@ -3142,11 +3170,21 @@ wizterrainwish(struct _readobjnam_data *d)
 
     /* ("water" matches "potion of water" rather than terrain) */
     } else if (!BSTRCMPI(bp, p - 4, "pool")
-               || !BSTRCMPI(bp, p - 4, "moat")) {
-        lev->typ = !BSTRCMPI(bp, p - 4, "pool") ? POOL : MOAT;
+               || !BSTRCMPI(bp, p - 4, "moat")
+               || !BSTRCMPI(bp, p - 13, "wall of water")) {
+        long save_prop;
+        const char *new_water;
+
+        lev->typ = !BSTRCMPI(bp, p - 4, "pool") ? POOL
+                   : !BSTRCMPI(bp, p - 4, "moat") ? MOAT
+                     : WATER;
         lev->flags = 0;
         del_engr_at(x, y);
-        pline("A %s.", (lev->typ == POOL) ? "pool" : "moat");
+        save_prop = EHalluc_resistance;
+        EHalluc_resistance = 1;
+        new_water = waterbody_name(x, y);
+        EHalluc_resistance = save_prop;
+        pline("%s.", An(new_water));
         /* Must manually make kelp! */
         water_damage_chain(g.level.objects[x][y], TRUE);
         madeterrain = TRUE;
@@ -3404,7 +3442,7 @@ readobjnam_init(char *bp, struct _readobjnam_data *d)
     d->name = (const char *) 0;
     d->ftype = g.context.current_fruit;
     (void) memset(d->globbuf, '\0', sizeof d->globbuf);
-    (void) memset(d->fruitbuf, '\0', sizeof d->globbuf);
+    (void) memset(d->fruitbuf, '\0', sizeof d->fruitbuf);
 }
 
 /* return 1 if d->bp is empty or contains only various qualifiers like
@@ -3550,9 +3588,11 @@ readobjnam_preparse(struct _readobjnam_data *d)
                 break;
             d->gsize = 1;
         } else if (!strncmpi(d->bp, "medium ", l = 7)) {
-            /* xname() doesn't display "medium" but without this
-               there'd be no way to ask for the intermediate size
-               ("glob" without size prefix yields smallest one) */
+            /* 3.7: in 3.6, "medium" was only used during wishing and the
+               mid-size glob had no adjective when formatted, but as of
+               3.7, "medium" has become an explicit part of the name for
+               combined globs of at least 5 individual ones (owt >= 100)
+               and less than 15 (owt < 300) */
             d->gsize = 2;
         } else if (!strncmpi(d->bp, "large ", l = 6)) {
             /* "large" might be part of monster name (dog, cat, koboold,

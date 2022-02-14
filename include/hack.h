@@ -291,10 +291,12 @@ typedef struct sortloot_item Loot;
 #define MM_NOTAIL   0x008000L /* if a long worm, don't give it a tail */
 #define MM_MALE     0x010000L /* male variation */
 #define MM_FEMALE   0x020000L /* female variation */
+#define MM_NOMSG    0x040000L /* no appear message */
 /* if more MM_ flag masks are added, skip or renumber the GP_ one(s) */
-#define GP_ALLOW_XY 0x040000L /* [actually used by enexto() to decide whether
+#define GP_ALLOW_XY 0x080000L /* [actually used by enexto() to decide whether
                                * to make an extra call to goodpos()]        */
-#define GP_ALLOW_U  0x080000L /* don't reject hero's location */
+#define GP_ALLOW_U  0x100000L /* don't reject hero's location */
+#define MM_NOEXCLAM 0x200000L /* more sedate "<mon> appears." mesg for ^G */
 
 /* flags for make_corpse() and mkcorpstat(); 0..7 are recorded in obj->spe */
 #define CORPSTAT_NONE     0x00
@@ -442,6 +444,12 @@ typedef struct sortloot_item Loot;
 #define SUPPRESS_HISTORY 4
 #define URGENT_MESSAGE   8
 
+/* rloc() flags */
+#define RLOC_NONE    0x00
+#define RLOC_ERR     0x01 /* allow impossible() if no rloc */
+#define RLOC_MSG     0x02 /* show vanish/appear msg */
+#define RLOC_NOMSG   0x04 /* prevent appear msg, even for STRAT_APPEARMSG */
+
 /* Lua callback functions */
 enum nhcore_calls {
     NHCORE_START_NEW_GAME = 0,
@@ -530,6 +538,11 @@ enum bodypart_types {
 #define BRK_KNOWN2BREAK    4
 #define BRK_KNOWN2NOTBREAK 8
 #define BRK_KNOWN_OUTCOME  (BRK_KNOWN2BREAK | BRK_KNOWN2NOTBREAK)
+
+/* extended command return values */
+#define ECMD_OK     0x00 /* cmd done successfully */
+#define ECMD_TIME   0x01 /* cmd took time, uses up a turn */
+#define ECMD_CANCEL 0x02 /* cmd canceled by user */
 
 /* values returned from getobj() callback functions */
 enum getobj_callback_returns {

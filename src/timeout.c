@@ -11,6 +11,7 @@ static void choke_dialogue(void);
 static void levitation_dialogue(void);
 static void slime_dialogue(void);
 static void slimed_to_death(struct kinfo *);
+static void sickness_dialogue(void);
 static void phaze_dialogue(void);
 static void done_timeout(int, int);
 static void slip_or_trip(void);
@@ -114,7 +115,7 @@ static NEARDATA const char *const stoned_texts[] = {
 static void
 stoned_dialogue(void)
 {
-    register long i = (Stoned & TIMEOUT);
+    long i = (Stoned & TIMEOUT);
 
     if (i > 0L && i <= SIZE(stoned_texts)) {
         char buf[BUFSZ];
@@ -122,7 +123,7 @@ stoned_dialogue(void)
         Strcpy(buf, stoned_texts[SIZE(stoned_texts) - i]);
         if (nolimbs(g.youmonst.data) && strstri(buf, "limbs"))
             (void) strsubst(buf, "limbs", "extremities");
-        pline1(buf);
+        urgent_pline("%s", buf);
     }
     switch ((int) i) {
     case 5: /* slowing down */
@@ -241,6 +242,8 @@ vomiting_dialogue(void)
     exercise(A_CON, FALSE);
 }
 
+DISABLE_WARNING_FORMAT_NONLITERAL   /* RESTORE is after slime_dialogue */
+
 static NEARDATA const char *const choke_texts[] = {
     "You find it hard to breathe.",
     "You're gasping for air.",
@@ -260,21 +263,53 @@ static NEARDATA const char *const choke_texts2[] = {
 static void
 choke_dialogue(void)
 {
-    register long i = (Strangled & TIMEOUT);
+    long i = (Strangled & TIMEOUT);
 
     if (i > 0 && i <= SIZE(choke_texts)) {
-        if (Breathless || !rn2(50))
-            pline(choke_texts2[SIZE(choke_texts2) - i], body_part(NECK));
-        else {
+        if (Breathless || !rn2(50)) {
+            urgent_pline(choke_texts2[SIZE(choke_texts2) - i],
+                         body_part(NECK));
+        } else {
             const char *str = choke_texts[SIZE(choke_texts) - i];
 
             if (index(str, '%'))
-                pline(str, hcolor(NH_BLUE));
+                urgent_pline(str, hcolor(NH_BLUE));
             else
-                pline1(str);
+                urgent_pline("%s", str);
         }
     }
     exercise(A_STR, FALSE);
+}
+
+static NEARDATA const char *const sickness_texts[] = {
+    "Your illness feels worse.",
+    "Your illness is severe.",
+    "You are at Death's door.",
+};
+
+static void
+sickness_dialogue(void)
+{
+    long j = (Sick & TIMEOUT), i = j / 2L;
+
+    if (i > 0L && i <= SIZE(sickness_texts) && (j % 2) != 0) {
+        char buf[BUFSZ], pronounbuf[40];
+
+        Strcpy(buf, sickness_texts[SIZE(sickness_texts) - i]);
+        /* change the message slightly for food poisoning */
+        if ((u.usick_type & SICK_NONVOMITABLE) == 0)
+            (void) strsubst(buf, "illness", "sickness");
+        if (Hallucination && strstri(buf, "Death's door")) {
+            /* youmonst: for Hallucination, mhe()'s mon argument isn't used */
+            Strcpy(pronounbuf, mhe(&g.youmonst));
+            Sprintf(eos(buf), "  %s %s inviting you in.",
+                    /* upstart() modifies its argument but vtense() doesn't
+                       care whether or not that has already happened */
+                    upstart(pronounbuf), vtense(pronounbuf, "are"));
+        }
+        urgent_pline("%s", buf);
+    }
+    exercise(A_CON, FALSE);
 }
 
 static NEARDATA const char *const levi_texts[] = {
@@ -302,8 +337,8 @@ levitation_dialogue(void)
             boolean danger = (is_pool_or_lava(u.ux, u.uy)
                               && !Is_waterlevel(&u.uz));
 
-            pline(s, danger ? "over" : "in",
-                  danger ? surface(u.ux, u.uy) : "air");
+            urgent_pline(s, danger ? "over" : "in",
+                         danger ? surface(u.ux, u.uy) : "air");
         } else
             pline1(s);
     }
@@ -343,12 +378,14 @@ slime_dialogue(void)
         if (index(buf, '%')) {
             if (i == 4L) {  /* "you are turning green" */
                 if (!Blind) /* [what if you're already green?] */
-                    pline(buf, hcolor(NH_GREEN));
-            } else
-                pline(buf,
-                      an(Hallucination ? rndmonnam(NULL) : "green slime"));
-        } else
-            pline1(buf);
+                    urgent_pline(buf, hcolor(NH_GREEN));
+            } else {
+                urgent_pline(buf, an(Hallucination ? rndmonnam(NULL)
+                                                   : "green slime"));
+            }
+        } else {
+            urgent_pline("%s", buf);
+        }
     }
 
     switch (i) {
@@ -371,6 +408,8 @@ slime_dialogue(void)
     }
     exercise(A_DEX, FALSE);
 }
+
+RESTORE_WARNING_FORMAT_NONLITERAL
 
 void
 burn_away_slime(void)
@@ -434,10 +473,10 @@ slimed_to_death(struct kinfo* kptr)
         Strcpy(slimebuf, "green slime has been genocided...");
         if (iflags.last_msg == PLNMSG_OK_DONT_DIE)
             /* follows "OK, so you don't die." and arg is second sentence */
-            pline("Yes, you do.  %s", upstart(slimebuf));
+            urgent_pline("Yes, you do.  %s", upstart(slimebuf));
         else
             /* follows "The medallion crumbles to dust." */
-            pline("Unfortunately, %s", slimebuf);
+            urgent_pline("Unfortunately, %s", slimebuf);
         /* die again; no possibility of amulet this time */
         done(GENOCIDED); /* [should it be done_timeout(GENOCIDED, SLIMED)?] */
         /* could be life-saved again (only in explore or wizard mode)
@@ -527,6 +566,8 @@ nh_timeout(void)
         vomiting_dialogue();
     if (Strangled)
         choke_dialogue();
+    if (Sick)
+        sickness_dialogue();
     if (HLevitation & TIMEOUT)
         levitation_dialogue();
     if (HPasses_walls & TIMEOUT)
@@ -583,8 +624,8 @@ nh_timeout(void)
                 make_vomiting(0L, TRUE);
                 break;
             case SICK:
-                /* You might be able to bounce back from food poisoning, but not
-                 * other forms of illness. */
+                /* hero might be able to bounce back from food poisoning,
+                   but not other forms of illness */
                 if ((u.usick_type & SICK_NONVOMITABLE) == 0
                     && rn2(100) < ACURR(A_CON)) {
                     You("have recovered from your illness.");
@@ -593,7 +634,7 @@ nh_timeout(void)
                     adjattrib(A_CON, -1, 1);
                     break;
                 }
-                You("die from your illness.");
+                urgent_pline("You die from your illness.");
                 if (kptr && kptr->name[0]) {
                     g.killer.format = kptr->format;
                     Strcpy(g.killer.name, kptr->name);
@@ -864,7 +905,8 @@ hatch_egg(anything *arg, long timeout)
             && !(g.mvitals[mnum].mvflags & (G_GENOD | G_EXTINCT))) {
             for (i = hatchcount; i > 0; i--) {
                 if (!enexto(&cc, x, y, &mons[mnum])
-                    || !(mon = makemon(&mons[mnum], cc.x, cc.y, NO_MINVENT)))
+                    || !(mon = makemon(&mons[mnum], cc.x, cc.y,
+                                       NO_MINVENT|MM_NOMSG)))
                     break;
                 /* tame if your own egg hatches while you're on the
                    same dungeon level, or any dragon egg which hatches
@@ -1011,7 +1053,7 @@ learn_egg_type(int mnum)
 
 /* Attach a fig_transform timeout to the given figurine. */
 void
-attach_fig_transform_timeout(struct obj* figurine)
+attach_fig_transform_timeout(struct obj *figurine)
 {
     int i;
 
@@ -1120,7 +1162,7 @@ slip_or_trip(void)
 
 /* Print a lamp flicker message with tailer. */
 static void
-see_lamp_flicker(struct obj* obj, const char* tailer)
+see_lamp_flicker(struct obj *obj, const char *tailer)
 {
     switch (obj->where) {
     case OBJ_INVENT:
@@ -1135,7 +1177,7 @@ see_lamp_flicker(struct obj* obj, const char* tailer)
 
 /* Print a dimming message for brass lanterns. */
 static void
-lantern_message(struct obj* obj)
+lantern_message(struct obj *obj)
 {
     /* from adventure */
     switch (obj->where) {
@@ -1158,7 +1200,7 @@ lantern_message(struct obj* obj)
  * See begin_burn() for meanings of obj->age and obj->spe.
  */
 void
-burn_object(anything* arg, long timeout)
+burn_object(anything *arg, long timeout)
 {
     struct obj *obj = arg->a_obj;
     boolean canseeit, many, menorah, need_newsym, need_invupdate;
@@ -1466,7 +1508,7 @@ burn_object(anything* arg, long timeout)
  * This is a "silent" routine - it should not print anything out.
  */
 void
-begin_burn(struct obj* obj, boolean already_lit)
+begin_burn(struct obj *obj, boolean already_lit)
 {
     int radius = 3;
     long turns = 0;
@@ -1558,7 +1600,7 @@ begin_burn(struct obj* obj, boolean already_lit)
  * light source.
  */
 void
-end_burn(struct obj* obj, boolean timer_attached)
+end_burn(struct obj *obj, boolean timer_attached)
 {
     if (!obj->lamplit) {
         impossible("end_burn: obj %s not lit", xname(obj));
@@ -1582,19 +1624,18 @@ end_burn(struct obj* obj, boolean timer_attached)
  * Cleanup a burning object if timer stopped.
  */
 static void
-cleanup_burn(anything* arg, long expire_time)
+cleanup_burn(anything *arg, long expire_time)
 {
     struct obj *obj = arg->a_obj;
+
     if (!obj->lamplit) {
         impossible("cleanup_burn: obj %s not lit", xname(obj));
         return;
     }
 
     del_light_source(LS_OBJECT, obj_to_any(obj));
-
     /* restore unused time */
     obj->age += expire_time - g.moves;
-
     obj->lamplit = 0;
 
     if (obj->where == OBJ_INVENT)
@@ -1721,15 +1762,9 @@ typedef struct {
     timeout_proc f, cleanup;
 #ifdef VERBOSE_TIMER
     const char *name;
-#define TTAB(a, b, c) \
-    {                 \
-        a, b, c       \
-    }
+#define TTAB(a, b, c) { a, b, c }
 #else
-#define TTAB(a, b, c) \
-    {                 \
-        a, b          \
-    }
+#define TTAB(a, b, c) { a, b } /* ignore c for !VERBOSE_TIMER */
 #endif
 } ttable;
 
@@ -1742,7 +1777,8 @@ static const ttable timeout_funcs[NUM_TIME_FUNCS] = {
     TTAB(burn_object, cleanup_burn, "burn_object"),
     TTAB(hatch_egg, (timeout_proc) 0, "hatch_egg"),
     TTAB(fig_transform, (timeout_proc) 0, "fig_transform"),
-    TTAB(melt_ice_away, (timeout_proc) 0, "melt_ice_away")
+    TTAB(melt_ice_away, (timeout_proc) 0, "melt_ice_away"),
+    TTAB(shrink_glob, (timeout_proc) 0, "shrink_glob"),
 };
 #undef TTAB
 
@@ -1788,6 +1824,7 @@ print_queue(winid win, timer_element* base)
     }
 }
 
+/* the #timeout command */
 int
 wiz_timeout_queue(void)
 {
@@ -1799,7 +1836,7 @@ wiz_timeout_queue(void)
 
     win = create_nhwindow(NHW_MENU); /* corner text window */
     if (win == WIN_ERR)
-        return 0;
+        return ECMD_OK;
 
     Sprintf(buf, "Current time = %ld.", g.moves);
     putstr(win, 0, buf);
@@ -1851,7 +1888,7 @@ wiz_timeout_queue(void)
     display_nhwindow(win, FALSE);
     destroy_nhwindow(win);
 
-    return 0;
+    return ECMD_OK;
 }
 
 void

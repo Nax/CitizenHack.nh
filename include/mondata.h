@@ -29,7 +29,8 @@
 #define resists_ston(mon) \
     ((mon_resistancebits(mon) & MR_STONE) != 0)
 
-#define immune_poisongas(ptr) ((ptr) == &mons[PM_HEZROU])
+#define immune_poisongas(ptr) ((ptr) == &mons[PM_HEZROU]        \
+                               || (ptr) == &mons[PM_VROCK])
 
 #define is_lminion(mon) \
     (is_minion((mon)->data) && mon_aligntyp(mon) == A_LAWFUL)
@@ -37,6 +38,7 @@
 #define is_floater(ptr) ((ptr)->mlet == S_EYE || (ptr)->mlet == S_LIGHT)
 /* clinger: piercers, mimics, wumpus -- generally don't fall down holes */
 #define is_clinger(ptr) (((ptr)->mflags1 & M1_CLING) != 0L)
+#define grounded(ptr) (!is_flyer(ptr) && !is_floater(ptr) && !is_clinger(ptr))
 #define is_swimmer(ptr) (((ptr)->mflags1 & M1_SWIM) != 0L)
 #define breathless(ptr) (((ptr)->mflags1 & M1_BREATHLESS) != 0L)
 #define amphibious(ptr) \
@@ -218,6 +220,11 @@
 
 #define touch_petrifies(ptr) \
     ((ptr) == &mons[PM_COCKATRICE] || (ptr) == &mons[PM_CHICKATRICE])
+
+/* missiles made of rocks don't harm these: xorns and earth elementals
+   (but not ghosts and shades because that would impact all missile use
+   and also require an exception for blessed rocks/gems/boulders) */
+#define passes_rocks(ptr) (passes_walls(ptr) && !unsolid(ptr))
 
 #define is_mind_flayer(ptr) \
     ((ptr) == &mons[PM_MIND_FLAYER] || (ptr) == &mons[PM_MASTER_MIND_FLAYER])

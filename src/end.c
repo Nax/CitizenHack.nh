@@ -1,4 +1,4 @@
-/* NetHack 3.7	end.c	$NHDT-Date: 1621380392 2021/05/18 23:26:32 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.225 $ */
+/* NetHack 3.7	end.c	$NHDT-Date: 1644524059 2022/02/10 20:14:19 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.235 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -340,7 +340,7 @@ done2(void)
             u.uinvulnerable = FALSE; /* avoid ctrl-C bug -dlc */
             u.usleep = 0;
         }
-        return 0;
+        return ECMD_OK;
     }
 #if (defined(UNIX) || defined(VMS) || defined(LATTICE))
     if (wizard) {
@@ -369,7 +369,7 @@ done2(void)
 #ifndef LINT
     done(QUIT);
 #endif
-    return 0;
+    return ECMD_OK;
 }
 
 #ifndef NO_SIGNAL
@@ -746,8 +746,9 @@ dump_plines(void)
 
 /*ARGSUSED*/
 static void
-dump_everything(int how,
-                time_t when) /* date+time at end of game */
+dump_everything(
+    int how,     /* ASCENDED, ESCAPED, QUIT, etc */
+    time_t when) /* date+time at end of game */
 {
 #ifdef DUMPLOG
     char pbuf[BUFSZ], datetimebuf[24]; /* [24]: room for 64-bit bogus value */
@@ -778,11 +779,11 @@ dump_everything(int how,
     putstr(0, 0, "");
 
     /* character name and basic role info */
-    Sprintf(pbuf, "%s, %s %s %s %s", g.plname,
-            aligns[1 - u.ualign.type].adj,
-            genders[flags.female].adj,
-            g.urace.adj,
-            (flags.female && g.urole.name.f) ? g.urole.name.f : g.urole.name.m);
+    Sprintf(pbuf, "%s, %s %s %s %s",
+            g.plname, aligns[1 - u.ualign.type].adj,
+            genders[flags.female].adj, g.urace.adj,
+            (flags.female && g.urole.name.f) ? g.urole.name.f
+                                             : g.urole.name.m);
     putstr(0, 0, pbuf);
     putstr(0, 0, "");
 
@@ -792,6 +793,8 @@ dump_everything(int how,
     putstr(0, 0, "");
 
     dump_plines();
+    putstr(0, 0, "");
+    (void) do_gamelog();
     putstr(0, 0, "");
     putstr(0, 0, "Inventory:");
     (void) display_inventory((char *) 0, TRUE);
@@ -1215,6 +1218,9 @@ done(int how)
         if (how == GENOCIDED) {
             pline("Unfortunately you are still genocided...");
         } else {
+            char killbuf[BUFSZ];
+            formatkiller(killbuf, BUFSZ, how, FALSE);
+            livelog_printf(LL_LIFESAVE, "averted death (%s)", killbuf);
             survive = TRUE;
         }
     }
@@ -1404,15 +1410,10 @@ really_done(int how)
        this grave in the current level's features for #overview */
     if (bones_ok && u.ugrave_arise == NON_PM
         && !(g.mvitals[u.umonnum].mvflags & G_NOCORPSE)) {
-        int mnum = u.umonnum;
+        /* Base corpse on race when not poly'd since original u.umonnum
+           is based on role, and all role monsters are human. */
+        int mnum = !Upolyd ? g.urace.mnum : u.umonnum;
 
-        if (!Upolyd) {
-            /* Base corpse on race when not poly'd since original u.umonnum
-               is based on role, and all role monsters are human. */
-            mnum = (flags.female && g.urace.femalenum != NON_PM)
-                       ? g.urace.femalenum
-                       : g.urace.malenum;
-        }
         corpse = mk_named_object(CORPSE, &mons[mnum], u.ux, u.uy, g.plname);
         Sprintf(pbuf, "%s, ", g.plname);
         formatkiller(eos(pbuf), sizeof pbuf - strlen(pbuf), how, TRUE);
@@ -1654,11 +1655,24 @@ really_done(int how)
         destroy_nhwindow(endwin);
 
     dump_close_log();
-    /* "So when I die, the first thing I will see in Heaven is a
-     * score list?" */
+    /*
+     * "So when I die, the first thing I will see in Heaven is a score list?"
+     *
+     * topten() updates 'logfile' and 'xlogfile', when they're enabled.
+     * Then the current game's score is shown in its relative position
+     * within high scores, and 'record' is updated if that makes the cut.
+     *
+     * FIXME!
+     *  If writing topten with raw_print(), which will usually be sent to
+     *  stdout, we call exit_nhwindows() first in case it erases the screen.
+     *  But when writing topten to a window, we call exit_nhwindows()
+     *  after topten() because that needs the windowing system to still
+     *  be up.  This sequencing is absurd; we need something like
+     *  raw_prompt("--More--") (or "Press <return> to continue.") that
+     *  topten() can call for !toptenwin before returning here.
+     */
     if (have_windows && !iflags.toptenwin)
         exit_nhwindows((char *) 0), have_windows = FALSE;
-    /* update 'logfile' and 'xlogfile', if enabled, and maybe 'record' */
     topten(how, endtime);
     if (have_windows)
         exit_nhwindows((char *) 0);
@@ -1763,7 +1777,6 @@ nh_terminate(int status)
         dlb_cleanup();
         l_nhcore_done();
     }
-    free_nomakedefs();
 
 #ifdef VMS
     /*

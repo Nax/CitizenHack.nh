@@ -82,8 +82,18 @@ enum trap_types {
     TRAPNUM      = 24
 };
 
+/* some trap-related function return results */
+enum { Trap_Effect_Finished = 0, Trap_Is_Gone = 0, Trap_Killed_Mon = 2 };
+
 #define is_pit(ttyp) ((ttyp) == PIT || (ttyp) == SPIKED_PIT)
 #define is_hole(ttyp)  ((ttyp) == HOLE || (ttyp) == TRAPDOOR)
+#define undestroyable_trap(ttyp) ((ttyp) == MAGIC_PORTAL         \
+                                  || (ttyp) == VIBRATING_SQUARE)
+#define is_magical_trap(ttyp) ((ttyp) == TELEP_TRAP     \
+                               || (ttyp) == LEVEL_TELEP \
+                               || (ttyp) == MAGIC_TRAP  \
+                               || (ttyp) == ANTI_MAGIC  \
+                               || (ttyp) == POLY_TRAP)
 /* "transportation" traps */
 #define is_xport(ttyp) ((ttyp) >= TELEP_TRAP && (ttyp) <= MAGIC_PORTAL)
 

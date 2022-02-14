@@ -44,6 +44,53 @@ static const char You_[] = "You ", are[] = "are ", were[] = "were ",
 static const char have_been[] = "have been ", have_never[] = "have never ",
                   never[] = "never ";
 
+/* for livelogging: */
+struct ll_achieve_msg {
+    unsigned long llflag;
+    const char *msg;
+};
+/* ordered per 'enum achievements' in you.h */
+/* take care to keep them in sync! */
+static struct ll_achieve_msg achieve_msg [] = {
+    { 0, "" }, /* actual achievements are numbered from 1 */
+    { LL_ACHIEVE, "acquired the Bell of Opening" },
+    { LL_ACHIEVE, "entered Gehennom" },
+    { LL_ACHIEVE, "acquired the Candelabrum of Invocation" },
+    { LL_ACHIEVE, "acquired the Book of the Dead" },
+    { LL_ACHIEVE, "performed the invocation" },
+    { LL_ACHIEVE, "acquired The Amulet of Yendor" },
+    { LL_ACHIEVE, "entered the Planes" },
+    { LL_ACHIEVE, "entered the Astral Plane" },
+    { LL_ACHIEVE, "ascended" },
+    { LL_ACHIEVE, "acquired the Mines' End luckstone" },
+    { LL_ACHIEVE, "completed Sokoban" },
+    { LL_ACHIEVE|LL_UMONST, "killed Medusa" },
+     /* these two are not logged */
+    { 0, "hero was always blond, no, blind" },
+    { 0, "hero never wore armor" },
+     /* */
+    { LL_MINORAC, "entered the Gnomish Mines" },
+    { LL_ACHIEVE, "reached Mine Town" }, /* probably minor, but dnh logs it */
+    { LL_MINORAC, "entered a shop" },
+    { LL_MINORAC, "entered a temple" },
+    { LL_ACHIEVE, "consulted the Oracle" }, /* minor, but rare enough */
+    { LL_ACHIEVE, "read a Discworld novel" }, /* ditto */
+    { LL_ACHIEVE, "entered Sokoban" }, /* Keep as major for turn comparison w/completed soko */
+    { LL_ACHIEVE, "entered the Bigroom" },
+    /* The following 8 are for advancing through the ranks
+       messages differ by role so are created on the fly */
+    { LL_MINORAC, "" },
+    { LL_MINORAC, "" },
+    { LL_MINORAC, "" },
+    { LL_MINORAC, "" },
+    { LL_ACHIEVE, "" },
+    { LL_ACHIEVE, "" },
+    { LL_ACHIEVE, "" },
+    { LL_ACHIEVE, "" },
+    { 0, "" } /* keep this one at the end */
+};
+
+
 #define enl_msg(prefix, present, past, suffix, ps) \
     enlght_line(prefix, final ? past : present, suffix, ps)
 #define you_are(attr, ps) enl_msg(You_, are, were, attr, ps)
@@ -1013,21 +1060,31 @@ status_enlightenment(int mode, int final)
         }
     }
     if (Wounded_legs) {
+        /* EWounded_legs is used to track left/right/both rather than some
+           form of extrinsic impairment; HWounded_legs is used for timeout;
+           both apply to steed instead of hero when mounted */
+        long whichleg = (EWounded_legs & BOTH_SIDES);
+        const char *bp = u.usteed ? mbodypart(u.usteed, LEG) : body_part(LEG),
+            *article = "a ", /* precedes "wounded", so never "an " */
+            *leftright = "";
+
+        if (whichleg == BOTH_SIDES)
+            bp = makeplural(bp), article = "";
+        else
+            leftright = (whichleg == LEFT_SIDE) ? "left " : "right ";
+        Sprintf(buf, "%swounded %s%s", article, leftright, bp);
+
         /* when mounted, Wounded_legs applies to steed rather than to
            hero; we only report steed's wounded legs in wizard mode */
         if (u.usteed) { /* not `Riding' here */
             if (wizard && steedname) {
-                Strcpy(buf, steedname);
-                *buf = highc(*buf);
-                enl_msg(buf, " has", " had", " wounded legs", "");
+                char steednambuf[BUFSZ];
+
+                Strcpy(steednambuf, steedname);
+                *steednambuf = highc(*steednambuf);
+                enl_msg(steednambuf, " has ", " had ", buf, "");
             }
         } else {
-            long wl = (EWounded_legs & BOTH_SIDES);
-            const char *bp = body_part(LEG), *article = "a ";
-
-            if (wl == BOTH_SIDES)
-                bp = makeplural(bp), article = "";
-            Sprintf(buf, "%swounded %s", article, bp);
             you_have(buf, "");
         }
     }
@@ -1829,7 +1886,7 @@ doattributes(void)
         mode |= MAGICENLIGHTENMENT;
 
     enlightenment(mode, ENL_GAMEINPROGRESS);
-    return 0;
+    return ECMD_OK;
 }
 
 void
@@ -1895,7 +1952,7 @@ int
 doconduct(void)
 {
     show_conduct(0);
-    return 0;
+    return ECMD_OK;
 }
 
 /* display conducts; for doconduct(), also disclose() and dump_everything() */
@@ -2040,7 +2097,8 @@ show_conduct(int final)
  */
 
 static void
-show_achievements(int final) /* used "behind the curtain" by enl_foo() macros */
+show_achievements(
+    int final) /* 'final' is used "behind the curtain" by enl_foo() macros */
 {
     int i, achidx, absidx, acnt;
     char title[QBUFSZ], buf[QBUFSZ];
@@ -2221,7 +2279,18 @@ record_achievement(schar achidx)
         if (abs(u.uachieved[i]) == abs(achidx))
             return; /* already recorded, don't duplicate it */
     u.uachieved[i] = achidx;
-    return;
+
+    if (g.program_state.gameover)
+        return; /* don't livelog achievements recorded at end of game */
+    if (absidx >= ACH_RNK1 && absidx <= ACH_RNK8) {
+        livelog_printf(achieve_msg[absidx].llflag,
+                       "attained the rank of %s (level %d)",
+                       rank_of(rank_to_xlev(absidx - (ACH_RNK1 - 1)),
+                               Role_switch, (achidx < 0) ? TRUE : FALSE),
+                       u.ulevel);
+    } else
+        livelog_printf(achieve_msg[absidx].llflag, "%s",
+                       achieve_msg[absidx].msg);
 }
 
 /* discard a recorded achievement; return True if removed, False otherwise */
@@ -2415,7 +2484,7 @@ int
 dovanquished(void)
 {
     list_vanquished('a', FALSE);
-    return 0;
+    return ECMD_OK;
 }
 
 DISABLE_WARNING_FORMAT_NONLITERAL
@@ -2450,7 +2519,7 @@ doborn(void)
     display_nhwindow(datawin, FALSE);
     destroy_nhwindow(datawin);
 
-    return 0;
+    return ECMD_OK;
 }
 
 RESTORE_WARNING_FORMAT_NONLITERAL
@@ -2841,8 +2910,20 @@ mstatusline(struct monst *mtmp)
                             ? ", digesting you"
                             : is_animal(u.ustuck->data) ? ", swallowing you"
                                : ", engulfing you");
-    if (mtmp == u.usteed)
+    if (mtmp == u.usteed) {
         Strcat(info, ", carrying you");
+        if (Wounded_legs) {
+            /* EWounded_legs is used to track left/right/both rather than
+               some form of extrinsic impairment; HWounded_legs is used for
+               timeout; both apply to steed instead of hero when mounted */
+            long legs = (EWounded_legs & BOTH_SIDES);
+            const char *what = mbodypart(mtmp, LEG);
+
+            if (legs == BOTH_SIDES)
+                what = makeplural(what);
+            Sprintf(eos(info), ", injured %s", what);
+        }
+    }
 
     /* avoid "Status of the invisible newt ..., invisible" */
     /* and unlike a normal mon_nam, use "saddled" even if it has a name */
@@ -2892,16 +2973,21 @@ ustatusline(void)
     }
     if (Stunned)
         Strcat(info, ", stunned");
-    if (!u.usteed && Wounded_legs) {
-        long legs = (EWounded_legs | HWounded_legs);
+    if (Wounded_legs && !u.usteed) {
+        /* EWounded_legs is used to track left/right/both rather than some
+           form of extrinsic impairment; HWounded_legs is used for timeout;
+           both apply to steed instead of hero when mounted */
+        long legs = (EWounded_legs & BOTH_SIDES);
         const char *what = body_part(LEG);
 
-        if ((legs & BOTH_SIDES) == BOTH_SIDES)
+        if (legs == BOTH_SIDES)
             what = makeplural(what);
+        /* when it's just one leg, ^X reports which, left or right;
+           ustatusline() doesn't, in order to keep the output a bit shorter */
         Sprintf(eos(info), ", injured %s", what);
     }
     if (Glib)
-        Sprintf(eos(info), ", slippery %s", makeplural(body_part(HAND)));
+        Sprintf(eos(info), ", slippery %s", fingers_or_gloves(TRUE));
     if (u.utrap)
         Strcat(info, ", trapped");
     if (Fast)

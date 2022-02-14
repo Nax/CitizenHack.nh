@@ -55,7 +55,7 @@ precheck(struct monst* mon, struct obj* obj)
 
     if (obj->oclass == POTION_CLASS) {
         coord cc;
-        static const char *empty = "The potion turns out to be empty.";
+        static const char *const empty = "The potion turns out to be empty.";
         struct monst *mtmp;
 
         if (objdescr_is(obj, "milky")) {
@@ -65,7 +65,7 @@ precheck(struct monst* mon, struct obj* obj)
                     return 0;
                 mquaffmsg(mon, obj);
                 m_useup(mon, obj);
-                mtmp = makemon(&mons[PM_GHOST], cc.x, cc.y, NO_MM_FLAGS);
+                mtmp = makemon(&mons[PM_GHOST], cc.x, cc.y, MM_NOMSG);
                 if (!mtmp) {
                     if (vis)
                         pline1(empty);
@@ -91,7 +91,7 @@ precheck(struct monst* mon, struct obj* obj)
                 return 0;
             mquaffmsg(mon, obj);
             m_useup(mon, obj);
-            mtmp = makemon(&mons[PM_DJINNI], cc.x, cc.y, NO_MM_FLAGS);
+            mtmp = makemon(&mons[PM_DJINNI], cc.x, cc.y, MM_NOMSG);
             if (!mtmp) {
                 if (vis)
                     pline1(empty);
@@ -720,7 +720,7 @@ use_defensive(struct monst* mtmp)
         }
         if (oseen && how)
             makeknown(how);
-        (void) rloc(mtmp, TRUE);
+        (void) rloc(mtmp, RLOC_MSG);
         return 2;
     case MUSE_WAN_TELEPORTATION:
         g.zap_oseen = oseen;
@@ -1395,7 +1395,7 @@ mbhitm(register struct monst* mtmp, register struct obj* otmp)
                 if (cansee(mtmp->mx, mtmp->my))
                     pline("%s resists the magic!", Monnam(mtmp));
             } else if (!tele_restrict(mtmp))
-                (void) rloc(mtmp, TRUE);
+                (void) rloc(mtmp, RLOC_MSG);
         }
         break;
 #endif
@@ -1855,7 +1855,7 @@ find_misc(struct monst* mtmp)
             && uwep && !rn2(5) && obj == MON_WEP(mtmp)
             /* hero's location must be known and adjacent */
             && mtmp->mux == u.ux && mtmp->muy == u.uy
-            && distu(mtmp->mx, mtmp->my) <= 2
+            && next2u(mtmp->mx, mtmp->my)
             /* don't bother if it can't work (this doesn't
                prevent cursed weapons from being targetted) */
             && (canletgo(uwep, "")
@@ -2214,8 +2214,8 @@ use_misc(struct monst* mtmp)
                 pline("%s fails to wrap around %s.", The_whip, the_weapon);
                 return 1;
             }
-            pline("%s wraps around %s you're wielding!", The_whip,
-                  the_weapon);
+            urgent_pline("%s wraps around %s you're wielding!", The_whip,
+                         the_weapon);
             if (welded(obj)) {
                 pline("%s welded to your %s%c",
                       !is_plural(obj) ? "It is" : "They are", hand,
@@ -2428,6 +2428,8 @@ searches_for_item(struct monst* mon, struct obj* obj)
     return FALSE;
 }
 
+DISABLE_WARNING_FORMAT_NONLITERAL
+
 boolean
 mon_reflects(struct monst* mon, const char* str)
 {
@@ -2499,6 +2501,8 @@ ureflects(const char* fmt, const char* str)
     }
     return FALSE;
 }
+
+RESTORE_WARNING_FORMAT_NONLITERAL
 
 /* cure mon's blindness (use_defensive, dog_eat, meatobj) */
 void
@@ -2773,7 +2777,7 @@ muse_unslime(
         }
         /* hack to avoid mintrap()'s chance of avoiding known trap */
         mon->mtrapseen &= ~(1 << (FIRE_TRAP - 1));
-        mintrap(mon);
+        (void) mintrap(mon);
     } else if (otyp == STRANGE_OBJECT) {
         /* monster is using fire breath on self */
         if (vis)

@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# NetHack 3.7  compiler.2020 $NHDT-Date: 1597332785 2020/08/13 15:33:05 $  $NHDT-Branch: NetHack-3.7 $
+# NetHack 3.7  compiler.370 $NHDT-Date: 1637992237 2021/11/27 05:50:37 $  $NHDT-Branch: NetHack-3.7 $
 
 # compiler flags:  CCFLAGS is used to construct a value for CFLAGS with
 #	various -I, -D, and -W settings appended below;
@@ -26,10 +26,18 @@ CCFLAGS = -g
 #detection
 CCISCLANG := $(shell echo `$(CC) --version` | grep clang)
 ifeq "$(CCISCLANG)" ""
+ifdef WANT_WIN_QT6
+CXX=g++ -std=c++17
+else
 CXX=g++ -std=gnu++11
+endif
+else
+ifdef WANT_WIN_QT6
+CXX=clang++ -std=c++17
 else
 CXX=clang++ -std=gnu++11
 endif
+endif   # clang
 
 # If you want to override the compiler detection just carried out
 # uncomment one of the following pairs. Note, however, that
@@ -47,8 +55,8 @@ CFLAGS+=-Wall -Wextra -Wno-missing-field-initializers \
 	-Wreturn-type -Wunused -Wformat -Wswitch -Wshadow -Wwrite-strings
 CFLAGS+=-pedantic
 CFLAGS+=-Wmissing-declarations
-CFLAGS+=-Wformat-nonliteral
 CFLAGS+=-Wunreachable-code
+CFLAGS+=-Wformat-nonliteral
 #
 # the following are not allowed in C++
 CFLAGS+=-Wimplicit
@@ -63,7 +71,6 @@ CCXXFLAGS+=-Wall -Wextra -Wno-missing-field-initializers \
         -Wreturn-type -Wunused -Wformat -Wswitch -Wshadow -Wwrite-strings
 CCXXFLAGS+=-pedantic
 CCXXFLAGS+=-Wmissing-declarations
-CCXXFLAGS+=-Wformat-nonliteral
 
 ifeq "$(CCISCLANG)" ""
 # gcc-specific follows
@@ -84,11 +91,13 @@ ifeq "$(GPPGTEQ9)" "1"
 CCXXFLAGS+=-Wformat-overflow
 ifdef WANT_WIN_QT
 CCXXFLAGS+=-Wno-deprecated-copy
+CCXXFLAGS+=-Wno-deprecated-declarations
 endif  # WANT_WIN_QT
 endif  # g++ version greater than or equal to 9
 # end of gcc-specific
 
 else   # clang-specific follows
+
 # get the version of clang++
 CLANGPPGTEQ9 := $(shell expr `$(CXX) -dumpversion | cut -f1 -d.` \>= 9)
 ifeq "$(CLANGPPGTEQ9)" "1"
@@ -106,5 +115,24 @@ endif  # clang-specific ends here
 CFLAGS+=-DGCC_WARN
 CCXXFLAGS+=-DGCC_WARN
 
-#end of compiler.2020
+ifdef MAKEFILE_SRC
+ifdef WANT_WIN_QT
+# when switching from Qt5 to Qt6 or vice versa, any old .moc files will be
+# incompatible; get rid of them in case user hasn't run 'make spotless';
+# object files are incompatable with Qt library, so get rid of them too;
+# Qt*.h-t are empty timestamp files and at most one should exist
+QTany_H = Qt*.h-t
+ifdef WANT_WIN_QT6
+# Qt 6 builds and runs (with a couple of warnings) but needs more testing
+QTn_H = Qt6.h-t
+else
+# Qt 5 is currently the default version for nethack 3.7.x's Qt interface
+QTn_H = Qt5.h-t
+endif
+$(QTn_H) ::
+	@if test ! -f $@; then ( rm -f $(QTany_H) *.moc qt_*.o; touch $@ ); fi;
+endif #WANT_WIN_QT
+endif #MAKFILE_SRC
+
+#end of compiler.370
 #------------------------------------------------------------------------------

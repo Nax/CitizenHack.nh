@@ -150,7 +150,7 @@ const struct Role urole_init_data = {
       { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } },
     "L", "N", "C",
     "Xxx", "home", "locate",
-    NON_PM, NON_PM, NON_PM, NON_PM, NON_PM, NON_PM, NON_PM, NON_PM,
+    NON_PM, NON_PM, NON_PM, NON_PM, NON_PM, NON_PM, NON_PM,
     0, 0, 0, 0,
     /* Str Int Wis Dex Con Cha */
     { 7, 7, 7, 7, 7, 7 },
@@ -175,7 +175,6 @@ const struct Race urace_init_data = {
     "something",
     "Xxx",
     { 0, 0 },
-    NON_PM,
     NON_PM,
     NON_PM,
     NON_PM,
@@ -232,6 +231,7 @@ const struct instance_globals g_init = {
     WIN_ERR, /* en_win */
     FALSE, /* en_via_menu */
     UNDEFINED_VALUE, /* last_command_count */
+    NULL, /* ext_tlist */
 
     /* dbridge.c */
     UNDEFINED_VALUES, /* occupants */
@@ -305,8 +305,11 @@ const struct instance_globals g_init = {
     DUMMY, /* rooms */
     NULL, /* subrooms */
     UNDEFINED_VALUES, /* level */
-    1, /* moves */
-    0, /* wailmsg */
+    1L, /* moves; misnamed turn counter */
+    1L << 3, /* hero_seq: sequence number for hero movement, 'moves*8 + n'
+              * where n is usually 1, sometimes 2 when Fast/Very_fast, maybe
+              * higher if polymorphed into something that's even faster */
+    0L, /* wailmsg */
     NULL, /* migrating_objs */
     NULL, /* billobjs */
 #if defined(MICRO) || defined(WIN32)
@@ -407,6 +410,7 @@ const struct instance_globals g_init = {
     NULL, /* config_section_chosen */
     NULL, /* config_section_current */
     0, /* nesting */
+    0, /* no_sound_notified */
     0, /* symset_count */
     FALSE, /* chosen_symset_start */
     FALSE, /* chosen_symset_end */
@@ -546,6 +550,7 @@ const struct instance_globals g_init = {
 #endif
     (char *) 0, /* you_buf */
     0, /* you_buf_siz */
+    NULL, /* gamelog */
 
     /* polyself.c */
     0, /* sex_change_ok */
@@ -574,6 +579,8 @@ const struct instance_globals g_init = {
     NULL, /* regions */
     0, /* n_regions */
     0, /* max_regions */
+    FALSE, /* gas_cloud_diss_within */
+    0, /* gas_cloud_diss_seen */
 
     /* restore.c */
     0, /* n_ids_mapped */
@@ -643,7 +650,7 @@ const struct instance_globals g_init = {
     1, /* timer_id */
 
     /* topten.c */
-    WIN_ERR, /* topten */
+    WIN_ERR, /* toptenwin */
 
     /* trap.c */
     0, /* force_mintrap */
@@ -708,13 +715,13 @@ decl_globals_init(void)
     g.valuables[2].size = 0;
 
     if (g_init.magic != IVMAGIC) {
-        printf("decl_globals_init: g_init.magic in unexpected state (%lx)\n",
-                g_init.magic);
+        raw_printf(
+                 "decl_globals_init: g_init.magic in unexpected state (%lx).",
+                   g_init.magic);
         exit(1);
     }
-
     if (g_init.havestate != TRUE) {
-        printf("decl_globals_init: g_init..havestate not TRUE\n");
+        raw_print("decl_globals_init: g_init.havestate not True.");
         exit(1);
     }
 
@@ -738,8 +745,6 @@ decl_globals_init(void)
 
     g.urole = urole_init_data;
     g.urace = urace_init_data;
-
-
 }
 
 /*decl.c*/

@@ -42,16 +42,17 @@ dospkg: $(GAMEBIN) $(TARGETPFX)recover.exe ../dat/nhtiles.bmp
 endif  # CROSS_TO_MSDOS
 
 ifdef CROSS_TO_WASM
-$(WASM_TARGET): pregame $(HOSTOBJ) $(HOBJ) $(LUACROSSLIB) $(WASM_DATA_DIR)
+$(WASM_TARGET): pregame $(TARGETPFX)date.o $(HOSTOBJ) $(HOBJ) $(LUACROSSLIB) $(WASM_DATA_DIR)
 	-rm $@
 	$(TARGET_CC) $(TARGET_LFLAGS) $(TARGET_CFLAGS) -o $@ \
-		$(HOBJ) $(TARGET_LIBS)
+		$(HOBJ) $(TARGETPFX)date.o $(TARGET_LIBS)
 
 $(WASM_DATA_DIR): $(WASM_DATA_DIR)/nhdat
 	touch $(WASM_DATA_DIR)/perm
 	touch $(WASM_DATA_DIR)/record
 	touch $(WASM_DATA_DIR)/logfile
 	touch $(WASM_DATA_DIR)/xlogfile
+	touch $(WASM_DATA_DIR)/livelog
 	cp ../sys/libnh/sysconf $(WASM_DATA_DIR)/sysconf
 
 $(WASM_DATA_DIR)/nhdat:

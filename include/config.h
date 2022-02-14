@@ -173,9 +173,9 @@
 /*
  * Section 2:   Some global parameters and filenames.
  *
- *              LOGFILE, XLOGFILE, NEWS and PANICLOG refer to files in
- *              the playground directory.  Commenting out LOGFILE, XLOGFILE,
- *              NEWS or PANICLOG removes that feature from the game.
+ *              LOGFILE, XLOGFILE, LIVELOGFILE, NEWS and PANICLOG refer to
+ *              files in the playground directory.  Commenting out LOGFILE,
+ *              XLOGFILE, NEWS or PANICLOG removes that feature from the game.
  *
  *              Building with debugging features enabled is now unconditional;
  *              the old WIZARD setting for that has been eliminated.
@@ -483,13 +483,6 @@ typedef unsigned char uchar;
 #endif
 #endif
 
-/* The "repeat" key used in cmd.c as NHKF_DOAGAIN; if commented out or the
- * value is changed from C('A') to 0, it won't be bound to any keystroke
- * unless you use the run-time configuration file's BIND directive for it.
- * [Note: C() macro isn't defined yet but it will be before DOAGAIN is used.]
- */
-#define DOAGAIN C('A') /* repeat previous command; default is ^A, '\001' */
-
 /* CONFIG_ERROR_SECURE: If user makes NETHACKOPTIONS point to a file ...
  *  TRUE: Show the first error, nothing else.
  *  FALSE: Show all errors as normal, with line numbers and context.
@@ -584,7 +577,9 @@ typedef unsigned char uchar;
 
 /* EXTRA_SANITY_CHECKS adds extra impossible calls,
  * probably not useful for normal play */
-/* #define EXTRA_SANITY_CHECKS */
+#if (NH_DEVEL_STATUS != NH_STATUS_RELEASED)
+#define EXTRA_SANITY_CHECKS
+#endif
 
 /* BREADCRUMBS employs the use of predefined compiler macros
  * __FUNCTION__ and __LINE__ to store some caller breadcrumbs
@@ -602,6 +597,21 @@ typedef unsigned char uchar;
    to strip off characters at the end, or <escape> to discard the
    whole thing, then type a new end for the text. */
 /* #define EDIT_GETLIN */
+
+#ifndef NO_CHRONICLE
+/* CHRONICLE - enable #chronicle command, a log of major game events.
+   The logged messages will also appear in DUMPLOG. */
+#define CHRONICLE
+#ifdef CHRONICLE
+/* LIVELOG - log CHRONICLE events into LIVELOGFILE as they happen. */
+/* #define LIVELOG */
+#ifdef LIVELOG
+#define LIVELOGFILE "livelog" /* in-game events recorded, live */
+#endif /* LIVELOG */
+#endif /* CHRONICLE */
+#else
+#undef LIVELOG
+#endif /* NO_CHRONICLE */
 
 /* #define DUMPLOG */  /* End-of-game dump logs */
 #ifdef DUMPLOG

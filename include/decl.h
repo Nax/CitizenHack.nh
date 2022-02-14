@@ -177,6 +177,14 @@ struct kinfo {
     char name[BUFSZ]; /* actual killer name */
 };
 
+/* game events log */
+struct gamelog_line {
+    long turn; /* turn when this happened */
+    long flags; /* LL_foo flags */
+    char *text;
+    struct gamelog_line *next;
+};
+
 enum movemodes {
     MV_ANY = -1,
     MV_WALK,
@@ -443,22 +451,7 @@ struct early_opt {
 /* special key functions */
 enum nh_keyfunc {
     NHKF_ESC = 0,
-    NHKF_DOAGAIN,
 
-    NHKF_REQMENU,
-
-    /* run ... clicklook need to be in a continuous block */
-    NHKF_RUN,          /* 'G' */
-    NHKF_RUN2,         /* '5' or M-5 */
-    NHKF_RUSH,         /* 'g' */
-    NHKF_RUSH2,        /* M-5 or '5' */
-    NHKF_FIGHT,        /* 'F' */
-    NHKF_FIGHT2,       /* '-' */
-    NHKF_NOPICKUP,     /* 'm' */
-    NHKF_RUN_NOPICKUP, /* 'M' */
-
-    NHKF_REDRAW,
-    NHKF_REDRAW2,
     NHKF_GETDIR_SELF,
     NHKF_GETDIR_SELF2,
     NHKF_GETDIR_HELP,
@@ -503,9 +496,6 @@ struct cmd {
     boolean pcHack_compat; /* for numpad:  affects 5, M-5, and M-0 */
     boolean phone_layout;  /* inverted keypad:  1,2,3 above, 7,8,9 below */
     boolean swap_yz;       /* QWERTZ keyboards; use z to move NW, y to zap */
-    char move[N_DIRS];     /* char used for moving one step in direction */
-    char rush[N_DIRS];
-    char run[N_DIRS];
     const char *dirchars;      /* current movement/direction characters */
     const char *alphadirchars; /* same as dirchars if !numpad */
     const struct ext_func_tab *commands[256]; /* indexed by input character */
@@ -746,6 +736,7 @@ struct instance_globals {
     winid en_win;
     boolean en_via_menu;
     long last_command_count;
+    struct ext_func_tab *ext_tlist; /* info for rhack() from doextcmd() */
 
     /* dbridge.c */
     struct entity occupants[ENTITIES];
@@ -822,6 +813,8 @@ struct instance_globals {
     struct mkroom *subrooms;
     dlevel_t level; /* level map */
     long moves; /* turn counter */
+    long hero_seq; /* 'moves*8 + n' where n is updated each hero move during
+                    * the current turn */
     long wailmsg;
     struct obj *migrating_objs; /* objects moving to another dungeon level */
     struct obj *billobjs; /* objects not yet paid for */
@@ -930,6 +923,9 @@ struct instance_globals {
     char *config_section_chosen;
     char *config_section_current;
     int nesting;
+    int no_sound_notified; /* run-time option processing: warn once if built
+                            * without USER_SOUNDS and config file contains
+                            * SOUND=foo or SOUNDDIR=bar */
     int symset_count;             /* for pick-list building only */
     boolean chosen_symset_start;
     boolean chosen_symset_end;
@@ -1094,6 +1090,7 @@ struct instance_globals {
     /* work buffer for You(), &c and verbalize() */
     char *you_buf;
     int you_buf_siz;
+    struct gamelog_line *gamelog;
 
     /* polyself.c */
     int sex_change_ok; /* controls whether taking on new form or becoming new
@@ -1126,6 +1123,8 @@ struct instance_globals {
     NhRegion **regions;
     int n_regions;
     int max_regions;
+    boolean gas_cloud_diss_within;
+    int gas_cloud_diss_seen;
 
     /* restore.c */
     int n_ids_mapped;

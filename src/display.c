@@ -1,4 +1,4 @@
-/* NetHack 3.7	display.c	$NHDT-Date: 1609101156 2020/12/27 20:32:36 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.141 $ */
+/* NetHack 3.7	display.c	$NHDT-Date: 1644440006 2022/02/09 20:53:26 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.177 $ */
 /* Copyright (c) Dean Luick, with acknowledgements to Kevin Darcy */
 /* and Dave Cohrs, 1990.                                          */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -15,7 +15,7 @@
  * what to draw at a given location.  The routines for the vision system
  * can be found in vision.c and vision.h.  The routines for display can
  * be found in this file (display.c) and display.h.  The drawing routines
- * are part of the window port.  See doc/window.doc for the drawing
+ * are part of the window port.  See doc/window.txt for the drawing
  * interface.
  *
  * The display system deals with an abstraction called a glyph.  Anything
@@ -756,7 +756,7 @@ newsym(register int x, register int y)
     if (Underwater && !Is_waterlevel(&u.uz)) {
         /* when underwater, don't do anything unless <x,y> is an
            adjacent water or lava or ice position */
-        if (!(is_pool_or_lava(x, y) || is_ice(x, y)) || distu(x, y) > 2)
+        if (!(is_pool_or_lava(x, y) || is_ice(x, y)) || !next2u(x, y))
             return;
     }
 
@@ -1265,6 +1265,7 @@ under_ground(int mode)
  *      + hallucinating
  *      + doing a full screen redraw
  *      + see invisible times out or a ring of see invisible is taken off
+ *        or intrinsic see invisible is stolen by a gremlin
  *      + when a potion of see invisible is quaffed or a ring of see
  *        invisible is put on
  *      + gaining telepathy when blind [givit() in eat.c, pleased() in pray.c]
@@ -1404,11 +1405,12 @@ curs_on_u(void)
     flush_screen(1); /* Flush waiting glyphs & put cursor on hero */
 }
 
+/* the #redraw command */
 int
 doredraw(void)
 {
     docrt();
-    return 0;
+    return ECMD_OK;
 }
 
 void
@@ -1741,7 +1743,8 @@ clear_glyph_buffer(void)
 #ifndef UNBUFFERED_GLYPHINFO
     nul_gbuf.gnew = (giptr->ttychar != nul_gbuf.glyphinfo.ttychar
                      || giptr->gm.color != nul_gbuf.glyphinfo.gm.color
-                     || giptr->gm.glyphflags != nul_gbuf.glyphinfo.gm.glyphflags
+                     || giptr->gm.glyphflags
+                        != nul_gbuf.glyphinfo.gm.glyphflags
                      || giptr->gm.tileidx != nul_gbuf.glyphinfo.gm.tileidx)
 #else
     nul_gbuf.gnew = (giptr->glyphinfo.ttychar != ' '
@@ -1794,7 +1797,7 @@ row_refresh(int start, int stop, int y)
             bkglyphinfo.glyph = get_bk_glyph(x, y);
             print_glyph(WIN_MAP, x, y,
                         Glyphinfo_at(x, y, glyph), &bkglyphinfo);
-	}
+        }
     }
 }
 
@@ -1844,6 +1847,12 @@ flush_screen(int cursor_on_u)
         return;
 #endif
 
+    /* get this done now, before we place the cursor on the hero */
+    if (g.context.botl || g.context.botlx)
+        bot();
+    else if (iflags.time_botl)
+        timebot();
+
     for (y = 0; y < ROWNO; y++) {
         register gbuf_entry *gptr = &g.gbuf[y][x = g.gbuf_start[y]];
 
@@ -1855,16 +1864,14 @@ flush_screen(int cursor_on_u)
                 gptr->gnew = 0;
             }
     }
+    reset_glyph_bbox();
 
+    /* after map update, before display_nhwindow(WIN_MAP) */
     if (cursor_on_u)
         curs(WIN_MAP, u.ux, u.uy); /* move cursor to the hero */
+
     display_nhwindow(WIN_MAP, FALSE);
-    reset_glyph_bbox();
     flushing = 0;
-    if (g.context.botl || g.context.botlx)
-        bot();
-    else if (iflags.time_botl)
-        timebot();
 }
 
 /* ======================================================================== */
@@ -2028,12 +2035,13 @@ back_to_glyph(xchar x, xchar y)
 static int
 swallow_to_glyph(int mnum, int loc)
 {
+    int m_3 = what_mon(mnum, rn2_on_display_rng) << 3;
+
     if (loc < S_sw_tl || S_sw_br < loc) {
         impossible("swallow_to_glyph: bad swallow location");
         loc = S_sw_br;
     }
-    return ((int) (what_mon(mnum, rn2_on_display_rng) << 3) |
-            (loc - S_sw_tl)) + GLYPH_SWALLOW_OFF;
+    return (m_3 | (loc - S_sw_tl)) + GLYPH_SWALLOW_OFF;
 }
 
 /*
@@ -2167,30 +2175,52 @@ get_bk_glyph(xchar x, xchar y)
 #define GMAP_ROGUELEVEL     0x0002
 
 void
-map_glyphinfo(xchar x, xchar y, int glyph, unsigned mgflags,
-              glyph_info *glyphinfo)
+map_glyphinfo(
+    xchar x, xchar y,
+    int glyph,
+    unsigned mgflags,
+    glyph_info *glyphinfo)
 {
     int offset;
-    boolean is_you = (x == u.ux && y == u.uy);
+    boolean is_you = (x == u.ux && y == u.uy
+                      /* verify hero or steed (not something underneath
+                         when hero is invisible without see invisible,
+                         or a temporary display effect like an explosion);
+                         this is only approximate, because hero might be
+                         mimicking an object (after eating mimic corpse or
+                         if polyd into mimic) or furniture (only if polyd) */
+                      && glyph_is_monster(glyph));
     const glyph_map *gmap = &glyphmap[glyph];
 
     glyphinfo->gm = *gmap; /* glyphflags, symidx, color, tileidx */
-    /*   Only hero tinkering permitted on-the-fly (who).
-         Unique glyphs in glyphmap[] determine everything else (what). */
+    /*
+     * Only hero tinkering permitted on-the-fly (who).
+     * Unique glyphs in glyphmap[] determine everything else (what).
+     *
+     * (Note: if hero is invisible without see invisible, he/she usually
+     * can't see himself/herself.  This applies to accessibility hacks
+     * as well as to regular display.)
+     */
     if (is_you) {
 #ifdef TEXTCOLOR
-        if (iflags.use_color && HAS_ROGUE_IBM_GRAPHICS
-            && g.symset[g.currentgraphics].nocolor == 0) {
+        if (!iflags.use_color || Upolyd || glyph != hero_glyph) {
+            ; /* color tweak not needed (!use_color) or not wanted (poly'd
+                 or riding--which uses steed's color, not hero's) */
+        } else if (HAS_ROGUE_IBM_GRAPHICS
+                   && g.symset[g.currentgraphics].nocolor == 0) {
             /* actually player should be yellow-on-gray if in corridor */
             glyphinfo->gm.color = CLR_YELLOW;
-        } else if (iflags.use_color && flags.showrace && !Upolyd) {
-            /* special case the hero for `showrace' option */
+        } else if (flags.showrace) {
+            /* for showrace, non-human hero is displayed by the symbol of
+               corresponding type of monster rather than by '@' (handled
+               by newsym()); we change the color to same as human hero */
             glyphinfo->gm.color = HI_DOMESTIC;
         }
 #endif
         /* accessibility
           This unchanging display character for hero was requested by
-          a blind player to enhance screen reader use */
+          a blind player to enhance screen reader use.
+          Turn on override symbol if caller hasn't specified NOOVERRIDE. */
         if (sysopt.accessibility == 1 && !(mgflags & MG_FLAG_NOOVERRIDE)) {
             offset = SYM_HERO_OVERRIDE + SYM_OFF_X;
             if ((g.glyphmap_perlevel_flags & GMAP_ROGUELEVEL)
@@ -2202,7 +2232,8 @@ map_glyphinfo(xchar x, xchar y, int glyph, unsigned mgflags,
     }
     if (sysopt.accessibility == 1
         && (mgflags & MG_FLAG_NOOVERRIDE) && glyph_is_pet(glyph)) {
-        /* one more accessiblity kludge */
+        /* one more accessiblity kludge;
+           turn off override symbol if caller has specfieid NOOVERRIDE */
         glyphinfo->gm.symidx = mons[glyph_to_mon(glyph)].mlet + SYM_OFF_M;
     }
     glyphinfo->ttychar = g.showsyms[glyphinfo->gm.symidx];
@@ -2271,6 +2302,31 @@ int wallcolors[sokoban_walls + 1] = {
      && g.level.objects[(x)][(y)]->nexthere)
 #endif
 
+static int cmap_to_roguecolor(int);
+
+static int
+cmap_to_roguecolor(int cmap)
+{
+    int color = NO_COLOR;
+
+    if (g.symset[g.currentgraphics].nocolor)
+        return NO_COLOR;
+
+    if (cmap >= S_vwall && cmap <= S_hcdoor)
+        color = CLR_BROWN;
+    else if (cmap >= S_arrow_trap && cmap <= S_polymorph_trap)
+        color = CLR_MAGENTA;
+    else if (cmap == S_corr || cmap == S_litcorr)
+        color = CLR_GRAY;
+    else if (cmap >= S_room && cmap <= S_water
+                && cmap != S_darkroom)
+        color = CLR_GREEN;
+    else
+        color = NO_COLOR;
+
+    return color;
+}
+
 /*
    reset_glyphmap(trigger)
 
@@ -2278,8 +2334,8 @@ int wallcolors[sokoban_walls + 1] = {
 
    gm_levelchange    called when the player has gone to a new level.
 
-   gm_symchange      called if someone has interactively altered the symbols for
-                     the game, most likely at the options menu.
+   gm_symchange      called if someone has interactively altered the symbols
+                     for the game, most likely at the options menu.
 
    gm_optionchange   The game settings have been toggled and some of them
                      are configured to trigger a reset_glyphmap()
@@ -2297,9 +2353,8 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
 
     /* condense multiple tests in macro version down to single */
     boolean has_rogue_ibm_graphics = HAS_ROGUE_IBM_GRAPHICS,
-            has_rogue_color =
-                (has_rogue_ibm_graphics
-                 && g.symset[g.currentgraphics].nocolor == 0);
+            has_rogue_color = (has_rogue_ibm_graphics
+                               && g.symset[g.currentgraphics].nocolor == 0);
     if (trigger == gm_levelchange)
         g.glyphmap_perlevel_flags = 0;
 
@@ -2349,7 +2404,7 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
             gmap->glyphflags |= (MG_STATUE | MG_MALE | MG_OBJPILE);
         } else if ((offset = (glyph - GLYPH_BODY_PILETOP_OFF)) >= 0) {
             gmap->symidx = objects[CORPSE].oc_class + SYM_OFF_O;
-            if (has_rogue_color && iflags.use_color)
+            if (has_rogue_color)
                 color = CLR_RED;
             else
                 mon_color(offset);
@@ -2358,7 +2413,7 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
             gmap->symidx = objects[offset].oc_class + SYM_OFF_O;
             if (offset == BOULDER)
                 gmap->symidx = SYM_BOULDER + SYM_OFF_X;
-            if (has_rogue_color && iflags.use_color) {
+            if (has_rogue_color) {
                 switch (objects[offset].oc_class) {
                 case COIN_CLASS:
                     color = CLR_YELLOW;
@@ -2418,54 +2473,28 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
         } else if ((offset = (glyph - GLYPH_SWALLOW_OFF)) >= 0) {
             /* see swallow_to_glyph() in display.c */
             gmap->symidx = (S_sw_tl + (offset & 0x7)) + SYM_OFF_P;
-            if (has_rogue_color && iflags.use_color)
+            if (has_rogue_color)
                 color = NO_COLOR;
             else
                 mon_color(offset >> 3);
         } else if ((offset = (glyph - GLYPH_CMAP_C_OFF)) >= 0) {
             gmap->symidx = S_digbeam + offset + SYM_OFF_P;
-            cmap_color(S_digbeam + offset);
+            if (has_rogue_color)
+                color = cmap_to_roguecolor(S_digbeam + offset);
+            else
+                cmap_color(S_digbeam + offset);
         } else if ((offset = (glyph - GLYPH_ZAP_OFF)) >= 0) {
             /* see zapdir_to_glyph() in display.c */
             gmap->symidx = (S_vbeam + (offset & 0x3)) + SYM_OFF_P;
-            zap_color((offset >> 2));
+            if (has_rogue_color)
+                color = NO_COLOR;
+            else
+                zap_color((offset >> 2));
         } else if ((offset = (glyph - GLYPH_CMAP_B_OFF)) >= 0) {
-            gmap->symidx = S_grave + offset + SYM_OFF_P;
-            cmap_color(S_grave + offset);
-        } else if ((offset = (glyph - GLYPH_ALTAR_OFF)) >= 0) {
-            /* unaligned, chaotic, neutral, lawful, other altar */
-            gmap->symidx = S_altar + SYM_OFF_P;
-            altar_color(offset);
-        } else if ((offset = (glyph - GLYPH_CMAP_A_OFF)) >= 0) {
-            int cmap = S_ndoor + offset;
+            int cmap = S_grave + offset;
             gmap->symidx = cmap + SYM_OFF_P;
             cmap_color(cmap);
-            /*
-             *   Some speciality color mappings not hardcoded in data init
-             */
-            if (iflags.use_color) {
-                if (has_rogue_color) {
-                    if (cmap >= S_vwall && cmap <= S_hcdoor)
-                        color = CLR_BROWN;
-                    else if (cmap >= S_arrow_trap && cmap <= S_polymorph_trap)
-                        color = CLR_MAGENTA;
-                    else if (cmap == S_corr || cmap == S_litcorr)
-                        color = CLR_GRAY;
-                    else if (cmap >= S_room && cmap <= S_water
-                             && cmap != S_darkroom)
-                        color = CLR_GREEN;
-                    else
-                        color = NO_COLOR;
-#ifdef TEXTCOLOR
-                /* provide a visible difference if normal and lit corridor
-                   use the same symbol */
-                } else if ((cmap == S_litcorr)
-                           && g.showsyms[gmap->symidx]
-                                  == g.showsyms[S_corr + SYM_OFF_P]) {
-                    color = CLR_WHITE;
-#endif
-                }
-            } else { /* !iflags.use_color */
+            if (!iflags.use_color) {
                 /* try to provide a visible difference between water and lava
                    if they use the same symbol and color is disabled */
                 if (cmap == S_lava
@@ -2483,6 +2512,33 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
                                                     + SYM_OFF_P])) {
                     gmap->glyphflags |= MG_BW_ICE;
                 }
+            } else if (has_rogue_color) {
+                color = cmap_to_roguecolor(cmap);
+            }
+        } else if ((offset = (glyph - GLYPH_ALTAR_OFF)) >= 0) {
+            /* unaligned, chaotic, neutral, lawful, other altar */
+            gmap->symidx = S_altar + SYM_OFF_P;
+            if (has_rogue_color)
+                color = cmap_to_roguecolor(S_altar);
+            else
+                altar_color(offset);
+        } else if ((offset = (glyph - GLYPH_CMAP_A_OFF)) >= 0) {
+            int cmap = S_ndoor + offset;
+            gmap->symidx = cmap + SYM_OFF_P;
+            cmap_color(cmap);
+            /*
+             *   Some speciality color mappings not hardcoded in data init
+             */
+            if (has_rogue_color) {
+                color = cmap_to_roguecolor(cmap);
+#ifdef TEXTCOLOR
+            /* provide a visible difference if normal and lit corridor
+               use the same symbol */
+            } else if ((cmap == S_litcorr)
+                       && g.showsyms[gmap->symidx]
+                              == g.showsyms[S_corr + SYM_OFF_P]) {
+                color = CLR_WHITE;
+#endif
             }
         } else if ((offset = (glyph - GLYPH_CMAP_SOKO_OFF)) >= 0) {
             gmap->symidx = S_vwall + offset + SYM_OFF_P;
@@ -2498,7 +2554,10 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
             wall_color(mines_walls);
         } else if ((offset = (glyph - GLYPH_CMAP_MAIN_OFF)) >= 0) {
             gmap->symidx = S_vwall + offset + SYM_OFF_P;
-            wall_color(main_walls);
+            if (has_rogue_color)
+                color = cmap_to_roguecolor(S_vwall + offset);
+            else
+                wall_color(main_walls);
         } else if ((offset = (glyph - GLYPH_CMAP_STONE_OFF)) >= 0) {
             gmap->symidx = SYM_OFF_P;
             cmap_color(S_stone);
@@ -2506,7 +2565,7 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
             gmap->symidx = objects[offset].oc_class + SYM_OFF_O;
             if (offset == BOULDER)
                 gmap->symidx = SYM_BOULDER + SYM_OFF_X;
-            if (has_rogue_color && iflags.use_color) {
+            if (has_rogue_color) {
                 switch (objects[offset].oc_class) {
                 case COIN_CLASS:
                     color = CLR_YELLOW;
@@ -2527,20 +2586,20 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
                 /* don't ride (yet...).  Should we set it to yellow like in */
                 /* the monster case below?  There is no equivalent in rogue.
                  */
-                color = NO_COLOR; /* no need to check iflags.use_color */
+                color = NO_COLOR;
             else
                 mon_color(offset);
             gmap->glyphflags |= (MG_RIDDEN | MG_FEMALE);
         } else if ((offset = (glyph - GLYPH_RIDDEN_MALE_OFF)) >= 0) {
             gmap->symidx = mons[offset].mlet + SYM_OFF_M;
             if (has_rogue_color)
-                color = NO_COLOR; /* no need to check iflags.use_color */
+                color = NO_COLOR;
             else
                 mon_color(offset);
             gmap->glyphflags |= (MG_RIDDEN | MG_MALE);
         } else if ((offset = (glyph - GLYPH_BODY_OFF)) >= 0) {
             gmap->symidx = objects[CORPSE].oc_class + SYM_OFF_O;
-            if (has_rogue_color && iflags.use_color)
+            if (has_rogue_color)
                 color = CLR_RED;
             else
                 mon_color(offset);
@@ -2548,7 +2607,7 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
         } else if ((offset = (glyph - GLYPH_DETECT_FEM_OFF)) >= 0) {
             gmap->symidx = mons[offset].mlet + SYM_OFF_M;
             if (has_rogue_color)
-                color = NO_COLOR; /* no need to check iflags.use_color */
+                color = NO_COLOR;
             else
                 mon_color(offset);
             /* Disabled for now; anyone want to get reverse video to work? */
@@ -2557,7 +2616,7 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
         } else if ((offset = (glyph - GLYPH_DETECT_MALE_OFF)) >= 0) {
             gmap->symidx = mons[offset].mlet + SYM_OFF_M;
             if (has_rogue_color)
-                color = NO_COLOR; /* no need to check iflags.use_color */
+                color = NO_COLOR;
             else
                 mon_color(offset);
             /* Disabled for now; anyone want to get reverse video to work? */
@@ -2566,27 +2625,27 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
         } else if ((offset = (glyph - GLYPH_INVIS_OFF)) >= 0) {
             gmap->symidx = SYM_INVISIBLE + SYM_OFF_X;
             if (has_rogue_color)
-                color = NO_COLOR; /* no need to check iflags.use_color */
+                color = NO_COLOR;
             else
                 invis_color(offset);
             gmap->glyphflags |= MG_INVIS;
         } else if ((offset = (glyph - GLYPH_PET_FEM_OFF)) >= 0) {
             gmap->symidx = mons[offset].mlet + SYM_OFF_M;
             if (has_rogue_color)
-                color = NO_COLOR; /* no need to check iflags.use_color */
+                color = NO_COLOR;
             else
                 pet_color(offset);
             gmap->glyphflags |= (MG_PET | MG_FEMALE);
         } else if ((offset = (glyph - GLYPH_PET_MALE_OFF)) >= 0) {
             gmap->symidx = mons[offset].mlet + SYM_OFF_M;
             if (has_rogue_color)
-                color = NO_COLOR; /* no need to check iflags.use_color */
+                color = NO_COLOR;
             else
                 pet_color(offset);
             gmap->glyphflags |= (MG_PET | MG_MALE);
         } else if ((offset = (glyph - GLYPH_MON_FEM_OFF)) >= 0) {
             gmap->symidx = mons[offset].mlet + SYM_OFF_M;
-            if (has_rogue_color && iflags.use_color) {
+            if (has_rogue_color) {
                 color = NO_COLOR;
             } else {
                 mon_color(offset);
@@ -2594,7 +2653,7 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
             gmap->glyphflags |= MG_FEMALE;
         } else if ((offset = (glyph - GLYPH_MON_MALE_OFF)) >= 0) {
             gmap->symidx = mons[offset].mlet + SYM_OFF_M;
-            if (has_rogue_color && iflags.use_color) {
+            if (has_rogue_color) {
                 color = CLR_YELLOW;
             } else {
                 mon_color(offset);
@@ -2607,15 +2666,16 @@ reset_glyphmap(enum glyphmap_change_triggers trigger)
             int pet_override = ((g.glyphmap_perlevel_flags & GMAP_ROGUELEVEL)
                          ? g.ov_rogue_syms[SYM_PET_OVERRIDE + SYM_OFF_X]
                          : g.ov_primary_syms[SYM_PET_OVERRIDE + SYM_OFF_X]);
+
             if (g.showsyms[pet_override] != ' ')
-                gmap->symidx = pet_override;
+                gmap->symidx = SYM_PET_OVERRIDE + SYM_OFF_X;
         }
 #ifdef TEXTCOLOR
         /* Turn off color if no color defined, or rogue level w/o PC graphics.
          */
-        if (!has_color(color)
-            || ((g.glyphmap_perlevel_flags & GMAP_ROGUELEVEL)
-                && !has_rogue_color))
+        if ((!has_color(color)
+             || ((g.glyphmap_perlevel_flags & GMAP_ROGUELEVEL)
+                 && !has_rogue_color)) || !iflags.use_color)
 #endif
             color = NO_COLOR;
         gmap->color = color;
@@ -2631,7 +2691,7 @@ static const char *type_to_name(int);
 static void error4(int, int, int, int, int, int);
 
 static int bad_count[MAX_TYPE]; /* count of positions flagged as bad */
-static const char *type_names[MAX_TYPE] = {
+static const char *const type_names[MAX_TYPE] = {
     "STONE", "VWALL", "HWALL", "TLCORNER", "TRCORNER", "BLCORNER", "BRCORNER",
     "CROSSWALL", "TUWALL", "TDWALL", "TLWALL", "TRWALL", "DBWALL", "TREE",
     "SDOOR", "SCORR", "POOL", "MOAT", "WATER", "DRAWBRIDGE_UP", "LAVAPOOL",

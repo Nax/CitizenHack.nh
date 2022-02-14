@@ -1,4 +1,4 @@
-# NetHack 3.7  macOS.2020 $NHDT-Date: 1633401749 2021/10/05 02:42:29 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.88 $
+# NetHack 3.7  macOS.370 $NHDT-Date: 1633401749 2021/10/05 02:42:29 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.88 $
 # Copyright (c) Kenneth Lorber, Kensington, Maryland, 2015.
 # NetHack may be freely redistributed.  See license for details.
 #
@@ -7,17 +7,17 @@
 # Tested on:
 #     - MacOS Catalina 10.15
 #
-# If this doesn't work for some other version of Mac OS X, consider
+# If this doesn't work for some other version of macOS, consider
 # making a new hints file it, rather than changing this one.
 # And let us know about it.
 # Useful info: http://www.opensource.apple.com/darwinsource/index.html
 
 #-PRE xxxx
-# macOS X hints file
+# macOS hints file
 #
 
 # note: '#-INCLUDE' is not just a comment; multiw-1 contains sections 1 to 2
-#-INCLUDE multiw-1.2020
+#-INCLUDE multiw-1.370
 
 # 3. If you set WANT_WIN_QT, you need to
 #  A) set QTDIR either here or in the environment to point to the Qt5
@@ -27,14 +27,36 @@ ifndef WANT_WIN_QT
 ifdef WANT_WIN_ALL
 WANT_WIN_QT=1
 endif
-endif
+ifdef WANT_WIN_QT5
+ifndef WANT_WIN_QT
+WANT_WIN_QT=1
+endif   # not WANT_WIN_QT
+endif   # WANT_WIN_QT5
+ifdef WANT_WIN_QT6
+ifndef WANT_WIN_QT
+WANT_WIN_QT=1
+endif   # not WANT_WIN_QT
+endif   # WANT_WIN_QT6
+endif   # not WANT_WIN_QT
+
 ifdef WANT_WIN_QT
+ifndef WANT_WIN_QT5
+ifndef WANT_WIN_QT6
+WANT_WIN_QT5=1
+endif   # not WANT_WIN_QT6
+endif   # not WANT_WIN_QT5
 #QTDIR=/Developer/Qt
-# Qt installed via homebrew
-QTDIR=$(shell brew --prefix)/opt/qt
-# Qt installed via macports
+ifdef WANT_WIN_QT5
+# Qt5 installed via homebrew
+QTDIR=$(shell brew --prefix)/opt/qt@5
+endif   # WANT_WIN_QT5
+ifdef WANT_WIN_QT6
+QTDIR=$(shell brew --prefix)/opt/qt@6
+endif   # WANT_WIN_QT6
+# Qt5 installed via macports
 #QTDIR=/opt/local/libexec/qt5
 endif	# WANT_WIN_QT
+
 ifndef LIBXPM
 LIBXPM= -L/opt/X11/lib -lXpm
 endif
@@ -46,12 +68,23 @@ endif
 # you're reading this in Makefile augmented by hints, that may not be true).
 #
 
-#-INCLUDE multiw-2.2020
+ifeq "$(GIT)" "1"
+ifndef GITSUBMODULES
+GITSUBMODULES=1
+endif
+endif
+ifeq "$(git)" "1"
+ifndef GITSUBMODULES
+GITSUBMODULES=1
+endif
+endif
 
-# compiler.2020 contains compiler detection and adjustments common
+#-INCLUDE multiw-2.370
+
+# compiler.370 contains compiler detection and adjustments common
 # to both linux and macOS
 
-#-INCLUDE compiler.2020
+#-INCLUDE compiler.370
 
 # NetHack sources control
 NHCFLAGS+=-DDLB
@@ -70,11 +103,13 @@ NHCFLAGS+=-DNOMAIL
 #NHCFLAGS+=-DMSGHANDLER
 #NHCFLAGS+=-DTTY_TILES_ESCCODES
 #NHCFLAGS+=-DTTY_SOUND_ESCCODES
+#NHCFLAGS+=-DNO_CHRONICLE
+#NHCFLAGS+=-DLIVELOG
 
-CFLAGS+= $(WINCFLAGS)  #WINCFLAGS set from multiw-2.2020
+CFLAGS+= $(WINCFLAGS)  #WINCFLAGS set from multiw-2.370
 CFLAGS+= $(NHCFLAGS)
 
-CCXXFLAGS+= $(WINCFLAGS) #WINCFLAGS set from multiw-2.2020
+CCXXFLAGS+= $(WINCFLAGS) #WINCFLAGS set from multiw-2.370
 CCXXFLAGS+= $(NHCFLAGS)
 
 VARDATND =
@@ -118,10 +153,18 @@ LFLAGS=-L/opt/X11/lib
 endif	# WANT_WIN_X11
 
 ifdef WANT_WIN_QT
-# Qt5 requires C++11
 LINK = $(CXX)
+ifdef WANT_WIN_QT5
+# Qt5 requires C++11
 QTCXXFLAGS += $(sort $(shell PKG_CONFIG_PATH=$(QTDIR)/lib/pkgconfig pkg-config Qt5Gui Qt5Widgets Qt5Multimedia --cflags))
 WINLIB += $(shell PKG_CONFIG_PATH=$(QTDIR)/lib/pkgconfig pkg-config Qt5Gui Qt5Widgets Qt5Multimedia --libs)
+endif    # WANT_WIN_QT5
+ifdef WANT_WIN_QT6
+QTCXXFLAGS += -std=c++17 -I $(QTDIR)/include -I $(QTDIR)/include/QtCore
+MOC = moc
+MOCPATH = $(QTDIR)/share/qt/libexec/moc
+WINLIB += -F $(QTDIR)/Frameworks -framework QtCore -framework QtGui -framework QtWidgets
+endif    # WANT_WIN_QT6
 WINSRC += $(WINQTSRC)
 WINOBJ0 += $(WINQTOBJ)
 VARDATND0 += nhtiles.bmp rip.xpm nhsplash.xpm
@@ -155,13 +198,29 @@ LIBNHSYSSRC = ../sys/libnh/libnhmain.c \
 		../sys/share/ioctl.c ../sys/share/unixtty.c \
 		../sys/unix/unixunix.c ../sys/unix/unixres.c \
 		../win/shim/winshim.c
-LIBNHSYSOBJ= libnhmain.o ioctl.o unixtty.o unixunix.o \
-                unixres.o winshim.o
+LIBNHSYSOBJ = $(TARGETPFX)libnhmain.o $(TARGETPFX)ioctl.o \
+		$(TARGETPFX)unixtty.o $(TARGETPFX)unixunix.o \
+		$(TARGETPFX)unixres.o $(TARGETPFX)winshim.o
 #don't bother building the game executable as it will fail
 #without winshim
 override GAME=
-MOREALL += ( cd src ; $(MAKE) pregame ; $(MAKE) libnh.a )
+MOREALL += ( cd src ; $(MAKE) pregame ; $(MAKE) $(TARGETPFX)libnh.a )
 endif  # WANT_LIBNH
+
+# Lua
+# when building liblua.a, avoid warning that use of tmpnam() should be
+# replaced by mkstemp(); the lua code doesn't use nethack's config.h so
+# this needs to be passed via make rather than defined in unixconf.h
+ifdef GITSUBMODULES
+LUAFLAGS=CC='$(CC)' MYCFLAGS=' -DLUA_USE_MACOSX'
+ifneq "$(CCISCLANG)" ""
+# clang
+LUAFLAGS +=CWARNGCC=''
+endif   # clang
+override LUAHEADERS = submodules/lua
+override LUA2NHTOP = ../..
+override LUAMAKEFLAGS=$(LUAFLAGS)
+endif   # GITSUBMODULES
 
 WANT_BUNDLE=1
 ifdef WANT_SHARE_INSTALL
@@ -269,17 +328,17 @@ VARDIR=$(HACKDIR)
 # Install.Qt mentions a patch for macos - it's not there (it seems to be in the Qt binary
 # package under the docs directory).
 #
-#-INCLUDE cross-pre.2020
+#-INCLUDE cross-pre.370
 #
 #-POST
 
 ifdef WANT_LIBNH
-libnh.a: $(HOBJ) $(LIBNHSYSOBJ) ../lib/lua/liblua.a
+$(TARGETPFX)libnh.a: $(HOBJ) $(LIBNHSYSOBJ) ../lib/lua/liblua.a
 	$(AR) rcs $@ $(HOBJ) $(LIBNHSYSOBJ) ../lib/lua/liblua.a
 	@echo "$@ built."
-libnhmain.o : ../sys/libnh/libnhmain.c $(HACK_H)
+$(TARGETPFX)libnhmain.o : ../sys/libnh/libnhmain.c $(HACK_H)
 	$(CC) $(CFLAGS) -c -o$@ $<
-winshim.o : ../win/shim/winshim.c $(HACK_H)
+$(TARGETPFX)winshim.o : ../win/shim/winshim.c $(HACK_H)
 	$(CC) $(CFLAGS) -c -o$@ $<
 endif  # WANT_LIBNH
 
@@ -392,7 +451,7 @@ build_package_root:
 	sys/unix/hints/macosx.sh editsysconf sys/unix/sysconf $(PKGROOT_UGLN)/sysconf
 	cd dat; install -p $(DATNODLB) ../$(PKGROOT_UGLN)
 # XXX these files should be somewhere else for good Mac form
-	touch $(PKGROOT_UGLN)/perm $(PKGROOT_UGLN)/record $(PKGROOT_UGLN)/logfile $(PKGROOT_UGLN)/xlogfile
+	touch $(PKGROOT_UGLN)/perm $(PKGROOT_UGLN)/record $(PKGROOT_UGLN)/logfile $(PKGROOT_UGLN)/xlogfile $(PKGROOT_UGLN)/livelog
 	mkdir $(PKGROOT_UGLN)/save
 # XXX what about a news file?
 
@@ -416,6 +475,7 @@ build_package_root:
 	echo chmod $(VARFILEPERM) $(HACKDIR)/record   >> PKGSCRIPTS/postinstall
 	echo chmod $(VARFILEPERM) $(HACKDIR)/logfile  >> PKGSCRIPTS/postinstall
 	echo chmod $(VARFILEPERM) $(HACKDIR)/xlogfile >> PKGSCRIPTS/postinstall
+	echo chmod $(VARFILEPERM) $(HACKDIR)/livelog  >> PKGSCRIPTS/postinstall
 	echo chmod $(VARFILEPERM) $(HACKDIR)/sysconf  >> PKGSCRIPTS/postinstall
 	echo chmod $(GAMEPERM)   $(SHELLDIR)/nethack  >> PKGSCRIPTS/postinstall
 	echo chmod $(EXEPERM)    $(SHELLDIR)/recover  >> PKGSCRIPTS/postinstall
@@ -464,5 +524,5 @@ endif	# end of build_qt_pkg
 endif	# WANT_WIN_QT for packaging
 endif	# MAKEFILE_TOP
 #
-#-INCLUDE cross-post.2020
+#-INCLUDE cross-post.370
 #

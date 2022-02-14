@@ -1,4 +1,4 @@
-/* NetHack 3.7	tilemap.c	$NHDT-Date: 1596498340 2020/08/03 23:45:40 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.47 $ */
+/* NetHack 3.7	tilemap.c	$NHDT-Date: 1640987372 2021/12/31 21:49:32 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.64 $ */
 /*      Copyright (c) 2016 by Michael Allison                     */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -20,6 +20,13 @@
 #include "hack.h"
 #include "display.h"
 #include <stdarg.h>
+#endif
+
+#ifdef MONITOR_HEAP
+/* with heap monitoring enabled, free(ptr) is a macro which expands to
+   nhfree(ptr,__FILE__,__LINE__); since tilemap doesn't link with
+   src/alloc.o it doesn't have access to nhfree(); use actual free */
+#undef free
 #endif
 
 #define Fprintf (void) fprintf
@@ -88,11 +95,15 @@ const char *expl_texts[] = {
     "dark", "noxious", "muddy", "wet", "magical", "fiery", "frosty",
 };
 
-const char *zap_texts[] = { "missile", "fire",      "frost",      "sleep",
-                            "death",   "lightning", "poison gas", "acid" };
+const char *zap_texts[] = {
+    "missile", "fire",      "frost",      "sleep",
+    "death",   "lightning", "poison gas", "acid",
+};
 
-enum tilesrc {monsters_file, objects_file, other_file, generated};
-const char *tilesrc_texts[] = { "monsters.txt", "objects.txt", "other.txt", "generated" };
+enum tilesrc { monsters_file, objects_file, other_file, generated };
+const char *tilesrc_texts[] = {
+    "monsters.txt", "objects.txt", "other.txt", "generated",
+};
 
 struct tilemap_t {
     short tilenum;
@@ -691,12 +702,18 @@ init_tilemap(void)
         tilemap[GLYPH_BODY_PILETOP_OFF + i].tilenum = corpsetile;
 #if defined(OBTAIN_TILEMAP)
         Sprintf(buf, "%s (mnum=%d)", tilename(MON_GLYPH, file_entry, 0), i);
-        Sprintf(tilemap[GLYPH_MON_MALE_OFF + i].name, "male %s", buf);
-        Sprintf(tilemap[GLYPH_PET_MALE_OFF + i].name, "%s male %s", "pet", buf);
-        Sprintf(tilemap[GLYPH_DETECT_MALE_OFF + i].name, "%s male %s", "detected", buf);
-        Sprintf(tilemap[GLYPH_RIDDEN_MALE_OFF + i].name, "%s male %s", "ridden", buf);
-        Sprintf(tilemap[GLYPH_BODY_OFF + i].name, "%s %s", "body of", buf);
-        Sprintf(tilemap[GLYPH_BODY_PILETOP_OFF + i].name, "%s %s", "piletop body of", buf);
+        Snprintf(tilemap[GLYPH_MON_MALE_OFF + i].name,
+                 sizeof tilemap[0].name,"male %s", buf);
+        Snprintf(tilemap[GLYPH_PET_MALE_OFF + i].name,
+                 sizeof tilemap[0].name, "%s male %s", "pet", buf);
+        Snprintf(tilemap[GLYPH_DETECT_MALE_OFF + i].name,
+                 sizeof tilemap[0].name, "%s male %s", "detected", buf);
+        Snprintf(tilemap[GLYPH_RIDDEN_MALE_OFF + i].name,
+                 sizeof tilemap[0].name, "%s male %s", "ridden", buf);
+        Snprintf(tilemap[GLYPH_BODY_OFF + i].name,
+                 sizeof tilemap[0].name, "%s %s", "body of", buf);
+        Snprintf(tilemap[GLYPH_BODY_PILETOP_OFF + i].name,
+                 sizeof tilemap[0].name, "%s %s", "piletop body of", buf);
         add_tileref(tilenum, GLYPH_MON_MALE_OFF + i, monsters_file,
                     file_entry, tilemap[GLYPH_MON_MALE_OFF + i].name, "");
         add_tileref(tilenum, GLYPH_PET_MALE_OFF + i, monsters_file,
@@ -718,16 +735,22 @@ init_tilemap(void)
         tilemap[GLYPH_RIDDEN_FEM_OFF + i].tilenum = tilenum;
 #if defined(OBTAIN_TILEMAP)
         Sprintf(buf, "%s (mnum=%d)", tilename(MON_GLYPH, file_entry, 0), i);
-        Sprintf(tilemap[GLYPH_MON_FEM_OFF + i].name, "female %s", buf);
-        Sprintf(tilemap[GLYPH_PET_FEM_OFF + i].name, "%s female %s", "pet",
-                buf);
-        Sprintf(tilemap[GLYPH_DETECT_FEM_OFF + i].name, "%s female %s",
-                "detected", buf);
-        Sprintf(tilemap[GLYPH_RIDDEN_FEM_OFF + i].name, "%s female %s",
-                "ridden", buf);
-        Sprintf(tilemap[GLYPH_BODY_OFF + i].name, "%s %s", "body of", buf);
-        Sprintf(tilemap[GLYPH_BODY_PILETOP_OFF + i].name, "%s %s",
-                "piletop body of", buf);
+        Snprintf(tilemap[GLYPH_MON_FEM_OFF + i].name, 
+                 sizeof tilemap[0].name, "female %s", buf);
+        Snprintf(tilemap[GLYPH_PET_FEM_OFF + i].name,
+                 sizeof tilemap[0].name, "%s female %s", "pet",
+                 buf);
+        Snprintf(tilemap[GLYPH_DETECT_FEM_OFF + i].name,
+                 sizeof tilemap[0].name, "%s female %s",
+                 "detected", buf);
+        Snprintf(tilemap[GLYPH_RIDDEN_FEM_OFF + i].name,
+                 sizeof tilemap[0].name, "%s female %s",
+                 "ridden", buf);
+        Snprintf(tilemap[GLYPH_BODY_OFF + i].name,
+                 sizeof tilemap[0].name, "%s %s", "body of", buf);
+        Snprintf(tilemap[GLYPH_BODY_PILETOP_OFF + i].name,
+                 sizeof tilemap[0].name, "%s %s",
+                 "piletop body of", buf);
         add_tileref(tilenum, GLYPH_MON_FEM_OFF + i, monsters_file,
                     file_entry, tilemap[GLYPH_MON_FEM_OFF + i].name, "");
         add_tileref(tilenum, GLYPH_PET_FEM_OFF + i, monsters_file,
@@ -866,7 +889,7 @@ init_tilemap(void)
 #if defined(OBTAIN_TILEMAP)
         Snprintf(tilemap[GLYPH_CMAP_A_OFF + i].name,
                  sizeof tilemap[0].name,
-		         "cmap A %s (cmap=%d)",
+                 "cmap A %s (cmap=%d)",
                  tilename(OTH_GLYPH, file_entry, 0), cmap);
         add_tileref(tilenum, GLYPH_CMAP_A_OFF + i, other_file, file_entry,
                     tilemap[GLYPH_CMAP_A_OFF + i].name, "");
@@ -1258,7 +1281,7 @@ init_tilemap(void)
     }
     /* go beyond NUMMONS to cover off the invisible tile at the
        end of monsters.txt so that the tile mapping matches things
-       the .bmp file (for example) */
+       in the .bmp file (for example) */
     file_entry = 0;
 #if defined(OBTAIN_TILEMAP)
     add_tileref(tilenum, NO_GLYPH, monsters_file, file_entry,
@@ -1269,8 +1292,8 @@ init_tilemap(void)
 
 #if defined(OBTAIN_TILEMAP)
     for (i = 0; i < MAX_GLYPH; ++i) {
-        Fprintf(tilemap_file, "glyph[%04d] [%04d] %-80s\n", i, tilemap[i].tilenum,
-                tilemap[i].name);
+        Fprintf(tilemap_file, "glyph[%04d] [%04d] %-80s\n",
+                i, tilemap[i].tilenum, tilemap[i].name);
     }
     dump_tilerefs(tilemap_file);
     fclose(tilemap_file);
@@ -1310,17 +1333,23 @@ main(int argc UNUSED, char *argv[] UNUSED)
     Fprintf(ofp,
             "/* This file is automatically generated.  Do not edit. */\n");
     Fprintf(ofp, "\n#include \"hack.h\"\n");
+    Fprintf(ofp, "\n#ifdef USE_TILES\n");
     Fprintf(ofp, "\nint total_tiles_used = %d,\n", laststatuetile + 1);
     Fprintf(ofp, "%sTile_corr = %d,\n", indent, TILE_corr);       /* X11 references it */
     Fprintf(ofp, "%sTile_stone = %d,\n",  indent, TILE_stone);
-    Fprintf(ofp, "%sTile_unexplored = %d;\n\n",  indent, TILE_unexplored);
-    Fprintf(ofp, "/* glyph, ttychar, { color, symidx, ovidx, glyphflags, tileidx} */\n");
+    Fprintf(ofp, "%sTile_unexplored = %d;\n",  indent, TILE_unexplored);
+    Fprintf(ofp, "int maxmontile = %d,\n", lastmontile);
+    Fprintf(ofp, "%smaxobjtile = %d,\n", indent, lastobjtile);
+    Fprintf(ofp, "%smaxothtile = %d;\n\n", indent, lastothtile);
+    Fprintf(ofp,
+      "/* glyph, ttychar, { color, symidx, ovidx, glyphflags, tileidx} */\n");
     Fprintf(ofp, "const glyph_info nul_glyphinfo = { \n");
     Fprintf(ofp, "%sNO_GLYPH, ' ',\n", indent);
     Fprintf(ofp, "%s%s{  /* glyph_map */\n", indent, indent);
     Fprintf(ofp, "%s%s%sNO_COLOR, SYM_UNEXPLORED + SYM_OFF_X,\n",
-                 indent, indent, indent);
-    Fprintf(ofp, "%s%s%sMG_UNEXPL, %d\n", indent, indent, indent, TILE_unexplored);
+            indent, indent, indent);
+    Fprintf(ofp, "%s%s%sMG_UNEXPL, %d\n", indent, indent, indent,
+            TILE_unexplored);
     Fprintf(ofp, "%s%s}\n", indent, indent);
     Fprintf(ofp, "};\n");
     Fprintf(ofp, "\nglyph_map glyphmap[MAX_GLYPH] = {\n");
@@ -1334,6 +1363,7 @@ main(int argc UNUSED, char *argv[] UNUSED)
                 tilemap[i].name);
     }
     Fprintf(ofp, "};\n");
+    Fprintf(ofp, "\n#endif /* USE_TILES */\n");
     Fprintf(ofp, "\n/*tile.c*/\n");
 
     (void) fclose(ofp);
@@ -1423,8 +1453,13 @@ precheck(int offset, const char *glyphtype)
                 glyphtype);
 }
 
-void add_tileref(int n, int glyphref, enum tilesrc src, int entrynum,
-                 const char *nam, const char *prefix)
+void add_tileref(
+    int n,
+    int glyphref,
+    enum tilesrc src,
+    int entrynum,
+    const char *nam,
+    const char *prefix)
 {
     struct tiles_used temp = { 0 };
     static const char ellipsis[] UNUSED = "...";
@@ -1476,8 +1511,7 @@ free_tilerefs(void)
 
     for (i = 0; i < SIZE(tilelist); i++) {
         if (tilelist[i])
-            free(tilelist[i]);
-        tilelist[i] = (struct tiles_used *) 0;
+            free((genericptr_t) tilelist[i]), tilelist[i] = 0;
     }
 }
 
