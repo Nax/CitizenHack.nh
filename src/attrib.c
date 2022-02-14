@@ -377,19 +377,26 @@ set_moreluck(void)
         u.moreluck = -LUCKADD;
 }
 
+/* (not used) */
 void
 restore_attrib(void)
 {
     int i, equilibrium;;
 
     /*
-     * Note:  this gets called on every turn but ATIME() is never set
-     * to non-zero anywhere, and ATEMP() is only used for strength loss
-     * from hunger, so it doesn't actually do anything.
+     * Note:  this used to get called by moveloop() on every turn but
+     * ATIME() is never set to non-zero anywhere so didn't do anything.
+     * Presumably it once supported something like potion of heroism
+     * which conferred temporary characteristics boost(s).
+     *
+     * ATEMP() is used for strength loss from hunger, which doesn't
+     * time out, and for dexterity loss from wounded legs, which has
+     * its own timeout routine.
      */
 
     for (i = 0; i < A_MAX; i++) { /* all temporary losses/gains */
-        equilibrium = (i == A_STR && u.uhs >= WEAK) ? -1 : 0;
+        equilibrium = ((i == A_STR && u.uhs >= WEAK)
+                       || (i == A_DEX && Wounded_legs)) ? -1 : 0;
         if (ATEMP(i) != equilibrium && ATIME(i) != 0) {
             if (!(--(ATIME(i)))) { /* countdown for change */
                 ATEMP(i) += (ATEMP(i) > 0) ? -1 : 1;
@@ -1016,8 +1023,18 @@ newhp(void)
     }
     if (hp <= 0)
         hp = 1;
-    if (u.ulevel < MAXULEV)
+    if (u.ulevel < MAXULEV) {
+        /* remember increment; future level drain could take it away again */
         u.uhpinc[u.ulevel] = (xchar) hp;
+    } else {
+        /* after level 30, throttle hit point gains from extra experience;
+           once max reaches 1200, further increments will be just 1 more */
+        char lim = 5 - u.uhpmax / 300;
+
+        lim = max(lim, 1);
+        if (hp > lim)
+            hp = lim;
+    }
     return hp;
 }
 
@@ -1132,6 +1149,8 @@ uchangealign(int newalign,
     g.context.botl = TRUE; /* status line needs updating */
     if (reason == 0) {
         /* conversion via altar */
+        livelog_printf(LL_ALIGNMENT, "permanently converted to %s",
+                       aligns[1 - newalign].adj);
         u.ualignbase[A_CURRENT] = (aligntyp) newalign;
         /* worn helm of opposite alignment might block change */
         if (!uarmh || uarmh->otyp != HELM_OF_OPPOSITE_ALIGNMENT)
@@ -1140,6 +1159,11 @@ uchangealign(int newalign,
             (u.ualign.type != oldalign) ? "sudden " : "");
     } else {
         /* putting on or taking off a helm of opposite alignment */
+        if (reason == 1) {
+            /* don't livelog taking it back off */
+            livelog_printf(LL_ALIGNMENT, "used a helm to turn %s",
+                           aligns[1 - newalign].adj);
+        }
         u.ualign.type = (aligntyp) newalign;
         if (reason == 1)
             Your("mind oscillates %s.", Hallucination ? "wildly" : "briefly");

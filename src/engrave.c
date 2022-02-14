@@ -18,7 +18,7 @@ random_engraving(char *outbuf)
     /* a random engraving may come from the "rumors" file,
        or from the "engrave" file (formerly in an array here) */
     if (!rn2(4) || !(rumor = getrumor(0, outbuf, TRUE)) || !*rumor)
-        (void) get_rnd_text(ENGRAVEFILE, outbuf, rn2);
+        (void) get_rnd_text(ENGRAVEFILE, outbuf, rn2, MD_PAD_RUMORS);
 
     wipeout_text(outbuf, (int) (strlen(outbuf) / 4), 0);
     return outbuf;
@@ -513,7 +513,7 @@ u_can_engrave(void)
  * moonstone  -  6      (orthoclase)    * amber      -  2-2.5
  */
 
-/* return 1 if action took 1 (or more) moves, 0 if error or aborted */
+/* the #engrave command */
 int
 doengrave(void)
 {
@@ -554,7 +554,7 @@ doengrave(void)
 
     /* Can the adventurer engrave at all? */
     if (!u_can_engrave())
-        return 0;
+        return ECMD_OK;
 
     jello = (u.uswallow && !(is_animal(u.ustuck->data)
                              || is_whirly(u.ustuck->data)));
@@ -565,7 +565,7 @@ doengrave(void)
 
     otmp = getobj("write with", stylus_ok, GETOBJ_PROMPT);
     if (!otmp) /* otmp == cg.zeroobj if fingers */
-        return 0;
+        return ECMD_CANCEL;
 
     if (otmp == &cg.zeroobj) {
         Strcat(strcpy(fbuf, "your "), body_part(FINGERTIP));
@@ -579,34 +579,34 @@ doengrave(void)
      */
     if (!freehand() && otmp != uwep && !otmp->owornmask) {
         You("have no free %s to write with!", body_part(HAND));
-        return 0;
+        return ECMD_OK;
     }
 
     if (jello) {
         You("tickle %s with %s.", mon_nam(u.ustuck), writer);
         Your("message dissolves...");
-        return 0;
+        return ECMD_OK;
     }
     if (otmp->oclass != WAND_CLASS && !can_reach_floor(TRUE)) {
         cant_reach_floor(u.ux, u.uy, FALSE, TRUE);
-        return 0;
+        return ECMD_OK;
     }
     if (IS_ALTAR(levl[u.ux][u.uy].typ)) {
         You("make a motion towards the altar with %s.", writer);
         altar_wrath(u.ux, u.uy);
-        return 0;
+        return ECMD_OK;
     }
     if (IS_GRAVE(levl[u.ux][u.uy].typ)) {
         if (otmp == &cg.zeroobj) { /* using only finger */
             You("would only make a small smudge on the %s.",
                 surface(u.ux, u.uy));
-            return 0;
+            return ECMD_OK;
         } else if (!levl[u.ux][u.uy].disturbed) {
             You("disturb the undead!");
             levl[u.ux][u.uy].disturbed = 1;
             (void) makemon(&mons[PM_GHOUL], u.ux, u.uy, NO_MM_FLAGS);
             exercise(A_WIS, FALSE);
-            return 1;
+            return ECMD_TIME;
         }
     }
 
@@ -663,7 +663,7 @@ doengrave(void)
             check_unpaid(otmp);
             if (otmp->cursed && !rn2(WAND_BACKFIRE_CHANCE)) {
                 wand_explode(otmp, 0);
-                return 1;
+                return ECMD_TIME;
             }
             zapwand = TRUE;
             if (!can_reach_floor(TRUE))
@@ -850,7 +850,7 @@ doengrave(void)
         if (otmp == ublindf) {
             pline(
                 "That is a bit difficult to engrave with, don't you think?");
-            return 0;
+            return ECMD_OK;
         }
         switch (otmp->otyp) {
         case MAGIC_MARKER:
@@ -951,7 +951,7 @@ doengrave(void)
     if (!ptext) {
         if (otmp && otmp->oclass == WAND_CLASS && !can_reach_floor(TRUE))
             cant_reach_floor(u.ux, u.uy, FALSE, TRUE);
-        return 1;
+        return ECMD_TIME;
     }
     /*
      * Special effects should have deleted the current engraving (if
@@ -971,7 +971,7 @@ doengrave(void)
                             ynqchars, 'y');
             if (c == 'q') {
                 pline1(Never_mind);
-                return 0;
+                return ECMD_OK;
             }
         }
 
@@ -998,7 +998,7 @@ doengrave(void)
                         ? (is_ice(u.ux, u.uy) ? "melted into" : "burned into")
                         : "engraved in",
                     surface(u.ux, u.uy));
-                return 1;
+                return ECMD_TIME;
             } else if (type != oep->engr_type || c == 'n') {
                 if (!Blind || can_reach_floor(TRUE))
                     You("will overwrite the current message.");
@@ -1006,7 +1006,7 @@ doengrave(void)
             }
         } else if (oep && (int) strlen(oep->engr_txt) >= BUFSZ - 1) {
             There("is no room to add anything else here.");
-            return 1;
+            return ECMD_TIME;
         }
     }
 
@@ -1063,16 +1063,17 @@ doengrave(void)
             if (!Blind)
                 pline("%s, then %s.", Tobjnam(otmp, "glow"),
                       otense(otmp, "fade"));
-            return 1;
+            return ECMD_TIME;
         } else {
             pline1(Never_mind);
-            return 0;
+            return ECMD_OK;
         }
     }
 
     /* A single `x' is the traditional signature of an illiterate person */
     if (len != 1 || (!index(ebuf, 'x') && !index(ebuf, 'X')))
-        u.uconduct.literate++;
+        if (!u.uconduct.literate++)
+            livelog_printf(LL_CONDUCT, "became literate by engraving \"%s\"", ebuf);
 
     /* Mix up engraving if surface or state of mind is unsound.
        Note: this won't add or remove any spaces. */
@@ -1112,7 +1113,7 @@ doengrave(void)
 
     /* Engraving will always take at least one action via being run as an
      * occupation, so do not count this setup as taking time. */
-    return 0;
+    return ECMD_OK;
 }
 
 /* occupation callback for engraving some text */
@@ -1205,7 +1206,8 @@ engrave(void)
         if (g.context.engraving.actionct % 2 == 1) { /* 1st, 3rd, ... action */
             /* deduct a point on 1st, 3rd, 5th, ... turns, unless this is the
              * last character being engraved (a rather convoluted way to round
-             * down).
+             * down), but always deduct a point on the 1st turn to prevent
+             * zero-cost engravings.
              * Check for truncation *before* deducting a point - otherwise,
              * attempting to e.g. engrave 3 characters with a -2 weapon will
              * stop at the 1st. */
@@ -1214,7 +1216,7 @@ engrave(void)
                     impossible("<= -3 weapon valid for engraving");
                 }
                 truncate = TRUE;
-            } else if (*endc) {
+            } else if (*endc || g.context.engraving.actionct == 1) {
                 stylus->spe -= 1;
                 update_inventory();
             }
@@ -1446,7 +1448,7 @@ make_grave(int x, int y, const char *str)
     /* Engrave the headstone */
     del_engr_at(x, y);
     if (!str)
-        str = get_rnd_text(EPITAPHFILE, buf, rn2);
+        str = get_rnd_text(EPITAPHFILE, buf, rn2, MD_PAD_RUMORS);
     make_engr_at(x, y, str, 0L, HEADSTONE);
     return;
 }

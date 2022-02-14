@@ -92,3 +92,5 @@ targets/*
 /build
 /.vscode
 *.user
+util/*.lib
+util/*.exp

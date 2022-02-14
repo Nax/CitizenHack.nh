@@ -1,4 +1,4 @@
-/* NetHack 3.7  mdlib.c  $NHDT-Date: 1608933420 2020/12/25 21:57:00 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.17 $ */
+/* NetHack 3.7  mdlib.c  $NHDT-Date: 1644524060 2022/02/10 20:14:20 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.27 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Kenneth Lorber, Kensington, Maryland, 2015. */
 /* Copyright (c) M. Stephenson, 1990, 1991.                       */
@@ -14,9 +14,6 @@
 #ifndef MAKEDEFS_C
 #define MDLIB_C
 #include "config.h"
-#ifdef MONITOR_HEAP
-#undef free /* makedefs, mdlib don't use the alloc and free in src/alloc.c */
-#endif
 #include "permonst.h"
 #include "objclass.h"
 #include "sym.h"
@@ -81,16 +78,19 @@ extern int GUILaunched;
 /* these are in extern.h but we don't include hack.h */
 void runtime_info_init(void);
 const char *do_runtime_info(int *);
+void release_runtime_info(void);
 void populate_nomakedefs(struct version_info *);
+extern void free_nomakedefs(void); /* date.c */
 
 void build_options(void);
 static int count_and_validate_winopts(void);
 static void opt_out_words(char *, int *);
 static void build_savebones_compat_string(void);
+
 static int idxopttext, done_runtime_opt_init_once = 0;
 #define MAXOPT 40
 static char *opttext[120] = { 0 };
-char optbuf[BUFSZ];
+char optbuf[COLBUFSZ];
 static struct version_info version;
 static const char opt_indent[] = "    ";
 
@@ -422,7 +422,7 @@ build_savebones_compat_string(void)
                 VERSION_MAJOR, VERSION_MINOR, PATCHLEVEL);
 }
 
-static const char *build_opts[] = {
+static const char *const build_opts[] = {
 #ifdef AMIGA_WBENCH
     "Amiga WorkBench support",
 #endif
@@ -605,7 +605,7 @@ static const char *build_opts[] = {
     "and basic NetHack features"
 };
 
-int
+static int
 count_and_validate_winopts(void)
 {
     int i, cnt = 0;
@@ -629,8 +629,9 @@ count_and_validate_winopts(void)
 }
 
 static void
-opt_out_words(char *str,     /* input, but modified during processing */
-              int *length_p) /* in/out */
+opt_out_words(
+    char *str,     /* input, but modified during processing */
+    int *length_p) /* in/out */
 {
     char *word;
 
@@ -644,11 +645,11 @@ opt_out_words(char *str,     /* input, but modified during processing */
         if (word)
             *word = '\0';
         if (*length_p + (int) strlen(str) > COLNO - 5) {
-            opttext[idxopttext] = strdup(optbuf);
+            opttext[idxopttext] = dupstr(optbuf);
             if (idxopttext < (MAXOPT - 1))
                 idxopttext++;
             Sprintf(optbuf, "%s", opt_indent),
-                    *length_p = (int) strlen(opt_indent);
+                *length_p = (int) strlen(opt_indent);
         } else {
             Sprintf(eos(optbuf), " "), (*length_p)++;
         }
@@ -660,7 +661,7 @@ opt_out_words(char *str,     /* input, but modified during processing */
 void
 build_options(void)
 {
-    char buf[BUFSZ];
+    char buf[COLBUFSZ];
     int i, length, winsyscnt, cnt = 0;
     const char *defwinsys = DEFAULT_WINDOW_SYS;
 
@@ -670,7 +671,7 @@ build_options(void)
 #endif
 #endif
     build_savebones_compat_string();
-    opttext[idxopttext] = strdup(optbuf);
+    opttext[idxopttext] = dupstr(optbuf);
     if (idxopttext < (MAXOPT - 1))
         idxopttext++;
 #if (NH_DEVEL_STATUS != NH_STATUS_RELEASED)
@@ -684,11 +685,11 @@ build_options(void)
 #endif /* NH_DEVEL_STATUS == NH_STATUS_RELEASED */
     Sprintf(optbuf, "%sNetHack version %d.%d.%d%s\n",
             opt_indent, VERSION_MAJOR, VERSION_MINOR, PATCHLEVEL, STATUS_ARG);
-    opttext[idxopttext] = strdup(optbuf);
+    opttext[idxopttext] = dupstr(optbuf);
     if (idxopttext < (MAXOPT - 1))
         idxopttext++;
     Sprintf(optbuf, "Options compiled into this edition:");
-    opttext[idxopttext] = strdup(optbuf);
+    opttext[idxopttext] = dupstr(optbuf);
     if (idxopttext < (MAXOPT - 1))
         idxopttext++;
     optbuf[0] = '\0';
@@ -706,17 +707,17 @@ build_options(void)
                (i < SIZE(build_opts) - 1) ? "," : ".");
         opt_out_words(buf, &length);
     }
-    opttext[idxopttext] = strdup(optbuf);
+    opttext[idxopttext] = dupstr(optbuf);
     if (idxopttext < (MAXOPT - 1))
         idxopttext++;
     optbuf[0] = '\0';
     winsyscnt = count_and_validate_winopts();
-    opttext[idxopttext] = strdup(optbuf);
+    opttext[idxopttext] = dupstr(optbuf);
     if (idxopttext < (MAXOPT - 1))
         idxopttext++;
     Sprintf(optbuf, "Supported windowing system%s:",
             (winsyscnt > 1) ? "s" : "");
-    opttext[idxopttext] = strdup(optbuf);
+    opttext[idxopttext] = dupstr(optbuf);
     if (idxopttext < (MAXOPT - 1))
         idxopttext++;
     optbuf[0] = '\0';
@@ -748,14 +749,14 @@ build_options(void)
         opt_out_words(buf, &length);
     }
 
-    opttext[idxopttext] = strdup(optbuf);
+    opttext[idxopttext] = dupstr(optbuf);
     if (idxopttext < (MAXOPT - 1))
         idxopttext++;
     optbuf[0] = '\0';
 
 #if defined(MAKEDEFS_C) || defined(FOR_RUNTIME)
     {
-        static const char *lua_info[] = {
+        static const char *const lua_info[] = {
  "", "NetHack 3.7.* uses the 'Lua' interpreter to process some data:", "",
  "    :LUACOPYRIGHT:", "",
  /*        1         2         3         4         5         6         7
@@ -776,7 +777,7 @@ build_options(void)
         /* add lua copyright notice;
            ":TAG:" substitutions are deferred to caller */
         for (i = 0; lua_info[i]; ++i) {
-            opttext[idxopttext] = strdup(lua_info[i]);
+            opttext[idxopttext] = dupstr(lua_info[i]);
             if (idxopttext < (MAXOPT - 1))
                 idxopttext++;
         }
@@ -784,7 +785,7 @@ build_options(void)
 #endif /* MAKEDEFS_C || FOR_RUNTIME */
 
     /* end with a blank line */
-    opttext[idxopttext] = strdup("");
+    opttext[idxopttext] = dupstr("");
     if (idxopttext < (MAXOPT - 1))
         idxopttext++;
     return;
@@ -835,6 +836,17 @@ do_runtime_info(int *rtcontext)
             *rtcontext += 1;
         }
     return retval;
+}
+
+void
+release_runtime_info()
+{
+    while (idxopttext > 0) {
+        --idxopttext;
+        free((genericptr_t) opttext[idxopttext]), opttext[idxopttext] = 0;
+    }
+    done_runtime_opt_init_once = 0;
+    free_nomakedefs();
 }
 
 /*mdlib.c*/

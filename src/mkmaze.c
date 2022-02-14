@@ -320,7 +320,7 @@ put_lregion_here(
                It might still fail if there's a dungeon feature here. */
             struct trap *t = t_at(x, y);
 
-            if (t && t->ttyp != MAGIC_PORTAL && t->ttyp != VIBRATING_SQUARE)
+            if (t && !undestroyable_trap(t->ttyp))
                 deltrap(t);
             if (bad_location(x, y, nlx, nly, nhx, nhy))
                 return FALSE;
@@ -334,7 +334,7 @@ put_lregion_here(
         if ((mtmp = m_at(x, y)) != 0) {
             /* move the monster if no choice, or just try again */
             if (oneshot) {
-                if (!rloc(mtmp, TRUE))
+                if (!rloc(mtmp, RLOC_NOMSG))
                     m_into_limbo(mtmp);
             } else
                 return FALSE;
@@ -431,7 +431,7 @@ baalz_fixup(void)
         levl[x][y].typ = (levl[x][y].typ == TLWALL) ? BRCORNER : BLCORNER;
         levl[x][y + 1].typ = HWALL;
         if ((mtmp = m_at(x, y)) != 0) /* something at temporary pool... */
-            (void) rloc(mtmp, FALSE);
+            (void) rloc(mtmp, RLOC_ERR|RLOC_NOMSG);
     }
 
     x = g.bughack.delarea.x2, y = g.bughack.delarea.y2;
@@ -440,7 +440,7 @@ baalz_fixup(void)
         levl[x][y].typ = (levl[x][y].typ == TLWALL) ? TRCORNER : TLCORNER;
         levl[x][y - 1].typ = HWALL;
         if ((mtmp = m_at(x, y)) != 0) /* something at temporary pool... */
-            (void) rloc(mtmp, FALSE);
+            (void) rloc(mtmp, RLOC_ERR|RLOC_NOMSG);
     }
 
     /* reset bughack region; set low end to <COLNO,ROWNO> so that
@@ -589,7 +589,7 @@ check_ransacked(char * s)
 }
 
 #define ORC_LEADER 1
-static const char *orcfruit[] = { "paddle cactus", "dwarven root" };
+static const char *const orcfruit[] = { "paddle cactus", "dwarven root" };
 
 static void
 migrate_orc(struct monst* mtmp, unsigned long mflags)
@@ -1602,38 +1602,6 @@ restore_waterlevel(NHFILE* nhfp)
     b->next = (struct bubble *) 0;
 }
 
-const char *
-waterbody_name(xchar x, xchar y)
-{
-    struct rm *lev;
-    schar ltyp;
-
-    if (!isok(x, y))
-        return "drink"; /* should never happen */
-    lev = &levl[x][y];
-    ltyp = lev->typ;
-    if (ltyp == DRAWBRIDGE_UP)
-        ltyp = db_under_typ(lev->drawbridgemask);
-
-    if (ltyp == LAVAPOOL)
-        return hliquid("lava");
-    else if (ltyp == ICE)
-        return "ice";
-    else if (ltyp == POOL)
-        return "pool of water";
-    else if (ltyp == WATER || Is_waterlevel(&u.uz))
-        ; /* fall through to default return value */
-    else if (Is_juiblex_level(&u.uz))
-        return "swamp";
-    else if (ltyp == MOAT && !Is_medusa_level(&u.uz)
-             /* samurai has two moat spots on quest home level that seem
-                silly if described as such (maybe change them to pools?) */
-             && !(Role_if(PM_SAMURAI) && Is_qstart(&u.uz)))
-        return "moat";
-
-    return hliquid("water");
-}
-
 static void
 set_wportal(void)
 {
@@ -1867,7 +1835,7 @@ mv_bubble(struct bubble* b, int dx, int dy, boolean ini)
 
                 /* mnearto() might fail. We can jump right to elemental_clog
                    from here rather than deal_with_overcrowding() */
-                if (!mnearto(mon, cons->x, cons->y, TRUE))
+                if (!mnearto(mon, cons->x, cons->y, TRUE, RLOC_NOMSG))
                     elemental_clog(mon);
                 break;
             }
@@ -1880,7 +1848,7 @@ mv_bubble(struct bubble* b, int dx, int dy, boolean ini)
                 newsym(ux0, uy0); /* clean up old position */
 
                 if (mtmp) {
-                    mnexto(mtmp);
+                    mnexto(mtmp, RLOC_NOMSG);
                 }
                 break;
             }

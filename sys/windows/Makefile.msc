@@ -1,5 +1,5 @@
 # NetHack 3.7 Makefile.msc
-#       Copyright (c) NetHack PC Development Team 1993-2021
+#       Copyright (c) NetHack Development Team 1993-2022
 #
 #==============================================================================
 # Build Tools Environment
@@ -8,9 +8,9 @@
 #       MS Visual Studio Visual C++ compiler
 #
 #       Visual Studio Compilers Tested:
-#            - Microsoft Visual Studio 2017 Community Edition
-#            - Microsoft Visual Studio 2019 Community Edition
-#            - Microsoft Visual Studio 2022 Community Edition Preview 2
+#            - Microsoft Visual Studio 2017 Community Edition v 15.9.43
+#            - Microsoft Visual Studio 2019 Community Edition v 16.11.9
+#            - Microsoft Visual Studio 2022 Community Edition v 17.0.5
 #
 #==============================================================================
 #   This is used for building two distinct executables of NetHack:
@@ -21,151 +21,63 @@
 #   A Win32 native port built on the Windows API, Graphical NetHack or
 #       NetHackW.exe
 #
-#   BEFORE YOU START, in addition to your C compiler and linker,
-#
-#       o You will need a complete Lua source tree parallel to your
-#         NetHack source tree. Lua is not an optional requirement,
-#         it is required in order to process the level and dungeon
-#         description files during the game. You can obtain the
-#         Lua source from here:
-#             https://www.lua.org/download.html
-#
-#       o If you want to include the curses Window port in the non-GUI
-#         NetHack.exe build, you will need a complete PDCurses source
-#         tree parallel to your NetHack source tree. You can obtain the
-#         PDCurses source from here:
-#             https://sourceforge.net/projects/pdcurses/files/pdcurses/
-#         or via git from here:
-#             git clone https://github.com/wmcbrine/PDCurses.git ../pdcurses
-#
-#       o If you want your build of NetHack to include support for
-#         compressing your save files, or to be able to exchange and use
-#         compressed save files that originated on another platform such
-#         as Linux or a handheld phone or tablet, then you will need
-#         a copy of the zlib source tree parallel to your NetHack source
-#         tree. You can obtain the zlib source from here:
-#             https://www.zlib.net/zlib1211.zip
-#
-#   If you want to find out more information about Lua, PDCurses, or zlib,
-#   here are the home page links for each at the time of this writing:
-#
-#         Lua:       https://www.lua.org/
-#         PDCurses:  https://pdcurses.org/
-#         zlib:      https://www.zlib.net/
-#
 #   If you have any questions about building NetHack for the Windows platform
 #   please read sys/windows/Install.windows file included in the distribution.
 #
 #==============================================================================
-# DECISIONS SECTION
 #
-# Build Options Decisions
+# The default make target (so just typing 'nmake' is useful).
 #
-#       There are currently 5 decisions that you can choose to make.
-#       none of the 5 decisions are absolutely required because defaults
-#       are in place:
-#
-#       1. Do you have git commands in your path and NetHack in a
-#          git repository?
-#	2. Where do you want your build results to end up?
-#       3. Do you want to include the optional curses port?
-#       4. Do you want to include compressed savefile support to
-#          transfer compressed savefiles between platforms?
-#	5. Do you want debug information in the executable?
-#	6. Do you want to explicitly override auto-detection of
-#          a 32-bit or 64-bit target?
-#
-# Mandatory Lua source Location (not optional)
-#
-#       Lua source code or is required to build NetHack-3.7.
-#       LUATOP below must point to the correct location of the LUA sources.
-#       By default it is assumed to be parallel to your NetHack source tree in
-#       the same parent directory/folder.
-#
-#------------------------------------------------------------------------------
-#==============================================================================
+
+default : install
 
 #
 #------------------------------------------------------------------------------
-# 1. Do you have git commands available and NetHack in a git repository.
-#    If not, such as if you obtained the NetHack sources in a zip file download,
-#    set GIT_AVAILABLE = 0
+# Where do you want the game to be built (which folder)?
 #
-GIT_AVAILABLE = 1
-#
-#------------------------------------------------------------------------------
-# 2. Where do you want the game to be built (which folder)?
-#
+
 GAMEDIR = ..\binary               # Default game build directory
+
 #
 #------------------------------------------------------------------------------
-# OPTIONAL - Curses window port support
+# Do you want debug information available to the executable?
 #
-# 3. Uncomment these and set them appropriately if you want to
-#    include curses port support alongside TTY support in your
-#    NetHack.exe binary.
-#
-#    You'll have to set PDCURSES_H to the correct location of the
-#    PDCurses header (.h) files and PDCURSES_C to the location
-#    of your PDCurses C files.
-#
-#ADD_CURSES=Y
-#PDCURSES_TOP=..\lib\pdcurses
-#
-#------------------------------------------------------------------------------
-# OPTIONAL - zlib support (to allow compressed savefile exchange across platforms
-#
-# 4. Location of zlib sources
-#
-#
-#ADD_ZLIB=Y
-#ZLIBTOP=..\lib\zlib
-#
-#------------------------------------------------------------------------------
-# 5. Do you want debug information available to the executable?
-#
+
 DEBUGINFO = Y
+
+#------------------------------------------------------------------------------
+#
+#
+# Do you have a connection to the internet available that you want
+# to utilize for obtaining prerequisite Lua source code and pdcurses source code?
+#
+
+INTERNET_AVAILABLE = N
+
+#------------------------------------------------------------------------------
+#
+# Do you have git commands available and NetHack in a git repository?
+
+GIT_AVAILABLE = N
+
+# If not, because you obtained the NetHack sources in a zip file download,
+# set GIT_AVAILABLE = N
+# You can override INTERNET_AVAILABLE and GIT_AVAILABLE on the nmake command
+# line by adding GIT=1
+#   for example:
+#      nmake GIT=1 install
 #
 #------------------------------------------------------------------------------
-# 6. This Makefile will attempt to auto-detect your selected target architecture
-#    based on Visual Studio command prompt configuration settins etc.
-#    However, if you want to manually override generation of a
-#    32-bit or 64-bit build target, you can uncomment the apppropriate
-#    TARGET_CPU line below.
+# This Makefile will attempt to auto-detect your selected target architecture
+# based on Visual Studio command prompt configuration settins etc.
+# However, if you want to manually override generation of a
+# 32-bit or 64-bit build target, you can uncomment the apppropriate
+# TARGET_CPU line below.
 #
+
 #TARGET_CPU=x64
 #TARGET_CPU=x86
-#
-#
-#==============================================================================
-#==============================================================================
-# This marks the end of the BUILD DECISIONS section.
-#==============================================================================
-!IFNDEF LUA_VERSION
-LUAVER=5.4.3
-!ELSE
-LUAVER=$(LUA_VERSION)
-!ENDIF
-#==============================================================================
-#
-# Location of LUA
-#
-# Original source needs to be obtained from:
-#    http://www.lua.org/ftp/lua-5.4.3.tar.gz
-#
-#    This build assumes that the LUA sources are located
-#    at the specified location. If they are actually elsewhere
-#    you'll need to specify the correct spot below in order to
-#    successfully build NetHack-3.7.  You cannot build a functional
-#    version of NetHack-3.7 Work-in-progress without including Lua.
-#
-LUATOP=..\lib\lua-$(LUAVER)
-#
-#
-#==============================================================================
-#
-#TEST_CROSSCOMPILE=Y
-#
+
 #==============================================================================
 #======================== End of Modification Section =========================
 #==============================================================================
@@ -176,6 +88,111 @@ LUATOP=..\lib\lua-$(LUAVER)
 #       #                                               #
 #       #################################################
 #
+#==============================================================================
+
+SKIP_NETHACKW = N
+
+!IFNDEF LUA_VERSION
+LUAVER=5.4.4
+!ELSE
+LUAVER=$(LUA_VERSION)
+!ENDIF
+
+# if GIT=1 is passed on the make command, allow use of git and internet
+!IF "$(GIT)" == "1"
+INTERNET_AVAILABLE=Y
+GIT_AVAILABLE=Y
+!ENDIF
+!IF "$(git)" == "1"
+INTERNET_AVAILABLE=Y
+GIT_AVAILABLE=Y
+!ENDIF
+
+#==============================================================================
+# Sanity checks for prerequisite Lua and pdcurses
+#
+LUA_MAY_PROCEED=N
+ADD_CURSES=N
+
+# First, Lua
+!IF "$(INTERNET_AVAILABLE)" == "Y"
+!IF "$(GIT_AVAILABLE)" == "Y"
+LUATOP=..\submodules\lua
+LUASRC=$(LUATOP)
+LUA_MAY_PROCEED=Y
+!ELSE   # GIT_AVAILABLE
+LUATOP = ..\lib\lua-$(LUAVER)
+LUASRC = $(LUATOP)\src
+LUA_MAY_PROCEED=Y
+!ENDIF  # GIT_AVAILABLE
+!ELSE   # INTERNET_AVAILABLE is not Y below
+# The internet is not available for obtaining Lua using either
+# method (git or download). Check to see if it is available already, with
+# precedence given to ../submodules, then ../lib.
+#
+!IF EXIST("..\submodules\lua\lua.h")
+LUATOP=..\submodules\lua
+LUASRC=$(LUATOP)
+LUA_MAY_PROCEED=Y
+!ELSEIF EXIST("..\lib\lua-$(LUAVER)\src\lua.h")
+LUATOP = ..\lib\lua-$(LUAVER)
+LUASRC = $(LUATOP)\src
+LUA_MAY_PROCEED=Y
+!ENDIF  # Lua sources
+!IF "$(LUA_MAY_PROCEED)" == "Y"
+!MESSAGE No internet connection was authorized in the Makefile,
+!MESSAGE but a copy of lua-$(LUAVER) was found in $(LUATOP), so that will be used.
+!ENDIF  # LUA_MAY_PROCEED
+!ENDIF  # INTERNET_AVAILABLE
+
+!IF "$(LUA_MAY_PROCEED)" != "Y"
+!IF "$(INTERNET_AVAILABLE)" != "Y"
+!MESSAGE Your Makefile settings do not allow use of the internet to obtain Lua
+!ENDIF  # INTERNET_AVAILABLE
+!MESSAGE and no copy of Lua was found in either ..\submodules\lua or ..\lib\lua-$(LUAVER).
+!MESSAGE Change your nmake command line to include:
+!MESSAGE     GIT=1
+!MESSAGE or modify your Makefile to set the following:
+!MESSAGE     INTERNET_AVAILABLE=Y
+!MESSAGE     GIT_AVAILABLE=Y
+!ERROR Stopping because NetHack 3.7 requires Lua for its build.
+!ENDIF  # LUA_MAY_PROCEED
+
+# Now, pdcurses
+!IF "$(INTERNET_AVAILABLE)" == "Y"
+!IF "$(GIT_AVAILABLE)" == "Y"
+PDCURSES_TOP=..\submodules\pdcurses
+ADD_CURSES=Y
+!ELSE  # GIT_AVAILABLE
+PDCURSES_TOP=..\lib\pdcurses
+ADD_CURSES=Y
+!ENDIF # GIT_AVAILABLE
+!ELSE  # INTERNET_AVAILABLE is not Y below
+# Your Makefile settings do not allow pdcurses to be obtained by
+# git or by download. Check to see if it is available at one of
+# the expected locations already, with precedence given to ../submodules,
+# then ../lib.
+#
+!IF EXIST("..\submodules\pdcurses\curses.h")
+PDCURSES_TOP=..\submodules\pdcurses
+ADD_CURSES=Y
+!ELSEIF EXIST("..\lib\pdcurses\curses.h")
+PDCURSES_TOP=..\lib\pdcurses
+ADD_CURSES=Y
+!ENDIF  # pdcurses sources available somewhere
+!IF "$(ADD_CURSES)" == "Y"
+!MESSAGE Your Makefile settings do not allow pdcurses to be obtained by
+!MESSAGE git or by download, but a copy of pdcurses was found in $(PDCURSES_TOP),
+!MESSAGE so that will be used.
+!ENDIF  # ADD_CURSES == Y
+!ENDIF  # INTERNET_AVAILABLE
+
+!IF "$(ADD_CURSES)" != "Y"
+!MESSAGE NetHack 3.7 will be built without support for the curses window-port.
+!ENDIF
+
+#TEST_CROSSCOMPILE=Y
+
 #==============================================================================
 #
 #  The version of the game this Makefile was designed for
@@ -270,6 +287,92 @@ CROSSCOMPILE_TARGET=
 CROSSCOMPILE=
 !ENDIF
 
+#===============-=================================================
+# LUA library
+# Official source for Lua is http://www.lua.org/ftp/lua-5.4.4.tar.gz
+#
+# Source for the NetHack repository submodule in ../submodules/lua
+# is https://github.com/lua/lua.git
+#=================================================================
+#
+# Location of LUA
+#
+# Original source needs to be obtained from:
+#    http://www.lua.org/ftp/lua-5.4.4.tar.gz
+#
+#    This build assumes that the LUA sources are located
+#    at the specified location. If they are actually elsewhere
+#    you'll need to specify the correct spot below in order to
+#    successfully build NetHack-3.7.  You cannot build a functional
+#    version of NetHack-3.7 Work-in-progress without including Lua.
+#
+
+!IFNDEF LUAVER
+LUAVER=5.4.4
+!ENDIF
+
+LUALIB   = $(O)lua$(LUAVER)-static.lib
+LUADLL   = $(O)lua$(LUAVER).dll
+LUAINCL  = /I$(LUASRC)
+LUATARGETS = lua.exe luac.exe $(LUADLL) $(LUALIB)
+
+LUASRCFILES =   lapi.c lauxlib.c lbaselib.c lcode.c              \
+		lcorolib.c lctype.c ldblib.c ldebug.c ldo.c      \
+		ldump.c lfunc.c lgc.c linit.c liolib.c llex.c    \
+		lmathlib.c lmem.c loadlib.c lobject.c lopcodes.c \
+		loslib.c lparser.c lstate.c lstring.c lstrlib.c  \
+		ltable.c ltablib.c ltm.c lundump.c lutf8lib.c    \
+		lvm.c lzio.c
+
+LUAOBJFILES =   $(O)lapi.o $(O)lauxlib.o $(O)lbaselib.o                \
+		$(O)lcode.o $(O)lcorolib.o $(O)lctype.o $(O)ldblib.o   \
+		$(O)ldebug.o $(O)ldo.o $(O)ldump.o $(O)lfunc.o         \
+		$(O)lgc.o $(O)linit.o $(O)liolib.o $(O)llex.o          \
+		$(O)lmathlib.o $(O)lmem.o $(O)loadlib.o $(O)lobject.o  \
+		$(O)lopcodes.o $(O)loslib.o $(O)lparser.o $(O)lstate.o \
+		$(O)lstring.o $(O)lstrlib.o $(O)ltable.o $(O)ltablib.o \
+		$(O)ltm.o $(O)lundump.o $(O)lutf8lib.o $(O)lvm.o $(O)lzio.o
+
+!IF "$(LUAVER)" == "5.3.5"
+LUASRCFILES = $(LUASRCFILES) lbitlib.c
+LUAOBJFILES =   $(LUAOBJFILES) $(O)lbitlib.o
+!ELSE
+#  5.4.0 added header files ljumptab.h and lopnames.h
+#        and removes lbitlib.c
+!ENDIF
+#===============-=================================================
+# PDCurses build macros
+# Source for the NetHack repository submodule in ../submodules/PDCurses
+# is https://github.com/wmcbrine/PDCurses.git
+#=================================================================
+!IF "$(ADD_CURSES)" == "Y"
+PDCURSES_CURSES_H	= $(PDCURSES_TOP)\curses.h
+PDCURSES_CURSPRIV_H	= $(PDCURSES_TOP)\curspriv.h
+PDCURSES_HEADERS	= $(PDCURSES_CURSES_H) $(PDCURSES_CURSPRIV_H)
+PDCSRC                  = $(PDCURSES_TOP)\pdcurses
+PDCWINCON               = $(PDCURSES_TOP)\wincon
+PDCDEP                  = $(PDCURSES_TOP)\curses.h
+
+PDCLIBOBJS = $(O)addch.o $(O)addchstr.o $(O)addstr.o $(O)attr.o $(O)beep.o \
+	$(O)bkgd.o $(O)border.o $(O)clear.o $(O)color.o $(O)delch.o $(O)deleteln.o \
+	$(O)getch.o $(O)getstr.o $(O)getyx.o $(O)inch.o $(O)inchstr.o \
+	$(O)initscr.o $(O)inopts.o $(O)insch.o $(O)insstr.o $(O)instr.o $(O)kernel.o \
+	$(O)keyname.o $(O)mouse.o $(O)move.o $(O)outopts.o $(O)overlay.o $(O)pad.o \
+	$(O)panel.o $(O)printw.o $(O)refresh.o $(O)scanw.o $(O)scr_dump.o $(O)scroll.o \
+	$(O)slk.o $(O)termattr.o $(O)touch.o $(O)util.o $(O)window.o $(O)debug.o
+
+PDCOBJS = $(O)pdcclip.o $(O)pdcdisp.o $(O)pdcgetsc.o $(O)pdckbd.o $(O)pdcscrn.o \
+	$(O)pdcsetsc.o $(O)pdcutil.o
+
+PDCLIB = $(O)pdcurses.lib
+
+PDCINCL = /I$(PDCURSES_TOP) /I$(PDCSRC) /I$(PDCWINCON)
+
+!ELSE
+PDCLIB =
+PDCDEP =
+!ENDIF
+
 HACKINCL = $(INCL)\align.h $(INCL)\artifact.h $(INCL)\artilist.h \
 	$(INCL)\attrib.h $(INCL)\botl.h $(INCL)\color.h $(INCL)\config.h \
 	$(INCL)\config1.h $(INCL)\context.h $(INCL)\coord.h $(INCL)\decl.h \
@@ -318,7 +421,7 @@ HACKCSRC = allmain.c alloc.c apply.c artifact.c attrib.c ball.c bones.c \
 MAKESRC       = $(U)makedefs.c
 
 MAKEDEFSOBJS  = $(O)makedefs.o $(O)monst$(HOST).o $(O)objects$(HOST).o \
-		$(O)date.o
+		$(O)date.o $(O)alloc.o $(O)panic.o
 
 RECOVOBJS      = $(O)recover.o
 
@@ -393,12 +496,8 @@ GITHASH = -DNETHACK_GIT_SHA=\"$(GIT_HASH)\"
 GITBRANCH = -DNETHACK_GIT_BRANCH=\"$(GIT_BRANCH)\"
 !ENDIF
 
-!IFNDEF ADD_CURSES
-CURSESOBJ=
-!ELSE
 CURSESOBJ= $(O)cursdial.o $(O)cursinit.o $(O)cursinvt.o $(O)cursmain.o \
 	   $(O)cursmesg.o $(O)cursmisc.o $(O)cursstat.o $(O)curswins.o
-!ENDIF
 
 SOBJ   = $(O)windmain.o $(O)windsys.o $(O)win10.o \
 	$(O)safeproc.o $(O)nhlan.o $(SOUND)
@@ -427,8 +526,6 @@ ALL_GUIHDR = $(MSWIN)\mhaskyn.h $(MSWIN)\mhdlg.h $(MSWIN)\mhfont.h \
 
 COMCTRL = comctl32.lib
 
-KEYDLLS	= $(GAMEDIR)\nhdefkey.dll $(GAMEDIR)\nh340key.dll $(GAMEDIR)\nhraykey.dll
-
 SOUND = $(OBJ)\ntsound.o
 
 VVOBJ  = $(O)version.o
@@ -437,130 +534,32 @@ ALLOBJ  = $(SOBJ) $(DLBOBJ)  $(WOBJ) $(OBJS) $(VVOBJ) $(LUAOBJ)
 
 OPTIONS_FILE = $(DAT)\options
 
-#===============-=================================================
-# LUA library
-# Source from http://www.lua.org/ftp/lua-5.4.3.tar.gz
-#=================================================================
-
-!IFNDEF LUAVER
-!IFDEF LUATOP
-LUATMP   = $(LUATOP:..\lib\lua-=)    #strip leading "..\lib\lua-"
-LUATMP   = $(LUATMP:-beta=)         #strip suffix if exists "-beta"
-!IF "$(LUATMP)" == "5.4.0"
-LUAVER   = 5.4.0
-!ENDIF
-!IF "$(LUATMP)" == "5.4.1"
-LUAVER   = 5.4.1
-!ENDIF
-!IF "$(LUATMP)" == "5.4.2"
-LUAVER   = 5.4.2
-!ENDIF
-!IF "$(LUATMP)" == "5.4.3"
-LUAVER   = 5.4.3
-!ENDIF
-!ELSE
-!ERROR NetHack 3.7 requires LUA so LUATOP must be defined
-!ENDIF
-
-!IFNDEF LUAVER
-LUATMP   = $(LUATOP:..\lib\LUA-=)    #strip leading "..\lib\LUA-"
-LUATMP   = $(LUATMP:-BETA=)         #strip suffix if exists "-BETA"
-!IF "$(LUATMP)" == "5.3.5"
-LUAVER   = 5.3.5
-!ELSE
-LUAVER   = 5.4.3
-!ENDIF
-!ENDIF
-!ENDIF
-
-LUASRC   = $(LUATOP)\src
-LUALIB   = $(O)lua$(LUAVER)-static.lib
-LUADLL   = $(O)lua$(LUAVER).dll
-LUAINCL  = /I$(LUASRC)
-LUATARGETS = lua.exe luac.exe $(LUADLL) $(LUALIB)
-
-LUASRCFILES =   lapi.c lauxlib.c lbaselib.c lcode.c              \
-		lcorolib.c lctype.c ldblib.c ldebug.c ldo.c      \
-		ldump.c lfunc.c lgc.c linit.c liolib.c llex.c    \
-		lmathlib.c lmem.c loadlib.c lobject.c lopcodes.c \
-		loslib.c lparser.c lstate.c lstring.c lstrlib.c  \
-		ltable.c ltablib.c ltm.c lundump.c lutf8lib.c    \
-		lvm.c lzio.c
-
-LUAOBJFILES =   $(O)lapi.o $(O)lauxlib.o $(O)lbaselib.o                \
-		$(O)lcode.o $(O)lcorolib.o $(O)lctype.o $(O)ldblib.o   \
-		$(O)ldebug.o $(O)ldo.o $(O)ldump.o $(O)lfunc.o         \
-		$(O)lgc.o $(O)linit.o $(O)liolib.o $(O)llex.o          \
-		$(O)lmathlib.o $(O)lmem.o $(O)loadlib.o $(O)lobject.o  \
-		$(O)lopcodes.o $(O)loslib.o $(O)lparser.o $(O)lstate.o \
-		$(O)lstring.o $(O)lstrlib.o $(O)ltable.o $(O)ltablib.o \
-		$(O)ltm.o $(O)lundump.o $(O)lutf8lib.o $(O)lvm.o $(O)lzio.o
-
-!IF "$(LUAVER)" == "5.3.5"
-LUASRCFILES = $(LUASRCFILES) lbitlib.c
-LUAOBJFILES =   $(LUAOBJFILES) $(O)lbitlib.o
-!ELSE
-#  5.4.0 added header files ljumptab.h and lopnames.h
-#        and removes lbitlib.c
-!ENDIF
-
-!IF "$(ADD_CURSES)" == "Y"	
-#===============-=================================================
-# PDCurses build macros
-# Latest PDCurses from https://github.com/wmcbrine/PDCurses.git
-#=================================================================
-
-PDCURSES_CURSES_H	= $(PDCURSES_TOP)\curses.h
-PDCURSES_CURSPRIV_H	= $(PDCURSES_TOP)\curspriv.h
-PDCURSES_HEADERS	= $(PDCURSES_CURSES_H) $(PDCURSES_CURSPRIV_H)
-PDCSRC                  = $(PDCURSES_TOP)\pdcurses
-PDCWINCON               = $(PDCURSES_TOP)\wincon
-
-PDCLIBOBJS = $(O)addch.o $(O)addchstr.o $(O)addstr.o $(O)attr.o $(O)beep.o \
-	$(O)bkgd.o $(O)border.o $(O)clear.o $(O)color.o $(O)delch.o $(O)deleteln.o \
-	$(O)getch.o $(O)getstr.o $(O)getyx.o $(O)inch.o $(O)inchstr.o \
-	$(O)initscr.o $(O)inopts.o $(O)insch.o $(O)insstr.o $(O)instr.o $(O)kernel.o \
-	$(O)keyname.o $(O)mouse.o $(O)move.o $(O)outopts.o $(O)overlay.o $(O)pad.o \
-	$(O)panel.o $(O)printw.o $(O)refresh.o $(O)scanw.o $(O)scr_dump.o $(O)scroll.o \
-	$(O)slk.o $(O)termattr.o $(O)touch.o $(O)util.o $(O)window.o $(O)debug.o
-
-PDCOBJS = $(O)pdcclip.o $(O)pdcdisp.o $(O)pdcgetsc.o $(O)pdckbd.o $(O)pdcscrn.o \
-	$(O)pdcsetsc.o $(O)pdcutil.o
-
-PDCLIB = $(O)pdcurses.lib
-
-PDCINCL = /I$(PDCURSES_TOP) /I$(PDCSRC) /I$(PDCWINCON)
-
-!ELSE
-PDCLIB =
-!ENDIF
-
 #==========================================
 # Header file macros
 #==========================================
 
-CONFIG_H = $(INCL)\config.h $(INCL)\patchlevel.h \
-		$(INCL)\config1.h $(INCL)\tradstdc.h \
-		$(INCL)\global.h $(INCL)\fnamesiz.h $(INCL)\coord.h \
+CONFIG_H = $(INCL)\config.h $(INCL)\config1.h $(INCL)\patchlevel.h \
+		$(INCL)\tradstdc.h $(INCL)\global.h $(INCL)\coord.h \
 		$(INCL)\vmsconf.h $(INCL)\system.h $(INCL)\nhlua.h \
-		$(INCL)\unixconf.h $(INCL)\micro.h $(INCL)\pcconf.h \
-		$(INCL)\windconf.h
+		$(INCL)\unixconf.h $(INCL)\pcconf.h $(INCL)\micro.h \
+		$(INCL)\windconf.h $(INCL)\warnings.h \
+		$(INCL)\fnamesiz.h
 
 HACK_H = $(INCL)\hack.h $(CONFIG_H) $(INCL)\lint.h $(INCL)\align.h \
-		$(INCL)\dungeon.h $(INCL)\mkroom.h \
-		$(INCL)\objclass.h $(INCL)\youprop.h $(INCL)\prop.h \
-		$(INCL)\permonst.h $(INCL)\monattk.h \
-		$(INCL)\monflag.h $(INCL)\mondata.h \
-		$(INCL)\wintype.h $(INCL)\context.h \
-		$(INCL)\sym.h $(INCL)\defsym.h $(INCL)\rm.h \
-		$(INCL)\botl.h $(INCL)\rect.h \
-		$(INCL)\region.h $(INCL)\decl.h $(INCL)\quest.h \
-		$(INCL)\spell.h $(INCL)\color.h $(INCL)\obj.h \
-		$(INCL)\you.h $(INCL)\attrib.h $(INCL)\monst.h \
-		$(INCL)\mextra.h $(INCL)\skills.h \
-		$(INCL)\timeout.h $(INCL)\trap.h $(INCL)\flag.h \
-		$(INCL)\vision.h $(INCL)\display.h $(INCL)\engrave.h \
-		$(INCL)\winprocs.h $(INCL)\sys.h $(INCL)\wintty.h
+		$(INCL)\dungeon.h $(INCL)\sym.h $(INCL)\defsym.h \
+		$(INCL)\mkroom.h $(INCL)\artilist.h \
+		$(INCL)\objclass.h $(INCL)\objects.h \
+		$(INCL)\youprop.h $(INCL)\prop.h $(INCL)\permonst.h \
+		$(INCL)\monattk.h $(INCL)\monflag.h \
+		$(INCL)\monsters.h $(INCL)\mondata.h \
+		$(INCL)\wintype.h $(INCL)\context.h $(INCL)\rm.h \
+		$(INCL)\botl.h $(INCL)\rect.h $(INCL)\region.h \
+		$(INCL)\display.h $(INCL)\vision.h $(INCL)\color.h \
+		$(INCL)\decl.h $(INCL)\quest.h $(INCL)\spell.h \
+		$(INCL)\obj.h $(INCL)\engrave.h $(INCL)\you.h \
+		$(INCL)\attrib.h $(INCL)\monst.h $(INCL)\mextra.h \
+		$(INCL)\skills.h $(INCL)\timeout.h $(INCL)\trap.h \
+		$(INCL)\flag.h $(INCL)\winprocs.h $(INCL)\sys.h
 
 TILE_H      = ..\win\share\tile.h
 
@@ -580,7 +579,7 @@ DATABASE = $(DAT)\data.base
 # ctags options
 #
 #CTAGSCMD=ctags-orig.exe
-!IF "$(TRAVIS_BUILD_DIR)" != ""	
+!IF "$(CI_BUILD_DIR)" != ""
 CTAGSCMD=..\lib\ctags\ctags.exe
 !ELSE
 CTAGSCMD=..\..\..\ctags\ctags.exe
@@ -604,10 +603,9 @@ rc=Rc
 # is too old or untested.
 #
 # Recently tested versions:
-#NMAKE version 1416270450 from latest VS 2017 (Sep 14, 2021 version 15.9.39)
-#NMAKE version 1429301360 from latest VS 2019 (Oct 12, 2021 version 16.11.5)
-#NMAKE version 1430307050 from latest VS 2022 preview 7 (October 26, 2021)
-
+#NMAKE version 1416270450 from latest VS 2017 (Feb 8, 2022 version 15.9.44)
+#NMAKE version 1429301390 from latest VS 2019 (Feb 8, 2022 version 16.11.10)
+#NMAKE version 1430307090 from latest VS 2022 (Feb 8, 2022 version 17.0.6)
 #!MESSAGE $(MAKEFLAGS)
 #!MESSAGE $(MAKEDIR)
 #!MESSAGE $(MAKE)
@@ -618,7 +616,7 @@ MAKEVERSION=$(MAKEVERSION: =)
 #!MESSAGE $(MAKEVERSION)
 
 VSSPECIAL=
-VSNEWEST=2019
+VSNEWEST=2022
 !IF ($(MAKEVERSION) < 1000000000)
 VSVER=0000		#untested ancient version
 !ELSEIF ($(MAKEVERSION) > 1000000000) && ($(MAKEVERSION) < 1100000000)
@@ -631,13 +629,11 @@ VSVER=2013
 VSVER=2015
 !ELSEIF ($(MAKEVERSION) > 1411000000) && ($(MAKEVERSION) < 1416270451)
 VSVER=2017
-!ELSEIF ($(MAKEVERSION) > 1416270450) && ($(MAKEVERSION) < 1429301361)
-VSVER=$(VSNEWEST)
-!ELSEIF ($(MAKEVERSION) > 1429301360) && ($(MAKEVERSION) < 1430307051)
+!ELSEIF ($(MAKEVERSION) > 1416270450) && ($(MAKEVERSION) < 1429301391)
+VSVER=2019
+!ELSEIF ($(MAKEVERSION) > 1429301390) && ($(MAKEVERSION) < 1430307091)
 VSVER=2022
-VSNEWEST=2022
-VSSPECIAL=preview
-!ELSEIF ($(MAKEVERSION) > 1429300400)
+!ELSEIF ($(MAKEVERSION) > 1430307090)
 VSVER=2999              #untested future version
 !ENDIF
 
@@ -825,24 +821,24 @@ DLB =
 	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@ $<
 
 {$(SRC)}.c{$(OBJ)}.o:
-	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@  $<
+	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@ $<
 
 #==========================================
 # Rules for files in sys\share
 #==========================================
 
 {$(SSYS)}.c{$(OBJ)}.o:
-	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET)  -Fo$@  $<
+	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET)  -Fo$@ $<
 
 {$(SSYS)}.cpp{$(OBJ)}.o:
-	@$(cc) $(cppflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) /EHsc -Fo$@  $<
+	@$(cc) $(cppflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) /EHsc -Fo$@ $<
 
 #==========================================
 # Rules for files in sys\windows
 #==========================================
 
 {$(MSWSYS)}.c{$(OBJ)}.o:
-	@$(cc) $(cflagsBuild)  -Fo$@  $<
+	@$(cc) $(cflagsBuild)  -Fo$@ $<
 
 {$(MSWSYS)}.h{$(INCL)}.h:
 	@copy $< $@
@@ -872,7 +868,7 @@ DLB =
 #==========================================
 
 {$(TTY)}.c{$(OBJ)}.o:
-	@$(cc) $(cflagsBuild) -I$(MSWSYS) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@  $<
+	@$(cc) $(cflagsBuild) -I$(MSWSYS) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@ $<
 
 
 #==========================================
@@ -880,14 +876,14 @@ DLB =
 #==========================================
 
 {$(MSWIN)}.c{$(OBJ)}.o:
-	@$(cc) $(cflagsBuild) -I$(MSWSYS) -I$(MSWIN) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@  $<
+	@$(cc) $(cflagsBuild) -I$(MSWSYS) -I$(MSWIN) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@ $<
 
 #==========================================
 # Rules for files in win\curses
 #==========================================
 
 {$(WCURSES)}.c{$(OBJ)}.o:
-	@$(cc) -DPDC_NCMOUSE $(PDCINCL) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET)  -Fo$@ $<
+	$(cc) -DPDC_NCMOUSE $(PDCINCL) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@ $<
 
 #{$(WCURSES)}.txt{$(DAT)}.txt:
 #	@copy $< $@
@@ -917,11 +913,6 @@ DLB =
 #==========================================
 
 #
-#  The default make target (so just typing 'nmake' is useful).
-#
-default : install
-
-#
 #  The game target.
 #
 #
@@ -930,11 +921,44 @@ default : install
 
 all :	install
 
-install: $(INCL)\nhlua.h $(O)envchk.tag $(O)obj.tag $(O)utility.tag \
+install: $(LUASRC)\lua.h $(PDCDEP) $(INCL)\nhlua.h $(O)envchk.tag $(O)obj.tag $(O)utility.tag \
 		$(DAT)\data $(DAT)\rumors $(DAT)\oracles $(DAT)\engrave \
 		$(DAT)\epitaph $(DAT)\bogusmon $(GAMEDIR)\NetHack.exe \
 		$(GAMEDIR)\NetHackW.exe $(O)install.tag
 	@echo Done.
+
+!IF "$(INTERNET_AVAILABLE)" == "Y"
+!IF "$(GIT_AVAILABLE)" == "Y"
+$(LUASRC)\lua.h:
+	git submodule init ../submodules/lua
+	git submodule update --remote ../submodules/lua
+$(PDCURSES_TOP)\curses.h:
+	git submodule init ../submodules/pdcurses
+	git submodule update --remote ../submodules/pdcurses
+
+!ELSE  # GIT_AVAILABLE no
+CURLLUASRC=http://www.lua.org/ftp/lua-5.4.4.tar.gz
+CURLLUADST=lua-5.4.4.tar.gz
+
+CURLPDCSRC=https://github.com/wmcbrine/PDCurses/archive/refs/tags/3.9.zip
+CURLPDCDST=pdcurses.zip
+
+$(LUASRC)\lua.h:
+	cd ..\lib
+	curl -L $(CURLLUASRC) -o $(CURLLUADST)
+	tar -xvf $(CURLLUADST)
+	cd ..\src
+$(PDCURSES_TOP)\curses.h:
+	cd ..\lib
+	curl -L $(CURLPDCSRC) -o $(CURLPDCDST)
+	if not exist pdcurses\*.* mkdir pdcurses
+	tar -C pdcurses --strip-components=1 -xvf $(CURLPDCDST)
+	cd ..\src
+!ENDIF  # GIT_AVAILABLE
+!ELSE   # INTERNET_AVAILABLE
+$(LUASRC)\lua.h:
+$(PDCURSES_TOP)\curses.h:
+!ENDIF  # INTERNET_AVAILABLE
 
 #==========================================
 #  Main game targets.
@@ -981,7 +1005,7 @@ GAMEOBJ=$(GAMEOBJ:^ =^
 
 
 $(GAMEDIR)\NetHack.exe : $(O)gamedir.tag $(O)tile.o $(O)consoletty.o $(O)guistub.o \
-			$(ALLOBJ) $(TTYOBJ) $(O)date.o $(O)console.res $(KEYDLLS) \
+			$(ALLOBJ) $(TTYOBJ) $(O)date.o $(O)console.res \
 			$(LUATARGETS) $(PDCLIB)
 	@if not exist $(GAMEDIR)\*.* mkdir $(GAMEDIR)
 	@echo Linking $(@:\=/)
@@ -1008,7 +1032,7 @@ $(GAMEDIR)\NetHack.exe : $(O)gamedir.tag $(O)tile.o $(O)consoletty.o $(O)guistub
 
 $(GAMEDIR)\NetHackW.exe : $(O)gamedir.tag $(O)tile.o $(O)ttystub.o \
 			$(ALLOBJ) $(GUIOBJ) $(O)date.o $(O)NetHackW.res \
-			$(O)gamedir.tag $(KEYDLLS) \
+			$(O)gamedir.tag \
 			$(LUATARGETS)
 	@if not exist $(GAMEDIR)\*.* mkdir $(GAMEDIR)
 	@echo   Linking $(@:\=/)
@@ -1028,63 +1052,6 @@ $(O)gamedir.tag:
 	@if not exist $(GAMEDIR)\*.* mkdir $(GAMEDIR)
 	@echo directory created > $@
 
-$(O)nhdefkey.def:
-	@echo LIBRARY $(@B) >$@
-! IF "$(TARGET_CPU)"=="x64" || "$(PROCESSOR_ARCHITECTURE)"=="x64"
-! ELSE
-	@echo EXPORTS >>$@
-	@echo    ProcessKeystroke >>$@
-	@echo    NHkbhit >>$@
-	@echo    CheckInput >>$@
-	@echo    SourceWhere >>$@
-	@echo    SourceAuthor >>$@
-	@echo    KeyHandlerName >>$@
-! ENDIF
-
-$(GAMEDIR)\nhdefkey.dll : $(O)$(@B).o $(O)gamedir.tag $(O)$(@B).def
-	@echo Linking $(@:\=/)
-	@$(link) $(ldebug) /RELEASE /DLL user32.lib \
-		/PDB:"$(O)$(@B).PDB" /MAP:"$(O)$(@B).map" /DEF:$(O)$(@B).def \
-		/IMPLIB:$(O)$(@B).lib -out:$@ $(O)$(@B).o
-
-$(O)nh340key.def:
-	@echo LIBRARY $(@B) >$@
-! IF "$(TARGET_CPU)"=="x64" || "$(PROCESSOR_ARCHITECTURE)"=="x64"
-! ELSE
-	@echo EXPORTS >>$@
-	@echo    ProcessKeystroke >>$@
-	@echo    NHkbhit >>$@
-	@echo    CheckInput >>$@
-	@echo    SourceWhere >>$@
-	@echo    SourceAuthor >>$@
-	@echo    KeyHandlerName >>$@
-! ENDIF
-
-$(GAMEDIR)\nh340key.dll : $(O)$(@B).o $(O)gamedir.tag $(O)$(@B).def
-	@echo Linking $(@:\=/)
-	@$(link) $(ldebug) /RELEASE /NOLOGO /DLL user32.lib \
-		/PDB:"$(O)$(@B).PDB" /MAP:"$(O)$(@B).map" /DEF:$(O)$(@B).def \
-		/IMPLIB:$(O)$(@B).lib -out:$@ $(O)$(@B).o
-
-$(O)nhraykey.def:
-	@echo LIBRARY $(@B) >$@
-! IF "$(TARGET_CPU)"=="x64" || "$(PROCESSOR_ARCHITECTURE)"=="x64"
-! ELSE
-	@echo EXPORTS >>$@
-	@echo    ProcessKeystroke >>$@
-	@echo    NHkbhit >>$@
-	@echo    CheckInput >>$@
-	@echo    SourceWhere >>$@
-	@echo    SourceAuthor >>$@
-	@echo    KeyHandlerName >>$@
-! ENDIF
-
-$(GAMEDIR)\nhraykey.dll : $(O)$(@B).o $(O)gamedir.tag $(O)$(@B).def
-	@echo Linking $(@:\=/)
-	@$(link) $(ldebug) /RELEASE /NOLOGO /DLL user32.lib \
-		/PDB:"$(O)$(@B).PDB" /MAP:"$(O)$(@B).map" /DEF:$(O)$(@B).def \
-		/IMPLIB:$(O)$(@B).lib -out:$@ $(O)$(@B).o
-
 $(O)install.tag: 	$(DAT)\data	$(DAT)\rumors	$(DAT)\oracles \
 		$(O)sp_lev.tag $(DLB)
 ! IF ("$(USE_DLB)"=="Y")
@@ -1102,6 +1069,7 @@ $(O)install.tag: 	$(DAT)\data	$(DAT)\rumors	$(DAT)\oracles \
 	copy $(DAT)\hh $(GAMDEDIR)
 	copy $(DAT)\history $(GAMEDIR)
 	copy $(DAT)\license $(GAMEDIR)
+	copy $(DAT)\optmenu $(GAMEDIR)
 	copy $(DAT)\oracles $(GAMEDIR)
 	copy $(DAT)\rumors $(GAMEDIR)
 	copy $(DAT)\symbols $(GAMEDIR)
@@ -1116,7 +1084,7 @@ $(O)install.tag: 	$(DAT)\data	$(DAT)\rumors	$(DAT)\oracles \
 	if exist $(DAT)\ttyoptions copy $(DAT)\ttyoptions $(GAMEDIR)
 ! ENDIF
 	if exist $(MSWSYS)\sysconf.template copy $(MSWSYS)\sysconf.template $(GAMEDIR)
-	if exist $(DAT)\symbols copy $(DAT)\symbols $(GAMEDIR)\symbols.template
+	if exist $(DAT)\symbols copy $(DAT)\symbols $(GAMEDIR)\symbols
 	if exist $(DOC)\guidebook.txt copy $(DOC)\guidebook.txt $(GAMEDIR)\Guidebook.txt
 	if exist $(DOC)\nethack.txt copy $(DOC)\nethack.txt $(GAMEDIR)\NetHack.txt
 	@if exist $(GAMEDIR)\NetHack.PDB echo NOTE: You may want to remove $(GAMEDIR:\=/)/NetHack.PDB to conserve space
@@ -1139,11 +1107,11 @@ $(O)utility.tag: $(INCL)\nhlua.h $(U)tile2bmp.exe $(U)makedefs.exe
 	     @echo utilities made.
 
 $(INCL)\nhlua.h:
-	@echo  /* nhlua.h - generated by Makefile */ > $@
-	@echo #include "../lib/lua-$(LUAVER)/src/lua.h" >> $@
+	@echo  /* nhlua.h - generated by Makefile from Makefile.msc */ > $@
+	@echo #include "lua.h" >> $@
 	@echo LUA_API int   (lua_error) (lua_State *L) NORETURN; >> $@
-	@echo #include "../lib/lua-$(LUAVER)/src/lualib.h" >> $@
-	@echo #include "../lib/lua-$(LUAVER)/src/lauxlib.h" >> $@
+	@echo #include "lualib.h" >> $@
+	@echo #include "lauxlib.h" >> $@
 	@echo /*nhlua.h*/ >> $@
 
 tileutil: $(U)gif2txt.exe $(U)gif2tx32.exe $(U)txt2ppm.exe
@@ -1216,9 +1184,9 @@ $(O)date.o: $(HACKINCL) $(HACKSRC) $(HACKOBJ) $(ALLOBJ)
 !ENDIF
 
 #
-#  date.h should be remade every time any of the source or include
-#  files is modified.
-#
+#  date.h is not used with NetHack 3.7
+#  onames.h is not used with NetHack 3.7
+#  pm.h is not used with NetHack 3.7
 
 $(INCL)\date.h $(OPTIONS_FILE) : $(U)makedefs.exe
 	$(U)makedefs -v
@@ -1368,7 +1336,7 @@ $(O)dlb$(HOST).o: $(O)dlb_main$(HOST).o $(O)alloc$(HOST).o $(O)panic$(HOST).o $(
 
 $(O)dlb.o: $(O)dlb_main.o $(O)alloc.o $(O)panic.o $(INCL)\dlb.h
 	@$(cc) $(cflagsBuild) /Fo$@ $(SRC)\dlb.c
-	
+
 !IFDEF TEST_CROSSCOMPILE
 $(O)dlb_main$(HOST).o: $(UTIL)\dlb_main.c $(INCL)\config.h $(INCL)\dlb.h
 	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) /Fo$@ $(UTIL)\dlb_main.c
@@ -1382,7 +1350,7 @@ $(DAT)\porthelp: $(MSWSYS)\porthelp
 
 nhdat$(NHV):	$(U)dlb.exe $(DAT)\data $(DAT)\oracles $(OPTIONS_FILE) $(DAT)\quest.lua \
 	$(DAT)\rumors $(DAT)\help $(DAT)\hh $(DAT)\cmdhelp $(DAT)\keyhelp \
-	$(DAT)\history $(DAT)\opthelp $(DAT)\wizhelp $(DAT)\porthelp \
+	$(DAT)\history $(DAT)\opthelp $(DAT)\optmenu $(DAT)\wizhelp $(DAT)\porthelp \
 	$(DAT)\license $(DAT)\engrave $(DAT)\epitaph $(DAT)\bogusmon $(DAT)\tribute $(O)sp_lev.tag
 	cd $(DAT)
 	echo data >dlb.lst
@@ -1398,6 +1366,7 @@ nhdat$(NHV):	$(U)dlb.exe $(DAT)\data $(DAT)\oracles $(OPTIONS_FILE) $(DAT)\quest
 	echo keyhelp >>dlb.lst
 	echo history >>dlb.lst
 	echo opthelp >>dlb.lst
+	echo optmenu >>dlb.lst
 	echo wizhelp >>dlb.lst
 	echo license >>dlb.lst
 	echo engrave >>dlb.lst
@@ -1554,8 +1523,8 @@ $(O)pdcscrn.o : $(PDCURSES_HEADERS) $(PDCWINCON)\pdcscrn.c $(MSWSYS)\stub-pdcscr
 lua.exe: $(O)lua.o $(LUALIB)
 	link /OUT:$@ $(O)lua.o $(LUALIB)
 
-luac.exe: $(O)luac.o $(LUALIB)
-	link /OUT:$@ $(O)luac.o $(LUALIB)
+#luac.exe: $(O)luac.o $(LUALIB)
+#	link /OUT:$@ $(O)luac.o $(LUALIB)
 
 $(O)lua$(LUAVER).dll: $(LUAOBJFILES)
 	link /DLL /IMPLIB:lua$(LUAVER).lib /OUT:$@ $(LUAOBJFILES)
@@ -1564,7 +1533,7 @@ $(O)lua$(LUAVER)-static.lib: $(LUAOBJFILES)
 	lib /OUT:$@ $(LUAOBJFILES)
 
 $(O)lua.o: $(LUASRC)\lua.c
-$(O)luac.o: $(LUASRC)\luac.c
+#$(O)luac.o: $(LUASRC)\luac.c
 $(O)lapi.o: $(LUASRC)\lapi.c
 	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -wd4244 -wd4701 -wd4702 -Fo$@ $(LUASRC)\lapi.c
 
@@ -1627,14 +1596,14 @@ $(O)ttystub.o: $(WINDHDR) $(HACK_H) $(MSWSYS)\stubs.c
 # curses window port dependencies
 #===================================================================
 
-$(O)cursdial.o: $(WCURSES)\cursdial.c $(WCURSES)\cursdial.h $(INCL)\wincurs.h
-$(O)cursinit.o: $(WCURSES)\cursinit.c $(WCURSES)\cursinit.h $(INCL)\wincurs.h
-$(O)cursinvt.o: $(WCURSES)\cursinvt.c $(WCURSES)\cursinvt.h $(INCL)\wincurs.h
-$(O)cursmain.o: $(WCURSES)\cursmain.c $(INCL)\wincurs.h
-$(O)cursmesg.o: $(WCURSES)\cursmesg.c $(WCURSES)\cursmesg.h $(INCL)\wincurs.h
-$(O)cursmisc.o: $(WCURSES)\cursmisc.c $(WCURSES)\cursmisc.h $(INCL)\wincurs.h
-$(O)cursstat.o: $(WCURSES)\cursstat.c $(WCURSES)\cursstat.h $(INCL)\wincurs.h
-$(O)curswins.o: $(WCURSES)\curswins.c $(WCURSES)\curswins.h $(INCL)\wincurs.h
+#$(O)cursdial.o: $(WCURSES)\cursdial.c $(WCURSES)\cursdial.h $(INCL)\wincurs.h
+#$(O)cursinit.o: $(WCURSES)\cursinit.c $(WCURSES)\cursinit.h $(INCL)\wincurs.h
+#$(O)cursinvt.o: $(WCURSES)\cursinvt.c $(WCURSES)\cursinvt.h $(INCL)\wincurs.h
+#$(O)cursmain.o: $(WCURSES)\cursmain.c $(INCL)\wincurs.h
+#$(O)cursmesg.o: $(WCURSES)\cursmesg.c $(WCURSES)\cursmesg.h $(INCL)\wincurs.h
+#$(O)cursmisc.o: $(WCURSES)\cursmisc.c $(WCURSES)\cursmisc.h $(INCL)\wincurs.h
+#$(O)cursstat.o: $(WCURSES)\cursstat.c $(WCURSES)\cursstat.h $(INCL)\wincurs.h
+#$(O)curswins.o: $(WCURSES)\curswins.c $(WCURSES)\curswins.h $(INCL)\wincurs.h
 
 #===================================================================
 # save dependencies
@@ -1700,12 +1669,12 @@ $(O)monst.o: monst.c $(CONFIG_H) $(INCL)\permonst.h $(INCL)\align.h \
 $(O)objects_host.o: objects.c $(CONFIG_H) $(INCL)\obj.h $(INCL)\objclass.h \
 		$(INCL)\prop.h $(INCL)\skills.h $(INCL)\color.h
 	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) /EP  $(@B).c > $(O)$(@B).c.preproc
-	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@  $(@B).c
+	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@ $(@B).c
 
 $(O)objects.o: objects.c $(CONFIG_H) $(INCL)\obj.h $(INCL)\objclass.h \
 		$(INCL)\prop.h $(INCL)\skills.h $(INCL)\color.h
 	@$(cc) $(cflagsBuild) /EP  $(@B).c > $(O)$(@B).c.preproc
-	@$(cc) $(cflagsBuild) -Fo$@  $(@B).c
+	@$(cc) $(cflagsBuild) -Fo$@ $(@B).c
 
 $(O)alloc_host.o: alloc.c $(CONFIG_H)
 	@$(cc) $(cflagsBuild) $(CROSSCOMPILE) $(CROSSCOMPILE_TARGET) -Fo$@ alloc.c
@@ -1746,9 +1715,6 @@ $(DAT)\bogusmon: $(U)makedefs.exe $(DAT)\bogusmon.txt
 spotless: clean
 ! IF ("$(OBJ)"!="")
 	if exist $(OBJ)\* rmdir $(OBJ) /s /Q
-	if exist $(GAMEDIR)\nhdefkey.dll del $(GAMEDIR)\nhdefkey.dll
-	if exist $(GAMEDIR)\nh340key.dll del $(GAMEDIR)\nh340key.dll
-	if exist $(GAMEDIR)\nhraykey.dll del $(GAMEDIR)\nhraykey.dll
 	if exist $(GAMEDIR)\NetHack.exe  del $(GAMEDIR)\NetHack.exe
 	if exist $(GAMEDIR)\NetHack.pdb  del $(GAMEDIR)\NetHack.pdb
 	if exist $(GAMEDIR)\nhdat$(NHV)  del $(GAMEDIR)\nhdat$(NHV)
@@ -1785,7 +1751,7 @@ spotless: clean
 	if exist $(U)tilemap.exe         del $(U)tilemap.exe
 	if exist $(U)uudecode.exe        del $(U)uudecode.exe
 	if exist $(U)dlb.exe             del $(U)dlb.exe
-!IF "$(ADD_CURSES)" == "Y"	
+!IF "$(ADD_CURSES)" == "Y"
 	if exist $(O)pdcurses.lib        del $(O)pdcurses.lib
 !ENDIF
 	if exist $(DAT)\oracles		 del $(DAT)\oracles
@@ -1810,21 +1776,6 @@ clean:
 	if exist $(O)makedefs.MAP del $(O)makedefs.MAP
 	if exist $(O)makedefs.PDB del $(O)makedefs.PDB
 	if exist $(O)NetHack.MAP  del $(O)NetHack.MAP
-	if exist $(O)nh340key.def del $(O)nh340key.def
-	if exist $(O)nh340key.exp del $(O)nh340key.exp
-	if exist $(O)nh340key.lib del $(O)nh340key.lib
-	if exist $(O)nh340key.map del $(O)nh340key.map
-	if exist $(O)nh340key.PDB del $(O)nh340key.PDB
-	if exist $(O)nhdefkey.def del $(O)nhdefkey.def
-	if exist $(O)nhdefkey.exp del $(O)nhdefkey.exp
-	if exist $(O)nhdefkey.lib del $(O)nhdefkey.lib
-	if exist $(O)nhdefkey.map del $(O)nhdefkey.map
-	if exist $(O)nhdefkey.PDB del $(O)nhdefkey.PDB
-	if exist $(O)nhraykey.def del $(O)nhraykey.def
-	if exist $(O)nhraykey.exp del $(O)nhraykey.exp
-	if exist $(O)nhraykey.lib del $(O)nhraykey.lib
-	if exist $(O)nhraykey.map del $(O)nhraykey.map
-	if exist $(O)nhraykey.PDB del $(O)nhraykey.PDB
 	if exist $(O)envchk.tag   del $(O)envchk.tag
 	if exist $(O)obj.tag      del $(O)obj.tag
 	if exist $(O)sp_lev.tag   del $(O)sp_lev.tag
@@ -1848,6 +1799,8 @@ clean:
 #   * "-o $@ " is removed
 #   * win/X11/Window.o commented due to conflict with pdcurses
 #   * commented out $(TARGETPFX)tile.o: tile.c $(HACK_H)
+#   * commented out the lines starting with
+#	$(TARGET_CC) so the rules in this Makefile will be used instead
 # but otherwise untouched.
 # That means that there is some irrelevant stuff
 # in here, but maintenance should be easier.
@@ -1857,6 +1810,7 @@ TARGET_CC=$(cc)
 TARGET_CFLAGS=$(cflagsBuild)
 TARGET_CXX=$(cc)
 TARGET_CXXFLAGS=$(cppflagsBuild)
+MOCPATH = moc.exe
 #
 # DO NOT DELETE THIS LINE OR CHANGE ANYTHING BEYOND IT
 
@@ -1878,50 +1832,50 @@ TARGET_CXXFLAGS=$(cppflagsBuild)
 #		$(INCL)\monsters.h $(INCL)\mondata.h \
 #		$(INCL)\wintype.h $(INCL)\context.h $(INCL)\rm.h \
 #		$(INCL)\botl.h $(INCL)\rect.h $(INCL)\region.h \
+#		$(INCL)\display.h $(INCL)\vision.h $(INCL)\color.h \
 #		$(INCL)\decl.h $(INCL)\quest.h $(INCL)\spell.h \
-#		$(INCL)\color.h $(INCL)\obj.h $(INCL)\engrave.h \
-#		$(INCL)\you.h $(INCL)\attrib.h $(INCL)\monst.h \
-#		$(INCL)\mextra.h $(INCL)\skills.h $(INCL)\timeout.h \
-#		$(INCL)\trap.h $(INCL)\flag.h $(INCL)\vision.h \
-#		$(INCL)\display.h $(INCL)\winprocs.h $(INCL)\sys.h
+#		$(INCL)\obj.h $(INCL)\engrave.h $(INCL)\you.h \
+#		$(INCL)\attrib.h $(INCL)\monst.h $(INCL)\mextra.h \
+#		$(INCL)\skills.h $(INCL)\timeout.h $(INCL)\trap.h \
+#		$(INCL)\flag.h $(INCL)\winprocs.h $(INCL)\sys.h
 #	touch $(HACK_H)
 #
 $(TARGETPFX)pcmain.o: ..\sys\share\pcmain.c $(HACK_H) $(INCL)\dlb.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pcmain.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pcmain.c
 $(TARGETPFX)pcsys.o: ..\sys\share\pcsys.c $(HACK_H) $(INCL)\wintty.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pcsys.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pcsys.c
 $(TARGETPFX)pctty.o: ..\sys\share\pctty.c $(HACK_H) $(INCL)\wintty.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pctty.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pctty.c
 $(TARGETPFX)pcunix.o: ..\sys\share\pcunix.c $(HACK_H) $(INCL)\wintty.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pcunix.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pcunix.c
 $(TARGETPFX)pmatchregex.o: ..\sys\share\pmatchregex.c $(HACK_H)
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pmatchregex.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\pmatchregex.c
 $(TARGETPFX)posixregex.o: ..\sys\share\posixregex.c $(HACK_H)
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\posixregex.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\posixregex.c
 $(TARGETPFX)random.o: ..\sys\share\random.c $(HACK_H)
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\random.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\random.c
 $(TARGETPFX)ioctl.o: ..\sys\share\ioctl.c $(HACK_H) $(INCL)\tcap.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\ioctl.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\ioctl.c
 $(TARGETPFX)unixtty.o: ..\sys\share\unixtty.c $(HACK_H)
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\unixtty.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\share\unixtty.c
 $(TARGETPFX)unixmain.o: ..\sys\unix\unixmain.c $(HACK_H) $(INCL)\dlb.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\unix\unixmain.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\unix\unixmain.c
 $(TARGETPFX)unixunix.o: ..\sys\unix\unixunix.c $(HACK_H)
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\unix\unixunix.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\unix\unixunix.c
 $(TARGETPFX)unixres.o: ..\sys\unix\unixres.c $(CONFIG_H)
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\unix\unixres.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\sys\unix\unixres.c
 $(TARGETPFX)getline.o: ..\win\tty\getline.c $(HACK_H) $(INCL)\wintty.h \
 		$(INCL)\func_tab.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\tty\getline.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\tty\getline.c
 $(TARGETPFX)termcap.o: ..\win\tty\termcap.c $(HACK_H) $(INCL)\wintty.h \
 		$(INCL)\tcap.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\tty\termcap.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\tty\termcap.c
 $(TARGETPFX)topl.o: ..\win\tty\topl.c $(HACK_H) $(INCL)\tcap.h \
 		$(INCL)\wintty.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\tty\topl.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\tty\topl.c
 $(TARGETPFX)wintty.o: ..\win\tty\wintty.c $(HACK_H) $(INCL)\dlb.h \
 		$(INCL)\tcap.h $(INCL)\wintty.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\tty\wintty.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\tty\wintty.c
 $(TARGETPFX)cursmain.o: ..\win\curses\cursmain.c $(HACK_H) $(INCL)\wincurs.h
 #	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\curses\cursmain.c
 $(TARGETPFX)curswins.o: ..\win\curses\curswins.c $(HACK_H) \
@@ -1953,35 +1907,35 @@ $(TARGETPFX)cursinvt.o: ..\win\curses\cursinvt.c $(HACK_H) \
 #	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\Window.c
 $(TARGETPFX)dialogs.o: ..\win\X11\dialogs.c $(CONFIG_H) $(INCL)\lint.h \
 		$(INCL)\winX.h $(INCL)\color.h $(INCL)\wintype.h
-	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\dialogs.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\dialogs.c
 $(TARGETPFX)winX.o: ..\win\X11\winX.c $(HACK_H) $(INCL)\winX.h \
 		$(INCL)\dlb.h $(INCL)\xwindow.h ..\win\X11\nh72icon \
 		..\win\X11\nh56icon ..\win\X11\nh32icon
-	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winX.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winX.c
 $(TARGETPFX)winmap.o: ..\win\X11\winmap.c $(INCL)\xwindow.h $(HACK_H) \
 		$(INCL)\dlb.h $(INCL)\winX.h $(INCL)\tile2x11.h
-	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winmap.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winmap.c
 $(TARGETPFX)winmenu.o: ..\win\X11\winmenu.c $(HACK_H) $(INCL)\winX.h
-	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winmenu.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winmenu.c
 $(TARGETPFX)winmesg.o: ..\win\X11\winmesg.c $(INCL)\xwindow.h $(HACK_H) \
 		$(INCL)\winX.h
-	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winmesg.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winmesg.c
 $(TARGETPFX)winmisc.o: ..\win\X11\winmisc.c $(HACK_H) $(INCL)\func_tab.h \
 		$(INCL)\winX.h
-	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winmisc.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winmisc.c
 $(TARGETPFX)winstat.o: ..\win\X11\winstat.c $(HACK_H) $(INCL)\winX.h \
 		$(INCL)\xwindow.h
-	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winstat.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winstat.c
 $(TARGETPFX)wintext.o: ..\win\X11\wintext.c $(HACK_H) $(INCL)\winX.h \
 		$(INCL)\xwindow.h
-	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\wintext.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\wintext.c
 $(TARGETPFX)winval.o: ..\win\X11\winval.c $(HACK_H) $(INCL)\winX.h
-	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winval.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) $(X11CFLAGS) -Fo$@ ..\win\X11\winval.c
 #$(TARGETPFX)tile.o: tile.c $(HACK_H)
 $(TARGETPFX)winshim.o: ..\win\shim\winshim.c $(HACK_H)
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\shim\winshim.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\shim\winshim.c
 $(TARGETPFX)cppregex.o: ..\sys\share\cppregex.cpp
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\sys\share\cppregex.cpp
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\sys\share\cppregex.cpp
 $(TARGETPFX)qt_bind.o: ..\win\Qt\qt_bind.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_bind.h ..\win\Qt\qt_main.h \
 		..\win\Qt\qt_kde0.h ..\win\Qt\qt_click.h ..\win\Qt\qt_delay.h \
@@ -1990,119 +1944,148 @@ $(TARGETPFX)qt_bind.o: ..\win\Qt\qt_bind.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_rip.h ..\win\Qt\qt_msg.h ..\win\Qt\qt_plsel.h \
 		..\win\Qt\qt_svsel.h ..\win\Qt\qt_set.h ..\win\Qt\qt_stat.h \
 		..\win\Qt\qt_icon.h ..\win\Qt\qt_streq.h ..\win\Qt\qt_line.h \
-		..\win\Qt\qt_yndlg.h ..\win\Qt\qt_str.h $(INCL)\dlb.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_bind.cpp
+		..\win\Qt\qt_yndlg.h ..\win\Qt\qt_str.h $(INCL)\dlb.h \
+		$(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_bind.cpp
 $(TARGETPFX)qt_click.o: ..\win\Qt\qt_click.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
-		..\win\Qt\qt_post.h ..\win\Qt\qt_click.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_click.cpp
-$(TARGETPFX)qt_clust.o: ..\win\Qt\qt_clust.cpp ..\win\Qt\qt_clust.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_clust.cpp
+		..\win\Qt\qt_post.h ..\win\Qt\qt_click.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_click.cpp
+$(TARGETPFX)qt_clust.o: ..\win\Qt\qt_clust.cpp ..\win\Qt\qt_clust.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_clust.cpp
 $(TARGETPFX)qt_delay.o: ..\win\Qt\qt_delay.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
-		..\win\Qt\qt_post.h ..\win\Qt\qt_delay.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_delay.cpp
-$(TARGETPFX)qt_glyph.o: ..\win\Qt\qt_glyph.cpp $(HACK_H) $(INCL)\tile2x11.h \
-		..\win\Qt\qt_pre.h ..\win\Qt\qt_post.h ..\win\Qt\qt_glyph.h \
-		..\win\Qt\qt_bind.h ..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h \
-		..\win\Qt\qt_set.h ..\win\Qt\qt_inv.h ..\win\Qt\qt_map.h \
-		..\win\Qt\qt_win.h ..\win\Qt\qt_clust.h ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_glyph.cpp
+		..\win\Qt\qt_post.h ..\win\Qt\qt_delay.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_delay.cpp
+$(TARGETPFX)qt_glyph.o: ..\win\Qt\qt_glyph.cpp $(HACK_H) \
+		$(INCL)\tile2x11.h ..\win\Qt\qt_pre.h ..\win\Qt\qt_post.h \
+		..\win\Qt\qt_glyph.h ..\win\Qt\qt_bind.h ..\win\Qt\qt_main.h \
+		..\win\Qt\qt_kde0.h ..\win\Qt\qt_set.h ..\win\Qt\qt_inv.h \
+		..\win\Qt\qt_map.h ..\win\Qt\qt_win.h ..\win\Qt\qt_clust.h \
+		..\win\Qt\qt_str.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_glyph.cpp
 $(TARGETPFX)qt_icon.o: ..\win\Qt\qt_icon.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
-		..\win\Qt\qt_post.h ..\win\Qt\qt_icon.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_icon.cpp
+		..\win\Qt\qt_post.h ..\win\Qt\qt_icon.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_icon.cpp
 $(TARGETPFX)qt_inv.o: ..\win\Qt\qt_inv.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_inv.h ..\win\Qt\qt_glyph.h \
 		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_set.h \
-		..\win\Qt\qt_bind.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_inv.cpp
+		..\win\Qt\qt_bind.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_inv.cpp
 $(TARGETPFX)qt_key.o: ..\win\Qt\qt_key.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
-		..\win\Qt\qt_post.h ..\win\Qt\qt_key.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_key.cpp
+		..\win\Qt\qt_post.h ..\win\Qt\qt_key.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_key.cpp
 $(TARGETPFX)qt_line.o: ..\win\Qt\qt_line.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
-		..\win\Qt\qt_post.h ..\win\Qt\qt_line.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_line.cpp
+		..\win\Qt\qt_post.h ..\win\Qt\qt_line.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_line.cpp
 $(TARGETPFX)qt_main.o: ..\win\Qt\qt_main.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h \
 		qt_main.moc ..\win\Qt\qt_bind.h ..\win\Qt\qt_glyph.h \
 		..\win\Qt\qt_inv.h ..\win\Qt\qt_key.h ..\win\Qt\qt_map.h \
 		..\win\Qt\qt_win.h ..\win\Qt\qt_clust.h ..\win\Qt\qt_msg.h \
 		..\win\Qt\qt_set.h ..\win\Qt\qt_stat.h ..\win\Qt\qt_icon.h \
-		..\win\Qt\qt_str.h qt_kde0.moc
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_main.cpp
+		..\win\Qt\qt_str.h qt_kde0.moc $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_main.cpp
 $(TARGETPFX)qt_map.o: ..\win\Qt\qt_map.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_map.h ..\win\Qt\qt_win.h \
 		..\win\Qt\qt_clust.h qt_map.moc ..\win\Qt\qt_click.h \
 		..\win\Qt\qt_glyph.h ..\win\Qt\qt_set.h ..\win\Qt\qt_bind.h \
-		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_map.cpp
+		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_str.h \
+		$(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_map.cpp
 $(TARGETPFX)qt_menu.o: ..\win\Qt\qt_menu.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_menu.h ..\win\Qt\qt_win.h \
 		..\win\Qt\qt_rip.h qt_menu.moc ..\win\Qt\qt_key.h \
 		..\win\Qt\qt_glyph.h ..\win\Qt\qt_set.h ..\win\Qt\qt_bind.h \
 		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_streq.h \
-		..\win\Qt\qt_line.h ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_menu.cpp
+		..\win\Qt\qt_line.h ..\win\Qt\qt_str.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_menu.cpp
 $(TARGETPFX)qt_msg.o: ..\win\Qt\qt_msg.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_msg.h ..\win\Qt\qt_win.h \
 		qt_msg.moc ..\win\Qt\qt_map.h ..\win\Qt\qt_clust.h \
 		..\win\Qt\qt_set.h ..\win\Qt\qt_bind.h ..\win\Qt\qt_main.h \
-		..\win\Qt\qt_kde0.h ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_msg.cpp
+		..\win\Qt\qt_kde0.h ..\win\Qt\qt_str.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_msg.cpp
 $(TARGETPFX)qt_plsel.o: ..\win\Qt\qt_plsel.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_plsel.h qt_plsel.moc \
 		..\win\Qt\qt_bind.h ..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h \
-		..\win\Qt\qt_glyph.h ..\win\Qt\qt_set.h ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_plsel.cpp
+		..\win\Qt\qt_glyph.h ..\win\Qt\qt_set.h ..\win\Qt\qt_str.h \
+		$(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_plsel.cpp
 $(TARGETPFX)qt_rip.o: ..\win\Qt\qt_rip.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_rip.h ..\win\Qt\qt_bind.h \
-		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_rip.cpp
+		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_str.h \
+		$(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_rip.cpp
 $(TARGETPFX)qt_set.o: ..\win\Qt\qt_set.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_set.h ..\win\Qt\qt_bind.h \
 		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h qt_set.moc \
-		..\win\Qt\qt_glyph.h ..\win\Qt\qt_xcmd.h ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_set.cpp
+		..\win\Qt\qt_glyph.h ..\win\Qt\qt_xcmd.h ..\win\Qt\qt_str.h \
+		$(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_set.cpp
 $(TARGETPFX)qt_stat.o: ..\win\Qt\qt_stat.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_stat.h ..\win\Qt\qt_win.h \
 		..\win\Qt\qt_icon.h qt_stat.moc ..\win\Qt\qt_set.h \
 		..\win\Qt\qt_bind.h ..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h \
-		..\win\Qt\qt_str.h ..\win\Qt\qt_xpms.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_stat.cpp
-$(TARGETPFX)qt_str.o: ..\win\Qt\qt_str.cpp ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_str.cpp
+		..\win\Qt\qt_str.h ..\win\Qt\qt_xpms.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_stat.cpp
+$(TARGETPFX)qt_str.o: ..\win\Qt\qt_str.cpp ..\win\Qt\qt_str.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_str.cpp
 $(TARGETPFX)qt_streq.o: ..\win\Qt\qt_streq.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_streq.h ..\win\Qt\qt_line.h \
 		..\win\Qt\qt_str.h ..\win\Qt\qt_set.h ..\win\Qt\qt_bind.h \
-		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_streq.cpp
+		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_streq.cpp
 $(TARGETPFX)qt_svsel.o: ..\win\Qt\qt_svsel.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_svsel.h ..\win\Qt\qt_bind.h \
-		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_svsel.cpp
+		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_str.h \
+		$(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_svsel.cpp
 $(TARGETPFX)qt_win.o: ..\win\Qt\qt_win.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_win.h ..\win\Qt\qt_bind.h \
 		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_click.h \
 		..\win\Qt\qt_glyph.h ..\win\Qt\qt_inv.h ..\win\Qt\qt_key.h \
 		..\win\Qt\qt_icon.h ..\win\Qt\qt_map.h ..\win\Qt\qt_clust.h \
 		..\win\Qt\qt_menu.h ..\win\Qt\qt_rip.h ..\win\Qt\qt_msg.h \
-		..\win\Qt\qt_set.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_win.cpp
+		..\win\Qt\qt_set.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_win.cpp
 $(TARGETPFX)qt_xcmd.o: ..\win\Qt\qt_xcmd.cpp $(HACK_H) $(INCL)\func_tab.h \
 		..\win\Qt\qt_pre.h ..\win\Qt\qt_post.h ..\win\Qt\qt_xcmd.h \
 		qt_xcmd.moc ..\win\Qt\qt_key.h ..\win\Qt\qt_bind.h \
 		..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h ..\win\Qt\qt_set.h \
-		..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_xcmd.cpp
+		..\win\Qt\qt_str.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_xcmd.cpp
 $(TARGETPFX)qt_yndlg.o: ..\win\Qt\qt_yndlg.cpp $(HACK_H) ..\win\Qt\qt_pre.h \
 		..\win\Qt\qt_post.h ..\win\Qt\qt_yndlg.h qt_yndlg.moc \
-		..\win\Qt\qt_key.h ..\win\Qt\qt_str.h
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_yndlg.cpp
+		..\win\Qt\qt_key.h ..\win\Qt\qt_str.h $(QTn_H)
+#	$(TARGET_CXX) $(TARGET_CXXFLAGS) -Fo$@ ..\win\Qt\qt_yndlg.cpp
+qt_kde0.moc: ..\win\Qt\qt_kde0.h $(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_kde0.h
+qt_main.moc: ..\win\Qt\qt_main.h ..\win\Qt\qt_kde0.h $(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_main.h
+qt_map.moc: ..\win\Qt\qt_map.h ..\win\Qt\qt_win.h ..\win\Qt\qt_clust.h $(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_map.h
+qt_menu.moc: ..\win\Qt\qt_menu.h ..\win\Qt\qt_win.h ..\win\Qt\qt_rip.h $(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_menu.h
+qt_msg.moc: ..\win\Qt\qt_msg.h ..\win\Qt\qt_win.h $(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_msg.h
+qt_plsel.moc: ..\win\Qt\qt_plsel.h $(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_plsel.h
+qt_set.moc: ..\win\Qt\qt_set.h ..\win\Qt\qt_bind.h ..\win\Qt\qt_main.h \
+		..\win\Qt\qt_kde0.h $(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_set.h
+qt_stat.moc: ..\win\Qt\qt_stat.h ..\win\Qt\qt_win.h ..\win\Qt\qt_icon.h \
+		$(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_stat.h
+qt_xcmd.moc: ..\win\Qt\qt_xcmd.h $(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_xcmd.h
+qt_yndlg.moc: ..\win\Qt\qt_yndlg.h $(QTn_H)
+	$(MOCPATH)  ..\win\Qt\qt_yndlg.h
 $(TARGETPFX)wc_chainin.o: ..\win\chain\wc_chainin.c $(HACK_H)
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\chain\wc_chainin.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\chain\wc_chainin.c
 $(TARGETPFX)wc_chainout.o: ..\win\chain\wc_chainout.c $(HACK_H)
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\chain\wc_chainout.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\chain\wc_chainout.c
 $(TARGETPFX)wc_trace.o: ..\win\chain\wc_trace.c $(HACK_H) $(INCL)\wintty.h \
 		$(INCL)\func_tab.h
-	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\chain\wc_trace.c
+#	$(TARGET_CC) $(TARGET_CFLAGS) -Fo$@ ..\win\chain\wc_trace.c
 $(TARGETPFX)allmain.o: allmain.c $(HACK_H)
 $(TARGETPFX)alloc.o: alloc.c $(CONFIG_H)
 $(TARGETPFX)apply.o: apply.c $(HACK_H)
@@ -2238,6 +2221,3 @@ $(TARGETPFX)worn.o: worn.c $(HACK_H)
 $(TARGETPFX)write.o: write.c $(HACK_H)
 $(TARGETPFX)zap.o: zap.c $(HACK_H)
 # DEPENDENCIES MUST END AT END OF FILE
-# IF YOU PUT STUFF HERE IT WILL GO AWAY
-# end of file
-

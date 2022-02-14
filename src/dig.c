@@ -60,7 +60,7 @@ mkcavepos(xchar x, xchar y, int dist, boolean waslit, boolean rockit)
             return;                   /* don't cover the portal */
         if ((mtmp = m_at(x, y)) != 0) /* make sure crucial monsters survive */
             if (!passes_walls(mtmp->data))
-                (void) rloc(mtmp, TRUE);
+                (void) rloc(mtmp, RLOC_NOMSG);
     } else if (lev->typ == ROOM)
         return;
 
@@ -207,8 +207,7 @@ dig_check(struct monst *madeby, boolean verbose, int x, int y)
     } else if ((IS_ROCK(levl[x][y].typ) && levl[x][y].typ != SDOOR
                 && (levl[x][y].wall_info & W_NONDIGGABLE) != 0)
                || (ttmp
-                   && (ttmp->ttyp == MAGIC_PORTAL
-                       || ttmp->ttyp == VIBRATING_SQUARE
+                   && (undestroyable_trap(ttmp->ttyp)
                        || (!Can_dig_down(&u.uz) && !levl[x][y].candig)))) {
         if (verbose)
             pline_The("%s here is too hard to %s.", surface(x, y), verb);
@@ -230,9 +229,9 @@ dig_check(struct monst *madeby, boolean verbose, int x, int y)
 static int
 dig(void)
 {
-    register struct rm *lev;
-    register xchar dpx = g.context.digging.pos.x, dpy = g.context.digging.pos.y;
-    register boolean ispick = uwep && is_pick(uwep);
+    struct rm *lev;
+    xchar dpx = g.context.digging.pos.x, dpy = g.context.digging.pos.y;
+    boolean ispick = uwep && is_pick(uwep);
     const char *verb = (!uwep || is_pick(uwep)) ? "dig into" : "chop through";
 
     lev = &levl[dpx][dpy];
@@ -241,7 +240,7 @@ dig(void)
     if (u.uswallow || !uwep || (!ispick && !is_axe(uwep))
         || !on_level(&g.context.digging.level, &u.uz)
         || ((g.context.digging.down ? (dpx != u.ux || dpy != u.uy)
-                                  : (distu(dpx, dpy) > 2))))
+                                  : !next2u(dpx, dpy))))
         return 0;
 
     if (g.context.digging.down) {
@@ -437,10 +436,10 @@ dig(void)
             switch (rn2(2)) {
             case 0:
                 mtmp = makemon(&mons[PM_EARTH_ELEMENTAL], dpx, dpy,
-                               NO_MM_FLAGS);
+                               MM_NOMSG);
                 break;
             default:
-                mtmp = makemon(&mons[PM_XORN], dpx, dpy, NO_MM_FLAGS);
+                mtmp = makemon(&mons[PM_XORN], dpx, dpy, MM_NOMSG);
                 break;
             }
             if (mtmp)
@@ -451,7 +450,7 @@ dig(void)
             b_trapped("door", 0);
             newsym(dpx, dpy);
         }
-    cleanup:
+ cleanup:
         g.context.digging.lastdigtime = g.moves;
         g.context.digging.quiet = FALSE;
         g.context.digging.level.dnum = 0;
@@ -726,6 +725,8 @@ digactualhole(int x, int y, struct monst *madeby, int ttyp)
     }
 }
 
+DISABLE_WARNING_FORMAT_NONLITERAL
+
 /*
  * Called from dighole(), but also from do_break_wand()
  * in apply.c.
@@ -760,6 +761,8 @@ liquid_flow(xchar x, xchar y, schar typ, struct trap *ttmp,
     }
 }
 
+RESTORE_WARNING_FORMAT_NONLITERAL
+
 /* return TRUE if digging succeeded, FALSE otherwise */
 boolean
 dighole(boolean pit_only, boolean by_magic, coord *cc)
@@ -786,8 +789,7 @@ dighole(boolean pit_only, boolean by_magic, coord *cc)
     nohole = (!Can_dig_down(&u.uz) && !lev->candig);
     old_typ = lev->typ;
 
-    if ((ttmp && (ttmp->ttyp == MAGIC_PORTAL
-                  || ttmp->ttyp == VIBRATING_SQUARE || nohole))
+    if ((ttmp && (undestroyable_trap(ttmp->ttyp) || nohole))
         || (IS_ROCK(old_typ) && old_typ != SDOOR
             && (lev->wall_info & W_NONDIGGABLE) != 0)) {
         pline_The("%s %shere is too hard to dig in.", surface(dig_x, dig_y),
@@ -933,13 +935,13 @@ dig_up_grave(coord *cc)
         if (!Blind)
             pline(Hallucination ? "Dude!  The living dead!"
                                 : "The grave's owner is very upset!");
-        (void) makemon(mkclass(S_ZOMBIE, 0), dig_x, dig_y, NO_MM_FLAGS);
+        (void) makemon(mkclass(S_ZOMBIE, 0), dig_x, dig_y, MM_NOMSG);
         break;
     case 3:
         if (!Blind)
             pline(Hallucination ? "I want my mummy!"
                                 : "You've disturbed a tomb!");
-        (void) makemon(mkclass(S_MUMMY, 0), dig_x, dig_y, NO_MM_FLAGS);
+        (void) makemon(mkclass(S_MUMMY, 0), dig_x, dig_y, MM_NOMSG);
         break;
     default:
         /* No corpse */
@@ -958,15 +960,15 @@ use_pick_axe(struct obj *obj)
     const char *verb;
     char *dsp, dirsyms[12], qbuf[BUFSZ];
     boolean ispick;
-    int rx, ry, downok, res = 0;
+    int rx, ry, downok, res = ECMD_OK;
     int dir;
 
     /* Check tool */
     if (obj != uwep) {
         if (!wield_tool(obj, "swing"))
-            return 0;
+            return ECMD_OK;
         else
-            res = 1;
+            res = ECMD_TIME;
     }
     ispick = is_pick(obj);
     verb = ispick ? "dig" : "chop";
@@ -983,13 +985,8 @@ use_pick_axe(struct obj *obj)
     downok = !!can_reach_floor(FALSE);
     dsp = dirsyms;
     for (dir = 0; dir < N_DIRS_Z; dir++) {
-        char dirch;
-        if (dir == DIR_DOWN)
-            dirch = cmd_from_func(dodown);
-        else if (dir == DIR_UP)
-            dirch = cmd_from_func(doup);
-        else
-            dirch = g.Cmd.move[dir];
+        char dirch = cmd_from_dir(dir, MV_WALK);
+
         /* filter out useless directions */
         if (u.uswallow) {
             ; /* all directions are viable when swallowed */
@@ -1016,7 +1013,7 @@ use_pick_axe(struct obj *obj)
     *dsp = 0;
     Sprintf(qbuf, "In what direction do you want to %s? [%s]", verb, dirsyms);
     if (!getdir(qbuf))
-        return res;
+        return (res|ECMD_CANCEL);
 
     return use_pick_axe2(obj);
 }
@@ -1054,7 +1051,7 @@ use_pick_axe2(struct obj *obj)
         Sprintf(buf, "%s own %s", uhis(), OBJ_NAME(objects[obj->otyp]));
         losehp(Maybe_Half_Phys(dam), buf, KILLED_BY);
         g.context.botl = 1;
-        return 1;
+        return ECMD_TIME;
     } else if (u.dz == 0) {
         if (Stunned || (Confusion && !rn2(5)))
             confdir();
@@ -1062,11 +1059,11 @@ use_pick_axe2(struct obj *obj)
         ry = u.uy + u.dy;
         if (!isok(rx, ry)) {
             pline("Clash!");
-            return 1;
+            return ECMD_TIME;
         }
         lev = &levl[rx][ry];
         if (MON_AT(rx, ry) && do_attack(m_at(rx, ry)))
-            return 1;
+            return ECMD_TIME;
         dig_target = dig_typ(obj, rx, ry);
         if (dig_target == DIGTYP_UNDIGGABLE) {
             /* ACCESSIBLE or POOL */
@@ -1200,7 +1197,7 @@ use_pick_axe2(struct obj *obj)
         g.did_dig_msg = FALSE;
         set_occupation(dig, verbing, 0);
     }
-    return 1;
+    return ECMD_TIME;
 }
 
 /*
@@ -1368,7 +1365,7 @@ draft_message(boolean unexpected)
         } else {
             /* "marching" is deliberately ambiguous; it might mean drills
                 after entering military service or mean engaging in protests */
-            static const char *draft_reaction[] = {
+            static const char *const draft_reaction[] = {
                 "enlisting", "marching", "protesting", "fleeing",
             };
             int dridx;
@@ -1471,7 +1468,8 @@ zap_dig(void)
             coord cc;
             struct trap *adjpit = t_at(zx, zy);
 
-            if ((diridx != DIR_ERR) && !conjoined_pits(adjpit, trap_with_u, FALSE)) {
+            if (diridx != DIR_ERR
+                && !conjoined_pits(adjpit, trap_with_u, FALSE)) {
                 digdepth = 0; /* limited to the adjacent location only */
                 if (!(adjpit && is_pit(adjpit->ttyp))) {
                     char buf[BUFSZ];
@@ -1912,7 +1910,7 @@ bury_objs(int x, int y)
     newsym(x, y);
 
     if (costly && loss) {
-        You("owe %s %ld %s for burying merchandise.", mon_nam(shkp), loss,
+        You("owe %s %ld %s for burying merchandise.", shkname(shkp), loss,
             currency(loss));
     }
 }
@@ -1996,19 +1994,13 @@ rot_corpse(anything *arg, long timeout)
             Your("%s%s %s away%c", obj == uwep ? "wielded " : "", cname,
                  otense(obj, "rot"), obj == uwep ? '!' : '.');
         }
-        if (obj == uwep) {
-            uwepgone(); /* now bare handed */
-            stop_occupation();
-        } else if (obj == uswapwep) {
-            uswapwepgone();
-            stop_occupation();
-        } else if (obj == uquiver) {
-            uqwepgone();
+        if (obj->owornmask) {
+            remove_worn_item(obj, TRUE);
             stop_occupation();
         }
-    } else if (obj->where == OBJ_MINVENT && obj->owornmask) {
-        if (obj == MON_WEP(obj->ocarry))
-            setmnotwielded(obj->ocarry, obj);
+    } else if (obj->where == OBJ_MINVENT) {
+        if (obj->owornmask && obj == MON_WEP(obj->ocarry))
+            setmnotwielded(obj->ocarry, obj); /* clears owornmask */
     } else if (obj->where == OBJ_MIGRATING) {
         /* clear destination flag so that obfree()'s check for
            freeing a worn object doesn't get a false hit */
@@ -2125,7 +2117,7 @@ struct obj *otmp;
 #endif /*0*/
 
 #ifdef DEBUG
-/* bury everything at your loc and around */
+/* the #wizbury command - bury everything at your loc and around */
 int
 wiz_debug_cmd_bury(void)
 {
@@ -2135,7 +2127,7 @@ wiz_debug_cmd_bury(void)
         for (y = u.uy - 1; y <= u.uy + 1; y++)
             if (isok(x, y))
                 bury_objs(x, y);
-    return 0;
+    return ECMD_OK;
 }
 #endif /* DEBUG */
 

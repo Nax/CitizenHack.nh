@@ -1,4 +1,4 @@
-.\" $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.414 $ $NHDT-Date: 1613011698 2021/02/11 02:48:18 $
+.\" $NHDT-Branch: keni-datesub2 $:$NHDT-Revision: 1.437 $ $NHDT-Date: 1641933560 2022/01/11 20:39:20 $
 .\"
 .\" This is an excerpt from the 'roff' man page from the 'groff' package.
 .\" Guidebook.mn currently does *not* fully adhere to these guidelines.
@@ -35,7 +35,8 @@
 .ds vr "NetHack 3.7
 .ds f0 "\*(vr
 .ds f1
-.ds f2 "October 11, 2021
+.\"DO NOT REMOVE NH_DATESUB .ds f2 "DATE(%B %-d, %Y)
+.ds f2 "February 6, 2022
 .
 .\" A note on some special characters:
 .\" \(lq = left double quote
@@ -696,7 +697,7 @@ Remove one or more worn items, such as armor.
 Use \(oqT\(cq (take off) to take off only one piece of armor
 or \(oqR\(cq (remove) to take off only one accessory.
 .lp \(haA
-Redo the previous command.
+Repeat the previous command.
 .lp c
 Close a door.
 .lp C
@@ -799,6 +800,7 @@ If your wielded weapon has the throw-and-return property, your quiver
 is empty, and
 .op autoquiver
 is false, you will throw that wielded weapon instead of filling the quiver.
+This will also automatically use a polearm if wielded.
 If
 .op fireassist
 is true, firing will automatically try to wield a launcher (for example,
@@ -1243,8 +1245,14 @@ To really switch to explore mode, respond with \f(CRy\fP.
 You can set the
 .op paranoid_confirmation:quit
 option to require a response of \f(CRyes\fP instead.
+.lp "#fight   "
+Prefix key to force fight a direction, even if you see nothing
+to fight there.
+Default key is \(oqF\(cq, or \(oq\-\(cq with
+.op number_pad
 .lp "#fire    "
-Fire ammunition from quiver, possibly autowielding a launcher.
+Fire ammunition from quiver, possibly autowielding a launcher,
+or hit with a wielded polearm.
 Default key is \(oqf\(cq.
 .lp "#force   "
 Force a lock.
@@ -1436,6 +1444,13 @@ is on.
 .lp "#remove  "
 Remove an accessory (ring, amulet, etc).
 Default key is \(oqR\(cq.
+.lp "#repeat  "
+Repeat the previous command.
+Default key is \(oq\(haA\(cq.
+.lp "#reqmenu "
+Prefix key to modify the behaviour or request menu from some commands.
+Prevents autopickup when used with movement commands.
+Default key is \(oqm\(cq.
 .lp "#retravel"
 Travel to a previously selected travel destination.
 Default key is \(oqC-_\(cq.
@@ -1448,6 +1463,24 @@ Default key is \(oqM-R\(cq.
 Rub a lamp or a stone.
 Autocompletes.
 Default key is \(oqM-r\(cq.
+.lp "#run     "
+Prefix key to run towards a direction.
+Default key is \(oqG\(cq when
+.op number_pad
+is off,
+\(oq5\(cq when
+.op number_pad
+is set to 1 or 3,
+otherwise \(oqM-5\(cq when it is set to 2 or 4.
+.lp "#rush    "
+Prefix key to rush towards a direction.
+Default is \(oqg\(cq when
+.op number_pad
+is off,
+\(oqM-5\(cq when
+.op number_pad
+is set to 1 or 3,
+otherwise \(oq5\(cq when it is set to 2 or 4.
 .lp "#save    "
 Save the game and exit the program.
 Default key is \(oqS\(cq.
@@ -3291,17 +3324,17 @@ operating systems.
 On
 .UX ,
 Linux,
-and Mac OS X it is \(lq.nethackrc\(rq in the user's home directory.
+and macOS it is \(lq.nethackrc\(rq in the user's home directory.
 The file may not exist, but it is a normal ASCII text file and
 can be created with any text editor.
 .pg
 On Windows, it is \(lq.nethackrc\(rq in the folder
-\(lq\\%USERPROFILE%\\NetHack\\3.6\(rq.  The file may not exist,
+\(lq\\%USERPROFILE%\\NetHack\\3.7\(rq.  The file may not exist,
 but it is a normal ASCII text file can can be created with any
 text editor.
 After running NetHack for the first time, you should find a default
 template for the configuration file named \(lq.nethackrc.template\(rq
-in \(lq\\%USERPROFILE%\\NetHack\\3.6\(rq.
+in \(lq\\%USERPROFILE%\\NetHack\\3.7\(rq.
 If you had not created the configuration file, NetHack will create
 the configuration file for you using the default template file.
 .pg
@@ -4021,6 +4054,8 @@ than immediately praying; on by default;
 .PL Remove
 require selection from inventory for \(oqR\(cq and \(oqT\(cq
 commands even when wearing just one applicable item.
+.PL swim
+prevent walking into water or lava.
 .PL all
 turn on all of the above.
 .PE
@@ -4588,11 +4623,10 @@ Platform-specific Customization options
 .pg
 Here are explanations of options that are used by specific platforms or ports
 to customize and change the port behavior.
-.lp altkeyhandler
-Select an alternate keystroke handler dll to load (Win32 tty NetHack only).
-The name of the handler is specified without the .dll extension and without
-any path information.
-Cannot be set with the \(oqO\(cq command.
+.lp altkeyhandling
+Select an alternate way to handle keystrokes (Win32 tty NetHack only).
+The name of the handling type is one of \(lqdefault\(rq, \(lqray\(rq,
+\(lq340\(rq.
 .lp altmeta
 On Amiga, this option controls whether typing \(lqAlt\(rq plus another key
 functions as a meta-shift for that key (default on).
@@ -4773,15 +4807,6 @@ With
 .op number_pad
 only.
 Default is \(oqn\(cq.
-.lp fight
-Prefix key to force fight a direction.
-Default is \(oqF\(cq.
-.lp fight.numpad
-Prefix key to force fight a direction.
-With
-.op number_pad
-only.
-Default is \(oq\-\(cq.
 .lp getdir.help
 When asked for a direction, the key to show the help.
 Default is \(oq?\(cq.
@@ -4872,49 +4897,6 @@ Default is \(oqz\(cq.
 .lp getpos.valid.prev
 When asked for a location, the key to go to previous closest valid location.
 Default is \(oqZ\(cq.
-.lp nopickup
-Prefix key to move without picking up items.
-Default is \(oqm\(cq.
-.lp redraw
-Key to redraw the screen.
-Default is \(oq\(haR\(cq.
-.lp redraw.numpad
-Key to redraw the screen.
-With
-.op number_pad
-only.
-Default is \(oq\(haL\(cq.
-.lp repeat
-Key to repeat previous command.
-Default is \(oq\(haA\(cq.
-.lp reqmenu
-Prefix key to request menu from some commands.
-Default is \(oqm\(cq.
-.lp run
-Prefix key to run towards a direction.
-Default is \(oqG\(cq.
-.lp run.nopickup
-Prefix key to run towards a direction without picking up items on the way.
-Default is \(oqM\(cq.
-.lp run.numpad
-Prefix key to run towards a direction.
-With
-.op number_pad
-only.
-.lp ""
-Default is \(oq5\(cq when number_pad is set to 1 or 3,
-otherwise \(oqM-5\(cq when it is set to 2 or 4.
-.lp rush
-Prefix key to rush towards a direction.
-Default is \(oqg\(cq.
-.lp rush.numpad
-Prefix key to rush towards a direction.
-With
-.op number_pad
-only.
-.lp ""
-Default is \(oqM-5\(cq when number_pad is set to 1 or 3,
-otherwise \(oq5\(cq when it is set to 2 or 4.
 .hn 2
 Configuring Message Types
 .pg
@@ -5040,7 +5022,7 @@ An entry that maps a sound file to a user-specified message pattern.
 Each SOUND entry is broken down into the following parts:
 .PS "sound index"
 .PL MESG
-message window mapping (the only one supported in 3.6);
+message window mapping (the only one supported in 3.7);
 .PL pattern
 the pattern to match;
 .PL "sound file"
@@ -5495,29 +5477,10 @@ the capability, set the environment variable NETHACK_MSGHANDLER to an
 executable, which will be executed with the game message as the program's
 only parameter.
 .pg
-While it is not difficult for experienced users to edit the \fBdefaults.nh\fP
-file to accomplish this, novices may find this task somewhat daunting.
-Included within the \(lqsymbols\(rq file of all official distributions
-of NetHack is a symset called \fBNHAccess\fP.
-Selecting that symset in your
-configuration file will cause the game to run in a manner accessible
-to the blind.
-After you have gained some experience with the game
-and with editing files, you may want to alter settings via \fBSYMBOLS=\fP
-and \fBROGUESYMBOLS=\fP
-in your configuration file to better suit your preferences.
-See the previous section for the special symbols S_pet_override
-to force a consistent symbol for all pets and
-S_hero_override to force a unique symbol for the player character
-if \fBaccessibility\fP is enabled in the sysconf file.
-.pg
 The most crucial settings to make the game more accessible are:
 .pg
-.lp symset:NHAccess
+.lp symset:plain
 Load a symbol set appropriate for use by blind players.
-.lp roguesymset:NHAccess
-Load a symbol set for the rogue level that is appropriate for
-use by blind players.
 .lp menustyle:traditional
 This will assist in the interface to speech synthesizers.
 .lp nomenu_overlay
@@ -5528,6 +5491,8 @@ If this is the case, disable the
 .op number_pad
 option and use the traditional
 Rogue-like commands.
+.lp paranoid_confirmation:swim
+Prevent walking into water or lava.
 .lp autodescribe
 Automatically describe the terrain under the cursor when targeting.
 .lp mention_walls
@@ -5638,7 +5603,7 @@ if your game is compiled with DUMPLOG. Allows the following placeholders:
 .PL %%
 literal \(oq\f(CR%\fP\(cq
 .PL %v
-version (eg. \(lq\f(CR3.6.3\-0\fP\(rq)
+version (eg. \(lq\f(CR3.7.0\-0\fP\(rq)
 .PL %u
 game UID
 .PL %t

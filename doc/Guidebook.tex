@@ -45,7 +45,8 @@
 %.au
 \author{Original version - Eric S. Raymond\\
 (Edited and expanded for 3.7 by Mike Stephenson and others)}
-\date{October 11, 2021}
+%DO NOT REMOVE NH_DATESUB \date{DATE(%B %-d, %Y)}
+\date{February 6, 2022}
 
 \maketitle
 
@@ -796,7 +797,7 @@ Use `{\tt T}' (take off) to take off only one piece of armor
 or `{\tt R}' (remove) to take off only one accessory.
 %.lp
 \item[\tb{\^{}A}]
-Redo the previous command.
+Repeat the previous command.
 %.lp
 \item[\tb{c}]
 Close a door.
@@ -896,6 +897,7 @@ computer pick something appropriate if {\it autoquiver\/} is true.
 If your wielded weapon has the throw-and-return property, your quiver
 is empty, and {\it autoquiver\/}
 is false, you will throw that wielded weapon instead of filling the quiver.
+This will also automatically use a polearm if wielded.
 If {\it fireassist\/} is true, firing will automatically try to wield a launcher
 (for example, a bow or a sling) matching the ammo in the quiver; this might
 take multiple turns, and get interrupted by a monster.
@@ -1347,8 +1349,15 @@ You can set the
 {\it paranoid\verb+_+confirmation:quit\/}
 option to require a response of ``{\tt yes}'' instead.
 %.lp
+\item[\tb{\#fight}]
+Prefix key to force fight a direction, even if you see nothing
+to fight there.
+Default key is `{\tt F}', or `{\tt -}' with
+{\it number\verb+_+pad\/}
+%.lp
 \item[\tb{\#fire}]
-Fire ammunition from quiver, possibly autowielding a launcher.
+Fire ammunition from quiver, possibly autowielding a launcher,
+or hit with a wielded polearm.
 Default key is `{\tt f}'.
 %.lp
 \item[\tb{\#force}]
@@ -1543,6 +1552,15 @@ and also `{\tt \^{}L}' if {\it number\verb+_+pad\/} is on.
 \item[\tb{\#remove}]
 Remove an accessory (ring, amulet, etc). Default key is `{\tt R}'.
 %.lp
+\item[{\bb{\#repeat}}]
+Repeat the previous command.
+Default key is~`{\tt \^{}A}'.
+%.lp
+\item[\tb{\#reqmenu}]
+Prefix key to modify the behaviour or request menu from some commands.
+Prevents autopickup when used with movement commands.
+Default key is `{\tt m}'.
+%.lp
 \item[\tb{\#retravel}]
 Travel to a previously selected travel destination.
 Default key is `{\tt C-_}'.
@@ -1554,6 +1572,26 @@ Default key is `{\tt M-R}'.
 %.lp
 \item[\tb{\#rub}]
 Rub a lamp or a stone. Autocompletes. Default key is `{\tt M-r}'.
+%.lp
+\item[\tb{\#run}]
+Prefix key to run towards a direction.
+Default key is `{\tt G}' when
+{\it number\verb+_+pad\/}
+is off,
+`{\tt 5}' when
+{\it number\verb+_+pad\/}
+is set to 1~or~3,
+otherwise `{\tt M-5}' when it is set to 2~or~4.
+%.lp
+\item[\tb{\#rush}]
+Prefix key to rush towards a direction.
+Default key is `{\tt g}' when
+{\it number\verb+_+pad\/}
+is off,
+`{\tt M-5}' when
+{\it number\verb+_+pad\/}
+is set to 1~or~3,
+otherwise `{\tt 5}' when it is set to 2~or~4.
 %.lp
 \item[\tb{\#save}]
 Save the game and exit the program.
@@ -2656,7 +2694,7 @@ other worn items.
 %.pg
 Those of you in the audience who are AD\&D players, be aware that each
 weapon which existed in AD\&D does roughly the same damage to monsters in
-{\it NetHack}.  Some of the more obscure weapons (such as the %
+{\it NetHack}.  Some of the more obscure weapons (such as the
 {\it aklys}, {\it lucern hammer}, and {\it bec-de-corbin\/}) are defined
 in an appendix to {\it Unearthed Arcana}, an AD\&D supplement.
 
@@ -3555,18 +3593,18 @@ The default name and location of the configuration file varies on different
 operating systems.\\
 
 %.lp ""
-On UNIX, Linux and Mac OS X it is \mbox{``.nethackrc''} in the user's home
+On UNIX, Linux and macOS it is \mbox{``.nethackrc''} in the user's home
 directory. The file may not exist, but it is a normal ASCII text file and
 can be created with any text editor.\\
 
 %.lp ""
 On Windows, it is \mbox{``.nethackrc''} in the folder
-\mbox{{``\%USERPROFILE\%\textbackslash NetHack\textbackslash 3.6''}}. The
+\mbox{{``\%USERPROFILE\%\textbackslash NetHack\textbackslash 3.7''}}. The
 file may not exist, but it is a normal ASCII text file and can be created
 with any text editor.
 After runing {\it NetHack\/} for the first time, you should find a default
 template for ths configuration file named \mbox{``.nethackrc.template''} in
-\mbox{{``\%USERPROFILE\%\textbackslash NetHack\textbackslash 3.6''}}.
+\mbox{{``\%USERPROFILE\%\textbackslash NetHack\textbackslash 3.7''}}.
 If you had not created the configuration file, {\it NetHack\/} will create
 the configuration file for you using the default template file.
 
@@ -4392,6 +4430,8 @@ than immediately praying; on by default;
 \item[{\tt Remove~}] require selection from inventory for `{\tt R}'
 and `{\tt T}'
 commands even when wearing just one applicable item.
+\item[{\tt swim~~~}]
+prevent walking into water or lava.
 \item[{\tt all~~~~}]
 turn on all of the above.
 \elist
@@ -5004,7 +5044,7 @@ Acceptable values are
 columns of the display.
 A width of at least 110 columns (\verb&80+2+26+2&) is needed for
 {\it align_status\/}
-set to {tt left} or {\tt right}.)
+set to {\tt left} or {\tt right}.)
 
 %.lp ""
 The persistent inventory window, when enabled, can grow until it is
@@ -5052,11 +5092,9 @@ or ports to customize and change the port behavior.
 
 \blist{}
 %.lp
-\item[\ib{altkeyhandler}]
-Select an alternate keystroke handler dll to load ({\it Win32 tty\/ NetHack\/} only).
-The name of the handler is specified without the .dll extension and without any
-path information.
-Cannot be set with the `{\tt O}' command.
+\item[\ib{altkeyhandling}]
+Select an alternate way to handle keystrokes ({\it Win32 tty\/ NetHack\/} only).
+The name of the handling type is one of {\it default}, {\it ray}, {\it 340}
 %.lp
 \item[\ib{altmeta}]
 On Amiga, this option controls whether typing ``Alt'' plus another key
@@ -5264,13 +5302,6 @@ can only be bound to a single key.
 Prefix key to start a count, to repeat a command this many times.
 With {\it number\verb+_+pad\/} only. Default is~`{\tt n}'.
 %.lp
-\item[{\bb{fight}}]
-Prefix key to force fight a direction. Default is~`{\tt F}'.
-%.lp
-\item[{\bb{fight.numpad}}]
-Prefix key to force fight a direction. With {\it number\verb+_+pad\/} only.
-Default is~`{\tt -}'.
-%.lp
 \item[{\bb{getdir.help}}]
 When asked for a direction, the key to show the help. Default is~`{\tt ?}'.
 %.lp
@@ -5373,48 +5404,6 @@ Default is~`{\tt z}'.
 \item[{\bb{getpos.valid.prev}}]
 When asked for a location, the key to go to previous closest valid location.
 Default is~`{\tt Z}'.
-%.lp
-\item[{\bb{nopickup}}]
-Prefix key to move without picking up items. Default is~`{\tt m}'.
-%.lp
-\item[{\bb{redraw}}]
-Key to redraw the screen. Default is~`{\tt \^{}R}'.
-%.lp
-\item[{\bb{redraw.numpad}}]
-Key to redraw the screen. With {\it number\verb+_+pad\/} only.
-Default is~`{\tt \^{}L}'.
-%.lp
-\item[{\bb{repeat}}]
-Key to repeat previous command. Default is~`{\tt \^{}A}'.
-%.lp
-\item[{\bb{reqmenu}}]
-Prefix key to request menu from some commands. Default is~`{\tt m}'.
-%.lp
-\item[{\bb{run}}]
-Prefix key to run towards a direction. Default is~`{\tt G}'.
-%.lp
-\item[{\bb{run.nopickup}}]
-Prefix key to run towards a direction without picking up items on the way.
-Default is~`{\tt M}'.
-%.lp
-\item[{\bb{run.numpad}}]
-Prefix key to run towards a direction.
-With {\it number\verb+_+pad\/} only.
-
-%.lp ""
-Default is `{\tt 5}' when number_pad is set to 1~or~3,
-otherwise `{\tt M-5}' when it is set to 2~or~4.
-%.lp
-\item[{\bb{rush}}]
-Prefix key to rush towards a direction. Default is~`{\tt g}'.
-%.lp
-\item[{\bb{rush.numpad}}]
-Prefix key to rush towards a direction.
-With {\it number\verb+_+pad\/} only.
-
-.lp ""
-Default is `{\tt M-5}' when number_pad is set to 1~or~3,
-otherwise `{\tt 5}' when it is set to 2~or~4.
 \elist
 
 
@@ -5568,7 +5557,7 @@ Each SOUND entry is broken down into the following parts:
 
 %.sd
 %.si
-{\tt MESG       } --- message window mapping (the only one supported in 3.6);\\
+{\tt MESG       } --- message window mapping (the only one supported in 3.7);\\
 {\tt pattern    } --- the pattern to match;\\
 {\tt sound file } --- the sound file to play;\\
 {\tt volume     } --- the volume to be set while playing the sound file;\\
@@ -6030,31 +6019,13 @@ the capability, set the environment variable {\it NETHACK\_MSGHANDLER\/} to an
 executable, which will be executed with the game message as the program's
 only parameter.
 %.pg
-While it is not difficult for experienced users to edit the {\it defaults.nh\/}
-file to accomplish this, novices may find this task somewhat daunting.
-Included within the symbol file of all official distributions of {\it NetHack\/}
-is a symset called {\it NHAccess\/}.  Selecting that symset in your
-configuration file will cause the game to run in a manner accessible
-to the blind. After you have gained some experience with the game
-and with editing files, you may want to alter settings via {\it SYMBOLS=\/}
-and {\it ROGUESYMBOLS=\/}
-in your configuration file to better suit your preferences.
-See the previous section for the special symbols S\verb+_+pet\verb+_+override
-to force a consistent symbol for all pets and S\verb+_+hero\verb+_+override
-to force a unique symbol for the player character if {\it accessibility\/}
-is enabled in the {\it sysconf\/} file.
 
-%.pg
 The most crucial settings to make the game more accessible are:
 %.pg
 \blist{}
 %.lp
-\item[\ib{symset:NHAccess}]
+\item[\ib{symset:plain}]
 Load a symbol set appropriate for use by blind players.
-%.lp
-\item[\ib{roguesymset:NHAccess}]
-Load a symbol set for the rogue level that is appropriate for
-use by blind players.
 %.lp
 \item[\ib{menustyle:traditional}]
 This will assist in the interface to speech synthesizers.
@@ -6066,6 +6037,9 @@ Show menus on a cleared screen and aligned to the left edge.
 A lot of speech access programs use the number-pad to review the screen.
 If this is the case, disable the number\verb+_+pad option and use the
 traditional Rogue-like commands.
+%.lp
+\item[\ib{paranoid\verb+_+confirmation:swim}]
+Prevent walking into water or lava.
 %.lp
 \item[\ib{autodescribe}]
 Automatically describe the terrain under the cursor when targeting.
@@ -6201,7 +6175,7 @@ if your game is compiled with DUMPLOG. Allows the following placeholders:
 %.sd
 %.si
 {\tt \%\%}  --- literal `{\tt \%}'\\
-{\tt \%v}  --- version (eg. ``{\tt 3.6.3-0}'')\\
+{\tt \%v}  --- version (eg. ``{\tt 3.7.0-0}'')\\
 {\tt \%u}  --- game UID\\
 {\tt \%t}  --- game start time, UNIX timestamp format\\
 {\tt \%T}  --- current time, UNIX timestamp format\\

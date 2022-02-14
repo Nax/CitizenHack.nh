@@ -197,7 +197,12 @@ static NHFILE *viable_nhfile(NHFILE *);
  *          "This%20is%20a%20%25%20test%21"
  */
 char *
-fname_encode(const char *legal, char quotechar, char *s, char *callerbuf, int bufsz)
+fname_encode(
+    const char *legal,
+    char quotechar,
+    char *s,
+    char *callerbuf,
+    int bufsz)
 {
     char *sp, *op;
     int cnt = 0;
@@ -364,8 +369,8 @@ validate_prefix_locations(char *reasonbuf)
             if (!(details = strerror(errno)))
 #endif
                 details = "";
-            Sprintf(panicbuf2, "\"%s\", (%d) %s", g.fqn_prefix[prefcnt], errno,
-                    details);
+            Sprintf(panicbuf2, "\"%s\", (%d) %s",
+                    g.fqn_prefix[prefcnt], errno, details);
             paniclog(panicbuf1, panicbuf2);
             failcount++;
         }
@@ -513,8 +518,8 @@ create_levelfile(int lev, char errbuf[])
     if (nhfp) {
         nhfp->ftype = NHF_LEVELFILE;
         nhfp->mode = WRITING;
-        nhfp->structlevel = TRUE;       /* do set this TRUE for levelfiles */
-        nhfp->fieldlevel = FALSE;       /* don't set this TRUE for levelfiles */
+        nhfp->structlevel = TRUE; /* do set this TRUE for levelfiles */
+        nhfp->fieldlevel = FALSE; /* don't set this TRUE for levelfiles */
         nhfp->addinfo = FALSE;
         nhfp->style.deflt = FALSE;
         nhfp->style.binary = TRUE;
@@ -524,7 +529,8 @@ create_levelfile(int lev, char errbuf[])
         /* Use O_TRUNC to force the file to be shortened if it already
          * exists and is currently longer.
          */
-        nhfp->fd = open(fq_lock, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, FCMASK);
+        nhfp->fd = open(fq_lock, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY,
+                        FCMASK);
 #else
 #ifdef MAC
         nhfp->fd = maccreat(fq_lock, LEVL_TYPE);
@@ -536,7 +542,8 @@ create_levelfile(int lev, char errbuf[])
         if (nhfp->fd >= 0)
             g.level_info[lev].flags |= LFILE_EXISTS;
         else if (errbuf) /* failure explanation */
-            Sprintf(errbuf, "Cannot create file \"%s\" for level %d (errno %d).",
+            Sprintf(errbuf,
+                    "Cannot create file \"%s\" for level %d (errno %d).",
                     g.lock, lev, errno);
     }
     nhfp = viable_nhfile(nhfp);
@@ -556,8 +563,8 @@ open_levelfile(int lev, char errbuf[])
     nhfp = new_nhfile();
     if (nhfp) {
         nhfp->mode = READING;
-        nhfp->structlevel = TRUE;       /* do set this TRUE for levelfiles */
-        nhfp->fieldlevel = FALSE;       /* do not set this TRUE for levelfiles */
+        nhfp->structlevel = TRUE; /* do set this TRUE for levelfiles */
+        nhfp->fieldlevel = FALSE; /* do not set this TRUE for levelfiles */
         nhfp->addinfo = FALSE;
         nhfp->style.deflt = FALSE;
         nhfp->style.binary = TRUE;
@@ -576,7 +583,8 @@ open_levelfile(int lev, char errbuf[])
            settle for `lock' instead of `fq_lock' because the latter
            might end up being too big for nethack's BUFSZ */
         if (nhfp->fd < 0 && errbuf)
-            Sprintf(errbuf, "Cannot open file \"%s\" for level %d (errno %d).",
+            Sprintf(errbuf,
+                    "Cannot open file \"%s\" for level %d (errno %d).",
                     g.lock, lev, errno);
     }
     nhfp = viable_nhfile(nhfp);
@@ -890,8 +898,7 @@ set_savefile_name(boolean regularize_it)
     if (strlen(g.SAVEP) < (SAVESIZE - 1))
         Strcpy(g.SAVEF, g.SAVEP);
     if (strlen(g.SAVEF) < (SAVESIZE - 1))
-        (void) strncat(g.SAVEF, g.plname,
-			(SAVESIZE - strlen(g.SAVEF)));
+        (void) strncat(g.SAVEF, g.plname, (SAVESIZE - strlen(g.SAVEF)));
 #endif
 #if defined(MICRO) && !defined(VMS) && !defined(WIN32) && !defined(MSDOS)
     if (strlen(g.SAVEP) < (SAVESIZE - 1))
@@ -1015,7 +1022,8 @@ create_savefile(void)
         }
         if (nhfp->structlevel) {
 #if defined(MICRO) || defined(WIN32)
-            nhfp->fd = open(fq_save, O_WRONLY | O_BINARY | O_CREAT | O_TRUNC, FCMASK);
+            nhfp->fd = open(fq_save, O_WRONLY | O_BINARY | O_CREAT | O_TRUNC,
+                            FCMASK);
 #else
 #ifdef MAC
             nhfp->fd = maccreat(fq_save, SAVE_TYPE);
@@ -1209,7 +1217,7 @@ get_saved_games(void)
             if (findfirst((char *) fq_save)) {
                 i = 0;
                 do {
-                    files[i++] = strdup(foundfile);
+                    files[i++] = dupstr(foundfile);
                 } while (findnext());
             }
         }
@@ -1229,8 +1237,8 @@ get_saved_games(void)
                     fq_new_save = fqname(g.SAVEF, SAVEPREFIX, 0);
                     fq_old_save = fqname(files[i], SAVEPREFIX, 1);
 
-                    if(strcmp(fq_old_save, fq_new_save) != 0 &&
-                        !file_exists(fq_new_save))
+                    if (strcmp(fq_old_save, fq_new_save) != 0
+                        && !file_exists(fq_new_save))
                         rename(fq_old_save, fq_new_save);
 
                     result[j++] = r;
@@ -2570,6 +2578,13 @@ parse_config_line(char *origbuf)
             n = 10;
         }
         sysopt.tt_oname_maxrank = n;
+    } else if (src == set_in_sysconf && match_varname(buf, "LIVELOG", 7)) {
+        n = strtol(bufp,NULL,0);
+        if (n < 0 || n > 0xFFFF) {
+            raw_printf("Illegal value in LIVELOG (must be between 0 and 0xFFFF).");
+            return 0;
+        }
+        sysopt.livelog = n;
 
     /* SYSCF PANICTRACE options */
     } else if (in_sysconf && match_varname(buf, "PANICTRACE_LIBC", 15)) {
@@ -2773,7 +2788,15 @@ parse_config_line(char *origbuf)
         sounddir = dupstr(bufp);
     } else if (match_varname(buf, "SOUND", 5)) {
         add_sound_mapping(bufp);
-#endif
+#else /* !USER_SOUNDS */
+    } else if (match_varname(buf, "SOUNDDIR", 8)
+               || match_varname(buf, "SOUND", 5)) {
+        if (!g.no_sound_notified++) {
+            config_error_add("SOUND and SOUNDDIR are not available.");
+        }
+        ; /* skip this and any further SOUND or SOUNDDIR lines
+           * but leave 'retval' set to True */
+#endif /* ?USER_SOUNDS */
     } else if (match_varname(buf, "QT_TILEWIDTH", 12)) {
 #ifdef QT_GRAPHICS
         extern char *qt_tilewidth;
@@ -2919,7 +2942,8 @@ config_erradd(const char *buf)
     if (!g.program_state.config_error_ready) {
         /* either very early, where pline() will use raw_print(), or
            player gave bad value when prompted by interactive 'O' command */
-        pline("%s%s.", !iflags.window_inited ? "config_error_add: " : "", buf);
+        pline("%s%s.", !iflags.window_inited ? "config_error_add: " : "",
+              buf);
         wait_synch();
         return;
     }
@@ -2958,8 +2982,19 @@ config_error_done(void)
     if (!config_error_data)
         return 0;
     n = config_error_data->num_errors;
+#ifndef USER_SOUNDS
+    if (g.no_sound_notified > 0) {
+        /* no USER_SOUNDS; config_error_add() was called once for first
+           SOUND or SOUNDDIR entry seen, then skipped for any others;
+           include those skipped ones in the total error count */
+        n += (g.no_sound_notified - 1);
+        g.no_sound_notified = 0;
+    }
+#endif
     if (n) {
-        pline("\n%d error%s in %s.\n", n, plur(n),
+        boolean cmdline = !strcmp(config_error_data->source, "command line");
+
+        pline("\n%d error%s %s %s.\n", n, plur(n), cmdline ? "on" : "in",
               *config_error_data->source ? config_error_data->source
                                          : configfile);
         wait_synch();
@@ -3437,7 +3472,7 @@ read_sym_file(int which_set)
             clear_symsetentry(which_set, TRUE);
         config_error_done();
 
-        /* If name was defined, it was invalid... Then we're loading fallback */
+        /* If name was defined, it was invalid.  Then we're loading fallback */
         if (g.symset[which_set].name) {
             g.symset[which_set].explicitly = FALSE;
             return 0;
@@ -4332,7 +4367,7 @@ reveal_paths(void)
         if (strlen(pd) > 0) {
             raw_printf("portable_device_paths (set in sysconf):");
             raw_printf("    \"%s\"", pd);
-	}
+        }
     }
 #endif
 
@@ -4631,5 +4666,53 @@ Death_quote(char *buf, int bufsz)
 }
 
 /* ----------  END TRIBUTE ----------- */
+
+#if defined LIVELOG
+#define LLOG_SEP '\t' /* livelog field separator */
+
+/* Locks the live log file and writes 'buffer'
+ * IF the ll_type matches sysopt.livelog mask
+ * lltype is included in LL entry for post-process filtering also
+ */
+void
+livelog_add(unsigned int ll_type, const char *str)
+{
+    FILE* livelogfile;
+
+    if (!(ll_type & sysopt.livelog))
+        return;
+    if (lock_file(LIVELOGFILE, SCOREPREFIX, 10)) {
+        if (!(livelogfile = fopen_datafile(LIVELOGFILE, "a", SCOREPREFIX))) {
+            pline("Cannot open live log file!");
+            unlock_file(LIVELOGFILE);
+            return;
+        }
+        fprintf(livelogfile,
+                 "lltype=%d%cname=%s%crole=%s%crace=%s%cgender=%s%c"
+                 "align=%s%cturns=%ld%cstarttime=%ld%ccurtime=%ld%c"
+                 "message=%s\n",
+                 (ll_type & sysopt.livelog), LLOG_SEP,
+                 g.plname, LLOG_SEP,
+                 g.urole.filecode, LLOG_SEP,
+                 g.urace.filecode, LLOG_SEP,
+                 genders[flags.female].filecode, LLOG_SEP,
+                 aligns[1-u.ualign.type].filecode, LLOG_SEP,
+                 g.moves, LLOG_SEP,
+                 (long)ubirthday, LLOG_SEP,
+                 (long)time(NULL),
+                 LLOG_SEP, str);
+        (void) fclose(livelogfile);
+        unlock_file(LIVELOGFILE);
+    }
+}
+#undef LLOG_SEP
+
+#else
+void
+livelog_add(unsigned int ll_type UNUSED, const char *str UNUSED)
+{
+    /* nothing here */
+}
+#endif /* !LIVELOG */
 
 /*files.c*/

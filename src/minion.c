@@ -142,7 +142,7 @@ msummon(struct monst *mon)
     xlight = FALSE;
 
     while (cnt > 0) {
-        mtmp = makemon(&mons[dtype], u.ux, u.uy, MM_EMIN);
+        mtmp = makemon(&mons[dtype], u.ux, u.uy, MM_EMIN|MM_NOMSG);
         if (mtmp) {
             result++;
             /* an angel's alignment should match the summoner */
@@ -215,7 +215,7 @@ summon_minion(aligntyp alignment, boolean talk)
     if (mnum == NON_PM) {
         mon = 0;
     } else if (mnum == PM_ANGEL) {
-        mon = makemon(&mons[mnum], u.ux, u.uy, MM_EMIN);
+        mon = makemon(&mons[mnum], u.ux, u.uy, MM_EMIN|MM_NOMSG);
         if (mon) {
             mon->isminion = 1;
             EMIN(mon)->min_align = alignment;
@@ -225,14 +225,14 @@ summon_minion(aligntyp alignment, boolean talk)
                && mnum != PM_ALIGNED_CLERIC && mnum != PM_HIGH_CLERIC && mnum != PM_ARCH_SHOPKEEPER) {
         /* This was mons[mnum].pxlth == 0 but is this restriction
            appropriate or necessary now that the structures are separate? */
-        mon = makemon(&mons[mnum], u.ux, u.uy, MM_EMIN);
+        mon = makemon(&mons[mnum], u.ux, u.uy, MM_EMIN|MM_NOMSG);
         if (mon) {
             mon->isminion = 1;
             EMIN(mon)->min_align = alignment;
             EMIN(mon)->renegade = FALSE;
         }
     } else {
-        mon = makemon(&mons[mnum], u.ux, u.uy, NO_MM_FLAGS);
+        mon = makemon(&mons[mnum], u.ux, u.uy, MM_NOMSG);
     }
     if (mon) {
         if (talk) {
@@ -299,7 +299,7 @@ demon_talk(register struct monst *mtmp)
         else if (canseemon(mtmp))
             pline("%s says something.", Amonnam(mtmp));
         if (!tele_restrict(mtmp))
-            (void) rloc(mtmp, TRUE);
+            (void) rloc(mtmp, RLOC_MSG);
         return 1;
     }
     cash = money_cnt(g.invent);
@@ -331,10 +331,14 @@ demon_talk(register struct monst *mtmp)
         if (!Deaf && ((offer = bribe(mtmp)) >= demand)) {
             pline("%s vanishes, laughing about cowardly mortals.",
                   Amonnam(mtmp));
+            livelog_printf(LL_UMONST, "bribed %s with %ld %s for safe passage",
+                           Amonnam(mtmp), offer, currency(offer));
         } else if (offer > 0L
                    && (long) rnd(5 * ACURR(A_CHA)) > (demand - offer)) {
             pline("%s scowls at you menacingly, then vanishes.",
                   Amonnam(mtmp));
+            livelog_printf(LL_UMONST, "bribed %s with %ld %s for safe passage",
+                           Amonnam(mtmp), offer, currency(offer));
         } else {
             pline("%s gets angry...", Amonnam(mtmp));
             mtmp->mpeaceful = 0;

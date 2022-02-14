@@ -1,4 +1,4 @@
-/* NetHack 3.7	wintty.c	$NHDT-Date: 1608861214 2020/12/25 01:53:34 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.264 $ */
+/* NetHack 3.7	wintty.c	$NHDT-Date: 1644531502 2022/02/10 22:18:22 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.283 $ */
 /* Copyright (c) David Cohrs, 1991                                */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -109,9 +109,9 @@ struct window_procs tty_procs = {
      | WC2_HILITE_STATUS | WC2_HITPOINTBAR | WC2_FLUSH_STATUS
      | WC2_RESET_STATUS
 #endif
-     | WC2_DARKGRAY | WC2_SUPPRESS_HIST | WC2_STATUSLINES),
+     | WC2_DARKGRAY | WC2_SUPPRESS_HIST | WC2_URGENT_MESG | WC2_STATUSLINES),
 #ifdef TEXTCOLOR
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},   /* color availability */
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, /* color availability */
 #else
     {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
 #endif
@@ -1573,6 +1573,7 @@ erase_menu_or_text(winid window, struct WinDesc *cw, boolean clear)
             clear_screen();
         } else {
             docrt();
+            flush_screen(1);
         }
     } else {
         docorner((int) cw->offx, cw->maxrow + 1);
@@ -1624,6 +1625,8 @@ free_window_info(struct WinDesc *cw, boolean free_data)
         cw->morestr = 0;
     }
 }
+
+DISABLE_WARNING_FORMAT_NONLITERAL
 
 void
 tty_clear_nhwindow(winid window)
@@ -1679,6 +1682,8 @@ tty_clear_nhwindow(winid window)
     }
     cw->curx = cw->cury = 0;
 }
+
+RESTORE_WARNING_FORMAT_NONLITERAL
 
 static boolean
 toggle_menu_curr(winid window, tty_menu_item *curr, int lineno,
@@ -2051,11 +2056,6 @@ process_menu_window(winid window, struct WinDesc *cw)
 
         switch (morc) {
         case '0':
-            /* special case: '0' is also the default ball class */
-            if (!counting && index(gacc, morc))
-                goto group_accel;
-            /* fall through to count the zero */
-            /*FALLTHRU*/
         case '1':
         case '2':
         case '3':
@@ -2065,6 +2065,12 @@ process_menu_window(winid window, struct WinDesc *cw)
         case '7':
         case '8':
         case '9':
+            /* special case: '0' is also the default ball class;
+               some menus use digits as potential group accelerators
+               but their entries don't rely on counts */
+            if (!counting && index(gacc, morc))
+                goto group_accel;
+
             count = (count * 10L) + (long) (morc - '0');
             /*
              * It is debatable whether we should allow 0 to
@@ -2097,12 +2103,8 @@ process_menu_window(winid window, struct WinDesc *cw)
         case '\0': /* finished (commit) */
         case '\n':
         case '\r':
-            /* only finished if we are actually picking something */
-            if (cw->how != PICK_NONE) {
-                finished = TRUE;
-                break;
-            }
-        /* else fall through */
+            finished = TRUE;
+            break;
         case ' ':
         case MENU_NEXT_PAGE:
             if (cw->npages > 0 && curr_page != cw->npages - 1) {
@@ -2307,10 +2309,13 @@ process_text_window(winid window, struct WinDesc *cw)
     }
 }
 
+DISABLE_WARNING_FORMAT_NONLITERAL    /* RESTORE after tty_select_menu */
+
 /*ARGSUSED*/
 void
-tty_display_nhwindow(winid window,
-                    boolean blocking) /* with ttys, all windows are blocking */
+tty_display_nhwindow(
+    winid window,
+    boolean blocking) /* with ttys, all windows are blocking */
 {
     register struct WinDesc *cw = 0;
     short s_maxcol;
@@ -2662,7 +2667,21 @@ tty_putstr(winid window, int attr, const char *str)
 
     switch (cw->type) {
     case NHW_MESSAGE: {
-        int suppress_history = (attr & ATR_NOHISTORY);
+        int suppress_history = (attr & ATR_NOHISTORY),
+            urgent_message = (attr & ATR_URGENT);
+
+        /* if message is designated 'urgent' don't suppress it if user has
+           typed ESC at --More-- prompt when dismissing an earlier message;
+           besides turning off WIN_STOP, we need to prevent current message
+           from provoking --More-- and giving the user another chance at
+           using ESC to suppress, otherwise this message wouldn't get shown */
+        if (urgent_message) {
+            if ((cw->flags & WIN_STOP) != 0) {
+                tty_clear_nhwindow(WIN_MESSAGE);
+                cw->flags &= ~WIN_STOP;
+            }
+            cw->flags |= WIN_NOSTOP;
+        }
 
         /* in case we ever support display attributes for topline
            messages, clear flag mask leaving only display attr */
@@ -2678,6 +2697,8 @@ tty_putstr(winid window, int attr, const char *str)
             /* write to top line without remembering what we're writing */
             show_topl(str);
         }
+
+        cw->flags &= ~WIN_NOSTOP; /* NOSTOP is a one-shot operation */
         break;
     }
 #ifndef STATUS_HILITES
@@ -3131,6 +3152,8 @@ tty_select_menu(winid window, int how, menu_item **menu_list)
 
     return n;
 }
+
+RESTORE_WARNING_FORMAT_NONLITERAL
 
 /* special hack for treating top line --More-- as a one item menu */
 char
@@ -3849,7 +3872,7 @@ tty_status_enablefield(int fieldidx, const char *nm, const char *fmt,
  *         Each condition bit must only ever appear in one of the
  *         CLR_ array members, but can appear in multiple HL_ATTCLR_
  *         offsets (because more than one attribute can co-exist).
- *         See doc/window.doc for more details.
+ *         See doc/window.txt for more details.
  */
 
 DISABLE_WARNING_FORMAT_NONLITERAL

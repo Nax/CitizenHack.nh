@@ -135,8 +135,8 @@ struct context_info {
     int warnlevel;          /* threshold (digit) to warn about unseen mons */
     long next_attrib_check; /* next attribute check */
     long seer_turn;         /* when random clairvoyance will next kick in */
-    long stethoscope_move;  /* when a stethoscope was last used */
-    short stethoscope_movement; /* to track multiple moves on same turn */
+    long stethoscope_seq;   /* when a stethoscope was last used; first use
+                             * during a move takes no time, second uses move */
     boolean travel;  /* find way automatically to u.tx,u.ty */
     boolean travel1; /* first travel step */
     boolean forcefight;
@@ -150,6 +150,7 @@ struct context_info {
     boolean botlx;       /* print an entirely new bottom line */
     boolean door_opened; /* set to true if door was opened during test_move */
     boolean enhance_tip; /* player is informed about #enhance */
+    boolean swim_tip;    /* player was informed about walking into water */
     struct dig_info digging;
     struct victual_info victual;
     struct engrave_info engraving;

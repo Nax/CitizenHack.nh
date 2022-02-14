@@ -1,4 +1,4 @@
-/* NetHack 3.7	pline.c	$NHDT-Date: 1606504240 2020/11/27 19:10:40 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.100 $ */
+/* NetHack 3.7	pline.c	$NHDT-Date: 1637982230 2021/11/27 03:03:50 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.104 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2018. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -197,7 +197,7 @@ vpline(const char *line, va_list the_args)
     if (msgtyp == MSGTYP_STOP)
         display_nhwindow(WIN_MESSAGE, TRUE); /* --more-- */
 
-pline_done:
+ pline_done:
     --in_pline;
 }
 
@@ -207,12 +207,28 @@ RESTORE_WARNING_FORMAT_NONLITERAL
    message history (tty interface uses pline() to issue prompts and
    they shouldn't be blockable via MSGTYPE=hide) */
 void
-custompline(unsigned pflags, const char * line, ...)
+custompline(unsigned pflags, const char *line, ...)
 {
     va_list the_args;
 
     va_start(the_args, line);
     g.pline_flags = pflags;
+    vpline(line, the_args);
+    g.pline_flags = 0;
+    va_end(the_args);
+}
+
+/* if player has dismissed --More-- with ESC to suppress further messages
+   until next input request, tell the interface that it should override that
+   and re-enable them; equivalent to custompline(URGENT_MESSAGE, line, ...)
+   but slightly simpler to use */
+void
+urgent_pline(const char *line, ...)
+{
+    va_list the_args;
+
+    va_start(the_args, line);
+    g.pline_flags = URGENT_MESSAGE;
     vpline(line, the_args);
     g.pline_flags = 0;
     va_end(the_args);
@@ -382,6 +398,59 @@ verbalize(const char *line, ...)
     va_end(the_args);
 }
 
+#ifdef CHRONICLE
+
+void
+gamelog_add(unsigned int glflags, long gltime, const char *str)
+{
+    struct gamelog_line *tmp;
+    struct gamelog_line *lst = g.gamelog;
+
+    tmp = (struct gamelog_line *) alloc(sizeof (struct gamelog_line));
+    tmp->turn = gltime;
+    tmp->flags = glflags;
+    tmp->text = dupstr(str);
+    tmp->next = NULL;
+    while (lst && lst->next)
+        lst = lst->next;
+    if (!lst)
+        g.gamelog = tmp;
+    else
+        lst->next = tmp;
+}
+
+void
+livelog_printf(unsigned ll_type, const char *line, ...)
+{
+    char gamelogbuf[BUFSZ * 2];
+    va_list the_args;
+
+    va_start(the_args, line);
+    vsnprintf(gamelogbuf, sizeof gamelogbuf, line, the_args);
+    va_end(the_args);
+
+    gamelog_add(ll_type, g.moves, gamelogbuf);
+    strNsubst(gamelogbuf, "\t", "_", 0);
+    livelog_add(ll_type, gamelogbuf);
+}
+
+#else
+
+void
+gamelog_add(
+    unsigned glflags UNUSED, long gltime UNUSED, const char *msg UNUSED)
+{
+    ; /* nothing here */
+}
+
+void
+livelog_printf(unsigned ll_type UNUSED, const char *line UNUSED, ...)
+{
+    ; /* nothing here */
+}
+
+#endif /* !CHRONICLE */
+
 static void vraw_printf(const char *, va_list);
 
 void
@@ -525,7 +594,7 @@ vconfig_error_add(const char *str, va_list the_args)
     char buf[BIGBUFSZ]; /* will be chopped down to BUFSZ-1 if longer */
 
 #if !defined(NO_VSNPRINTF)
-    vlen = vsnprintf(buf, sizeof(buf), str, the_args);
+    vlen = vsnprintf(buf, sizeof buf, str, the_args);
 #if (NH_DEVEL_STATUS != NH_STATUS_RELEASED) && defined(DEBUG)
     if (vlen >= (int) sizeof buf)
         panic("%s: truncation of buffer at %zu of %d bytes",
@@ -544,15 +613,31 @@ RESTORE_WARNING_FORMAT_NONLITERAL
 void
 nhassert_failed(const char *expression, const char *filepath, int line)
 {
-    const char * filename;
+    const char *filename, *p;
 
-    /* attempt to get filename from path.  TODO: we really need a port provided
-     * function to return a filename from a path */
-    filename = strrchr(filepath, '/');
-    filename = (filename == NULL ? strrchr(filepath, '\\') : filename);
-    filename = (filename == NULL ? filepath : filename + 1);
+    /* Attempt to get filename from path.
+       TODO: we really need a port provided function to return a filename
+       from a path. */
+    filename = filepath;
+    if ((p = strrchr(filename, '/')) != 0)
+        filename = p + 1;
+    if ((p = strrchr(filename, '\\')) != 0)
+        filename = p + 1;
+#ifdef VMS
+    /* usually "device:[directory]name"
+       but might be "device:[root.][directory]name"
+       and either "[directory]" or "[root.]" or both can be delimited
+       by <> rather than by []; find the last of ']', '>', and ':'  */
+    if ((p = strrchr(filename, ']')) != 0)
+        filename = p + 1;
+    if ((p = strrchr(filename, '>')) != 0)
+        filename = p + 1;
+    if ((p = strrchr(filename, ':')) != 0)
+        filename = p + 1;
+#endif
 
-    impossible("nhassert(%s) failed in file '%s' at line %d", expression, filename, line);
+    impossible("nhassert(%s) failed in file '%s' at line %d",
+               expression, filename, line);
 }
 
 /*pline.c*/

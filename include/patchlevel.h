@@ -17,7 +17,7 @@
  * Incrementing EDITLEVEL can be used to force invalidation of old bones
  * and save files.
  */
-#define EDITLEVEL 44
+#define EDITLEVEL 50
 
 /*
  * Development status possibilities.
@@ -42,7 +42,7 @@
 /* nomakedefs.copyright_banner_c is generated at runtime */
 #define COPYRIGHT_BANNER_C nomakedefs.copyright_banner_c
 
-#define COPYRIGHT2_BANNER_A "NetHack, Copyright 1985-2021"
+#define COPYRIGHT2_BANNER_A "NetHack, Copyright 1985-2022"
 #define COPYRIGHT2_BANNER_B \
     "         By Stichting Mathematisch Centrum and M. Stephenson."
 

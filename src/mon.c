@@ -32,6 +32,14 @@ static void kill_eggs(struct obj *);
     (Is_rogue_level(&u.uz)            \
      || (g.level.flags.graveyard && is_undead(mdat) && rn2(3)))
 
+/* A specific combination of x_monnam flags for livelogging. The livelog
+ * shouldn't show that you killed a hallucinatory monster and not what it
+ * actually is. */
+#define livelog_mon_nam(mtmp) \
+    x_monnam(mtmp, ARTICLE_THE, (char *) 0,                 \
+             (SUPPRESS_IT | SUPPRESS_HALLUCINATION), FALSE)
+
+
 #if 0
 /* part of the original warning code which was replaced in 3.3.1 */
 const char *warnings[] = {
@@ -751,7 +759,7 @@ minliquid_core(struct monst* mtmp)
             /* not fair...?  hero doesn't automatically teleport away
                from lava, just from water */
             if (can_teleport(mtmp->data) && !tele_restrict(mtmp)) {
-                if (rloc(mtmp, TRUE))
+                if (rloc(mtmp, RLOC_MSG))
                     return 0;
             }
             if (!resists_fire(mtmp)) {
@@ -784,7 +792,7 @@ minliquid_core(struct monst* mtmp)
             if (!DEADMONSTER(mtmp)) {
                 (void) fire_damage_chain(mtmp->minvent, FALSE, FALSE,
                                          mtmp->mx, mtmp->my);
-                (void) rloc(mtmp, FALSE);
+                (void) rloc(mtmp, RLOC_ERR|RLOC_NOMSG);
                 return 0;
             }
             return 1;
@@ -799,7 +807,7 @@ minliquid_core(struct monst* mtmp)
             /* like hero with teleport intrinsic or spell, teleport away
                if possible */
             if (can_teleport(mtmp->data) && !tele_restrict(mtmp)) {
-                if (rloc(mtmp, TRUE))
+                if (rloc(mtmp, RLOC_MSG))
                     return 0;
             }
             if (cansee(mtmp->mx, mtmp->my)) {
@@ -809,7 +817,7 @@ minliquid_core(struct monst* mtmp)
                     /* hero used fire to melt ice that monster was on */
                     You("drown %s.", mon_nam(mtmp));
             }
-            if (u.ustuck && u.uswallow && u.ustuck == mtmp) {
+            if (engulfing_u(mtmp)) {
                 /* This can happen after a purple worm plucks you off a
                    flying steed while you are over water. */
                 pline("%s sinks as %s rushes in and flushes you out.",
@@ -821,7 +829,7 @@ minliquid_core(struct monst* mtmp)
                 xkilled(mtmp, XKILL_NOMSG);
             if (!DEADMONSTER(mtmp)) {
                 water_damage_chain(mtmp->minvent, FALSE);
-                if (!rloc(mtmp, TRUE))
+                if (!rloc(mtmp, RLOC_NOMSG))
                     deal_with_overcrowding(mtmp);
                 return 0;
             }
@@ -829,7 +837,8 @@ minliquid_core(struct monst* mtmp)
         }
     } else {
         /* but eels have a difficult time outside */
-        if (mtmp->data->mlet == S_EEL && !Is_waterlevel(&u.uz)) {
+        if (mtmp->data->mlet == S_EEL && !Is_waterlevel(&u.uz)
+            && !breathless(mtmp->data)) {
             /* as mhp gets lower, the rate of further loss slows down */
             if (mtmp->mhp > 1 && rn2(mtmp->mhp) > rn2(8))
                 mtmp->mhp--;
@@ -907,7 +916,7 @@ mcalcdistress(void)
         /* possibly polymorph shapechangers and lycanthropes */
         if (mtmp->cham >= LOW_PM)
             decide_to_shapeshift(mtmp, (canspotmon(mtmp)
-                                        || (u.uswallow && mtmp == u.ustuck))
+                                        || engulfing_u(mtmp))
                                           ? SHIFT_MSG : 0);
         were_change(mtmp);
 
@@ -1016,7 +1025,7 @@ movemon(void)
             if (mtmp->mundetected)
                 continue;
         } else if (mtmp->data->mlet == S_EEL && !mtmp->mundetected
-                   && (mtmp->mflee || distu(mtmp->mx, mtmp->my) > 2)
+                   && (mtmp->mflee || !next2u(mtmp->mx, mtmp->my))
                    && !canseemon(mtmp) && !rn2(4)) {
             /* some eels end up stuck in isolated pools, where they
                can't--or at least won't--move, so they never reach
@@ -1408,6 +1417,8 @@ meatcorpse(struct monst* mtmp) /* for purple worms and other voracious monsters 
     return 0;
 }
 
+DISABLE_WARNING_FORMAT_NONLITERAL
+
 /* Maybe give an intrinsic to a monster from eating a corpse that confers it. */
 void
 mon_givit(struct monst* mtmp, struct permonst* ptr)
@@ -1468,6 +1479,8 @@ mon_givit(struct monst* mtmp, struct permonst* ptr)
     if (vis && msg)
         pline(msg, Monnam(mtmp));
 }
+
+RESTORE_WARNING_FORMAT_NONLITERAL
 
 void
 mpickgold(register struct monst* mtmp)
@@ -1767,7 +1780,7 @@ mfndpos(
 
     nodiag = NODIAG(mdat - mons);
     wantpool = (mdat->mlet == S_EEL);
-    poolok = ((!Is_waterlevel(&u.uz)
+    poolok = ((!Is_waterlevel(&u.uz) && !(nowtyp != WATER)
                && (is_flyer(mdat) || is_floater(mdat) || is_clinger(mdat)))
               || (is_swimmer(mdat) && !wantpool));
     /* note: floating eye is the only is_floater() so this could be
@@ -2410,6 +2423,8 @@ lifesaved_monster(struct monst* mtmp)
     }
 }
 
+DISABLE_WARNING_FORMAT_NONLITERAL
+
 void
 mondead(register struct monst* mtmp)
 {
@@ -2564,10 +2579,36 @@ mondead(register struct monst* mtmp)
 #endif
     if (mtmp->data == &mons[PM_MEDUSA])
         record_achievement(ACH_MEDU);
+    else if (unique_corpstat(mtmp->data)) {
+        switch (g.mvitals[tmp].died) {
+            case 1:
+                livelog_printf(LL_UMONST, "%s %s",
+                               nonliving(mtmp->data) ? "destroyed" : "killed",
+                               livelog_mon_nam(mtmp));
+                break;
+            case 5:
+            case 10:
+            case 50:
+            case 100:
+            case 150:
+            case 200:
+            case 250:
+                livelog_printf(LL_UMONST, "%s %s (%d times)",
+                               nonliving(mtmp->data) ? "destroyed" : "killed",
+                               livelog_mon_nam(mtmp), g.mvitals[tmp].died);
+                break;
+            default:
+                /* don't spam the log every time */
+                break;
+        }
+    }
+
     if (glyph_is_invisible(levl[mtmp->mx][mtmp->my].glyph))
         unmap_object(mtmp->mx, mtmp->my);
     m_detach(mtmp, mptr);
 }
+
+RESTORE_WARNING_FORMAT_NONLITERAL
 
 /* TRUE if corpse might be dropped, magr may die if mon was swallowed */
 boolean
@@ -2695,6 +2736,8 @@ monstone(struct monst* mdef)
 
     if ((int) mdef->data->msize > MZ_TINY
         || !rn2(2 + ((int) (mdef->data->geno & G_FREQ) > 2))) {
+        unsigned corpstatflags = CORPSTAT_NONE;
+
         oldminvent = 0;
         /* some objects may end up outside the statue */
         while ((obj = mdef->minvent) != 0) {
@@ -2719,7 +2762,14 @@ monstone(struct monst* mdef)
         /* defer statue creation until after inventory removal
            so that saved monster traits won't retain any stale
            item-conferred attributes */
-        otmp = mkcorpstat(STATUE, mdef, mdef->data, x, y, CORPSTAT_NONE);
+        if (mdef->female)
+            corpstatflags |= CORPSTAT_FEMALE;
+        else if (!is_neuter(mdef->data))
+            corpstatflags |= CORPSTAT_MALE;
+        /* Archeologists should not break unique statues */
+        if (mdef->data->geno & G_UNIQ)
+            corpstatflags |= CORPSTAT_HISTORIC;
+        otmp = mkcorpstat(STATUE, mdef, mdef->data, x, y, corpstatflags);
         if (has_mgivenname(mdef))
             otmp = oname(otmp, MGIVENNAME(mdef));
         while ((obj = oldminvent) != 0) {
@@ -2727,9 +2777,6 @@ monstone(struct monst* mdef)
             obj->nobj = 0; /* avoid merged-> obfree-> dealloc_obj-> panic */
             (void) add_to_container(otmp, obj);
         }
-        /* Archeologists should not break unique statues */
-        if (mdef->data->geno & G_UNIQ)
-            otmp->spe = 1;
         otmp->owt = weight(otmp);
     } else
         otmp = mksobj_at(ROCK, x, y, TRUE, FALSE);
@@ -2742,7 +2789,7 @@ monstone(struct monst* mdef)
         newsym(x, y);
     /* We don't currently trap the hero in the statue in this case but we
      * could */
-    if (u.uswallow && u.ustuck == mdef)
+    if (engulfing_u(mdef))
         wasinside = TRUE;
     mondead(mdef);
     if (wasinside) {
@@ -2800,7 +2847,7 @@ void
 set_ustuck(struct monst* mtmp)
 {
     if (iflags.sanity_check || iflags.debug_fuzzer) {
-        if (mtmp && distu(mtmp->mx, mtmp->my) > 2)
+        if (mtmp && !next2u(mtmp->mx, mtmp->my))
             impossible("Sticking to %s at distu %d?",
                        mon_nam(mtmp), distu(mtmp->mx, mtmp->my));
     }
@@ -2858,7 +2905,7 @@ xkilled(
     struct obj *otmp;
     struct trap *t;
     boolean be_sad;
-    boolean wasinside = u.uswallow && (u.ustuck == mtmp),
+    boolean wasinside = engulfing_u(mtmp),
             burycorpse = FALSE,
             nomsg = (xkill_flags & XKILL_NOMSG) != 0,
             nocorpse = (xkill_flags & XKILL_NOCORPSE) != 0,
@@ -2870,7 +2917,8 @@ xkilled(
 
     mtmp->mhp = 0; /* caller will usually have already done this */
     if (!noconduct) /* KMH, conduct */
-        u.uconduct.killer++;
+        if (!u.uconduct.killer++)
+            livelog_printf(LL_CONDUCT, "killed for the first time");
 
     if (!nomsg) {
         boolean namedpet = has_mgivenname(mtmp) && !Hallucination;
@@ -3050,6 +3098,14 @@ xkilled(
             You_hear("the rumble of distant thunder...");
         else
             You_hear("the studio audience applaud!");
+        if (!unique_corpstat(mdat)) {
+            boolean mname = has_mgivenname(mtmp);
+
+            livelog_printf(LL_KILLEDPET, "murdered %s%s%s faithful %s",
+                           mname ? MGIVENNAME(mtmp) : "",
+                           mname ? ", " : "",
+                           uhis(), pmname(mdat, Mgender(mtmp)));
+        }
     } else if (mtmp->mpeaceful)
         adjalign(-5);
 
@@ -3105,7 +3161,7 @@ vamp_stone(struct monst* mtmp)
             set_mon_min_mhpmax(mtmp, 10); /* mtmp->mhpmax=max(m_lev+1,10) */
             mtmp->mhp = mtmp->mhpmax;
             /* this can happen if previously a fog cloud */
-            if (u.uswallow && (mtmp == u.ustuck))
+            if (engulfing_u(mtmp))
                 expels(mtmp, mtmp->data, FALSE);
             if (in_door) {
                 coord new_xy;
@@ -3256,10 +3312,9 @@ elemental_clog(struct monst* mon)
 /* make monster mtmp next to you (if possible);
    might place monst on far side of a wall or boulder */
 void
-mnexto(struct monst* mtmp)
+mnexto(struct monst* mtmp, unsigned int rlocflags)
 {
     coord mm;
-    boolean couldspot = canspotmon(mtmp);
 
     if (mtmp == u.usteed) {
         /* Keep your steed in sync with you instead */
@@ -3272,13 +3327,7 @@ mnexto(struct monst* mtmp)
         deal_with_overcrowding(mtmp);
         return;
     }
-    rloc_to(mtmp, mm.x, mm.y);
-    if (!g.in_mklev && (mtmp->mstrategy & STRAT_APPEARMSG)) {
-        mtmp->mstrategy &= ~STRAT_APPEARMSG; /* one chance only */
-        if (!couldspot && canspotmon(mtmp))
-            pline("%s suddenly %s!", Amonnam(mtmp),
-                  !Blind ? "appears" : "arrives");
-    }
+    rloc_to_flag(mtmp, mm.x, mm.y, rlocflags);
     return;
 }
 
@@ -3331,7 +3380,8 @@ mnearto(
     register struct monst *mtmp,
     xchar x,
     xchar y,
-    boolean move_other) /* make sure mtmp gets to x, y! so move m_at(x, y) */
+    boolean move_other, /* make sure mtmp gets to x, y! so move m_at(x, y) */
+    unsigned int rlocflags)
 {
     struct monst *othermon = (struct monst *) 0;
     xchar newx, newy;
@@ -3371,11 +3421,11 @@ mnearto(
         newx = mm.x;
         newy = mm.y;
     }
-    rloc_to(mtmp, newx, newy);
+    rloc_to_flag(mtmp, newx, newy, rlocflags);
 
     if (move_other && othermon) {
         res = 2; /* moving another monster out of the way */
-        if (!mnearto(othermon, x, y, FALSE))  /* no 'move_other' this time */
+        if (!mnearto(othermon, x, y, FALSE, rlocflags))  /* no 'move_other' this time */
             deal_with_overcrowding(othermon);
     }
 
@@ -3460,11 +3510,11 @@ setmangry(struct monst* mtmp, boolean via_attack)
             adjalign(2);
     } else
         adjalign(-1); /* attacking peaceful monsters is bad */
-    if (couldsee(mtmp->mx, mtmp->my)) {
-        if (humanoid(mtmp->data) || mtmp->isshk || mtmp->isgd)
+    if (humanoid(mtmp->data) || mtmp->isshk || mtmp->isgd) {
+        if (couldsee(mtmp->mx, mtmp->my))
             pline("%s gets angry!", Monnam(mtmp));
-        else if (flags.verbose && !Deaf)
-            growl(mtmp);
+    } else {
+        growl(mtmp);
     }
 
     /* attacking your own quest leader will anger his or her guardians */
@@ -3564,7 +3614,7 @@ setmangry(struct monst* mtmp, boolean via_attack)
                 } else if (mon->data->mlet == mtmp->data->mlet
                            && big_little_match(mndx, monsndx(mon->data))
                            && !rn2(3)) {
-                    if (!Deaf && !rn2(4)) {
+                    if (!rn2(4)) {
                         growl(mon);
                         exclaimed = (iflags.last_msg == PLNMSG_GROWL);
                     }
@@ -3754,7 +3804,7 @@ restrap(struct monst *mtmp)
         /* can't hide while trapped except in pits */
         || (mtmp->mtrapped && (t = t_at(mtmp->mx, mtmp->my)) != 0
             && !is_pit(t->ttyp))
-        || (sensemon(mtmp) && distu(mtmp->mx, mtmp->my) <= 2))
+        || (sensemon(mtmp) && next2u(mtmp->mx, mtmp->my)))
         return FALSE;
 
     if (mtmp->data->mlet == S_MIMIC) {
@@ -3964,6 +4014,10 @@ pickvampshape(struct monst* mon)
         mndx = (!rn2(4) && !uppercase_only) ? PM_FOG_CLOUD : PM_VAMPIRE_BAT;
         break;
     }
+
+    if (g.mvitals[mndx].mvflags & G_GENOD)
+        return mon->cham;
+
     return mndx;
 }
 
@@ -4345,8 +4399,15 @@ newcham(
     /* take on the new form... */
     set_mon_data(mtmp, mdat);
 
-    if (mtmp->mleashed && !leashable(mtmp))
-        m_unleash(mtmp, TRUE);
+    if (mtmp->mleashed) {
+        if (!leashable(mtmp))
+            m_unleash(mtmp, TRUE);
+        else
+            /* if leashed, persistent inventory window needs updating
+               (really only when mon_nam() is going to yield "a frog"
+               rather than "Kermit" but no need to micromanage here) */
+            update_inventory(); /* x - leash (attached to a <mon>) */
+    }
 
     if (emits_light(olddata) != emits_light(mtmp->data)) {
         /* used to give light, now doesn't, or vice versa,
@@ -4584,7 +4645,7 @@ kill_genocided_monsters(void)
                      && (g.mvitals[mtmp->cham].mvflags & G_GENOD));
         if ((g.mvitals[mndx].mvflags & G_GENOD) || kill_cham) {
             if (mtmp->cham >= LOW_PM && !kill_cham)
-                (void) newcham(mtmp, (struct permonst *) 0, FALSE, FALSE);
+                (void) newcham(mtmp, (struct permonst *) 0, FALSE, TRUE);
             else
                 mondead(mtmp);
         }
@@ -4644,7 +4705,7 @@ angry_guards(boolean silent)
         if (is_watch(mtmp->data) && mtmp->mpeaceful) {
             ct++;
             if (canspotmon(mtmp) && mtmp->mcanmove) {
-                if (distu(mtmp->mx, mtmp->my) <= 2)
+                if (next2u(mtmp->mx, mtmp->my))
                     nct++;
                 else
                     sct++;

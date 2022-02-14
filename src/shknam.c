@@ -613,7 +613,7 @@ shkinit(const struct shclass* shp, struct mkroom* sroom)
     } else if (sy == sroom->hy + 1) {
         sy--;
     } else {
-    shk_failed:
+ shk_failed:
 #ifdef DEBUG
         /* Said to happen sometimes, but I have never seen it. */
         /* Supposedly fixed by fdoor change in mklev.c */
@@ -636,7 +636,7 @@ shkinit(const struct shclass* shp, struct mkroom* sroom)
     }
 
     if (MON_AT(sx, sy))
-        (void) rloc(m_at(sx, sy), FALSE); /* insurance */
+        (void) rloc(m_at(sx, sy), RLOC_NOMSG); /* insurance */
 
     /* now initialize the shopkeeper monster structure */
     if (Is_market_level(&u.uz)) {

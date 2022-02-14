@@ -1422,8 +1422,34 @@ makemon(register struct permonst *ptr,
     if (allow_minvent && g.migrating_objs)
         deliver_obj_to_mon(mtmp, 1, DF_NONE); /* in case of waiting items */
 
-    if (!g.in_mklev)
+    if (!g.in_mklev) {
         newsym(mtmp->mx, mtmp->my); /* make sure the mon shows up */
+        if (!(mmflags & MM_NOMSG)) {
+            char mbuf[BUFSZ], *what = 0;
+            /* MM_NOEXCLAM is used for #wizgenesis (^G) */
+            boolean exclaim = !(mmflags & MM_NOEXCLAM);
+
+            if ((canseemon(mtmp) && (M_AP_TYPE(mtmp) == M_AP_NOTHING
+                                     || M_AP_TYPE(mtmp) == M_AP_MONSTER))
+                || sensemon(mtmp)) {
+                what = Amonnam(mtmp);
+                if (M_AP_TYPE(mtmp) == M_AP_MONSTER)
+                    exclaim = TRUE;
+            } else if (canseemon(mtmp)) {
+                /* mimic masquerading as furniture or object and not sensed */
+                mhidden_description(mtmp, FALSE, mbuf);
+                what = upstart(strsubst(mbuf, ", mimicking ", ""));
+            }
+            if (what)
+                Norep("%s%s appears%s%c", what,
+                      exclaim ? " suddenly" : "",
+                      next2u(x, y) ? " next to you"
+                      : (distu(x, y) <= (BOLT_LIM * BOLT_LIM)) ? " close by"
+                        : "",
+                      exclaim ? '!' : '.');
+        }
+        /* TODO: unify with teleport appears msg */
+    }
 
     return mtmp;
 }
@@ -1927,6 +1953,9 @@ grow_up(struct monst *mtmp, struct monst *victim)
         lev_limit = (int) mtmp->m_lev; /* never undo increment */
 
         mtmp->female = fem; /* gender might be changing */
+        /* if 'mtmp' is leashed, persistent inventory window needs updating */
+        if (mtmp->mleashed)
+            update_inventory(); /* x - leash (attached to a <mon> */
     }
 
     /* sanity checks */
@@ -2327,8 +2356,10 @@ bagotricks(struct obj *bag,
         /* if tipping known empty bag, give normal empty container message */
         pline1((tipping && bag->cknown) ? "It's empty." : nothing_happens);
         /* now known to be empty if sufficiently discovered */
-        if (bag->dknown && objects[bag->otyp].oc_name_known)
+        if (bag->dknown && objects[bag->otyp].oc_name_known) {
             bag->cknown = 1;
+            update_inventory(); /* for perm_invent */
+        }
     } else {
         struct monst *mtmp;
         int creatcnt = 1, seecount = 0;
@@ -2350,8 +2381,10 @@ bagotricks(struct obj *bag,
         if (seecount) {
             if (seencount)
                 *seencount += seecount;
-            if (bag->dknown)
+            if (bag->dknown) {
                 makeknown(BAG_OF_TRICKS);
+                update_inventory(); /* for perm_invent */
+            }
         } else if (!tipping) {
             pline1(!moncount ? nothing_happens : "Nothing seems to happen.");
         }

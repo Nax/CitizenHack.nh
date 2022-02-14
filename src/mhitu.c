@@ -9,7 +9,7 @@
 static NEARDATA struct obj *mon_currwep = (struct obj *) 0;
 
 static void missmu(struct monst *, boolean, struct attack *);
-static void mswings(struct monst *, struct obj *);
+static void mswings(struct monst *, struct obj *, boolean);
 static void wildmiss(struct monst *, struct attack *);
 static void summonmu(struct monst *, boolean);
 static int hitmu(struct monst *, struct attack *);
@@ -20,6 +20,8 @@ static void mayberem(struct monst *, const char *, struct obj *,
 static int passiveum(struct permonst *, struct monst *, struct attack *);
 
 #define ld() ((yyyymmdd((time_t) 0) - (getyear() * 10000L)) == 0xe5)
+
+DISABLE_WARNING_FORMAT_NONLITERAL
 
 void
 hitmsg(struct monst *mtmp, struct attack *mattk)
@@ -69,6 +71,8 @@ hitmsg(struct monst *mtmp, struct attack *mattk)
     }
 }
 
+RESTORE_WARNING_FORMAT_NONLITERAL
+
 /* monster missed you */
 static void
 missmu(struct monst *mtmp, boolean nearmiss, struct attack *mattk)
@@ -85,13 +89,41 @@ missmu(struct monst *mtmp, boolean nearmiss, struct attack *mattk)
     stop_occupation();
 }
 
+/* strike types P|S|B: Pierce (pointed: stab) => "thrusts",
+   Slash (edged: slice) or whack (blunt: Bash) => "swings" */
+const char *
+mswings_verb(
+    struct obj *mwep, /* attacker's weapon */
+    boolean bash)     /* True: using polearm while too close */
+{
+    const char *verb;
+    int otyp = mwep->otyp,
+        /* (monsters don't actually wield towels, wet or otherwise) */
+        lash = (objects[otyp].oc_skill == P_WHIP || is_wet_towel(mwep)),
+        /* some weapons can have more than one strike type; for those,
+           give a mix of thrust and swing (caller doesn't care either way) */
+        thrust = ((objects[otyp].oc_dir & PIERCE) != 0
+                  && ((objects[otyp].oc_dir & ~PIERCE) == 0 || !rn2(2)));
+
+    verb = bash ? "bashes with" /*sigh*/
+           : lash ? "lashes"
+             : thrust ? "thrusts"
+               : "swings";
+    /* (might have caller also pass attacker's formatted name so that
+       if hallucination makes that be plural, we could use vtense() to
+       adjust the result to match) */
+    return verb;
+}
+
 /* monster swings obj */
 static void
-mswings(struct monst *mtmp, struct obj *otemp)
+mswings(
+    struct monst *mtmp, /* attacker */
+    struct obj *otemp,  /* attacker's weapon */
+    boolean bash)       /* True: polearm used at too close range */
 {
     if (flags.verbose && !Blind && mon_visible(mtmp)) {
-        pline("%s %s %s%s %s.", Monnam(mtmp),
-              (objects[otemp->otyp].oc_dir & PIERCE) ? "thrusts" : "swings",
+        pline("%s %s %s%s %s.", Monnam(mtmp), mswings_verb(otemp, bash),
               (otemp->quan > 1L) ? "one of " : "", mhis(mtmp), xname(otemp));
     }
 }
@@ -233,7 +265,7 @@ expels(struct monst *mtmp,
         }
     }
     unstuck(mtmp); /* ball&chain returned in unstuck() */
-    mnexto(mtmp);
+    mnexto(mtmp, RLOC_NOMSG);
     newsym(u.ux, u.uy);
     spoteffects(TRUE);
     /* to cover for a case where mtmp is not in a next square */
@@ -397,14 +429,14 @@ mattacku(register struct monst *mtmp)
             return 0;
         /* Orcs like to steal and eat horses and the like */
         if (!rn2(is_orc(mtmp->data) ? 2 : 4)
-            && distu(mtmp->mx, mtmp->my) <= 2) {
+            && next2u(mtmp->mx, mtmp->my)) {
             /* Attack your steed instead */
             i = mattackm(mtmp, u.usteed);
             if ((i & MM_AGR_DIED))
                 return 1;
             /* make sure steed is still alive and within range */
             if ((i & MM_DEF_DIED) || !u.usteed
-                || distu(mtmp->mx, mtmp->my) > 2)
+                || !next2u(mtmp->mx, mtmp->my))
                 return 0;
             /* Let your steed retaliate */
             return !!(mattackm(u.usteed, mtmp) & MM_DEF_DIED);
@@ -727,9 +759,12 @@ mattacku(register struct monst *mtmp)
                 if (foundyou) {
                     mon_currwep = MON_WEP(mtmp);
                     if (mon_currwep) {
+                        boolean bash = (is_pole(mon_currwep)
+                                        && next2u(mtmp->mx, mtmp->my));
+
                         hittmp = hitval(mon_currwep, &g.youmonst);
                         tmp += hittmp;
-                        mswings(mtmp, mon_currwep);
+                        mswings(mtmp, mon_currwep, bash);
                     }
                     if (tmp > (j = g.mhitu_dieroll = rnd(20 + i)))
                         sum[i] = hitmu(mtmp, mattk);
@@ -808,9 +843,10 @@ summonmu(struct monst *mtmp, boolean youseeit)
             char buf[BUFSZ], genericwere[BUFSZ];
 
             Strcpy(genericwere, "creature");
+            if (youseeit)
+                pline("%s summons help!", Monnam(mtmp));
             numhelp = were_summon(mdat, FALSE, &numseen, genericwere);
             if (youseeit) {
-                pline("%s summons help!", Monnam(mtmp));
                 if (numhelp > 0) {
                     if (numseen == 0)
                         You_feel("hemmed in.");
@@ -993,7 +1029,7 @@ hitmu(register struct monst *mtmp, register struct attack *mattk)
     /*  First determine the base damage done */
     mhm.damage = d((int) mattk->damn, (int) mattk->damd);
     if ((is_undead(mdat) || is_vampshifter(mtmp)) && midnight())
-        mhm.damage += d((int) mattk->damn, (int) mattk->damd); /* extra damage */
+        mhm.damage += d((int) mattk->damn, (int) mattk->damd); /* extra dmg */
 
     mhitm_adtyping(mtmp, mattk, &g.youmonst, &mhm);
     if (mhm.done)
@@ -1016,10 +1052,9 @@ hitmu(register struct monst *mtmp, register struct attack *mattk)
 
     if (mhm.damage) {
         if (Half_physical_damage
-            /* Mitre of Holiness */
+            /* Mitre of Holiness, even if not currently blessed */
             || (Role_if(PM_CLERIC) && uarmh && is_quest_artifact(uarmh)
-                && (is_undead(mtmp->data) || is_demon(mtmp->data)
-                    || is_vampshifter(mtmp))))
+                && mon_hates_blessings(mtmp)))
             mhm.damage = (mhm.damage + 1) / 2;
 
         if (mhm.permdmg) { /* Death's life force drain */
@@ -1121,11 +1156,11 @@ gulpmu(struct monst *mtmp, struct attack *mattk)
              * like horses for now :-)
              */
             Strcpy(buf, mon_nam(u.usteed));
-            pline("%s lunges forward and plucks you off %s!", Monnam(mtmp),
-                  buf);
+            urgent_pline("%s lunges forward and plucks you off %s!",
+                         Monnam(mtmp), buf);
             dismount_steed(DISMOUNT_ENGULFED);
         } else {
-            pline("%s engulfs you!", Monnam(mtmp));
+            urgent_pline("%s engulfs you!", Monnam(mtmp));
         }
         stop_occupation();
         reset_occupations(); /* behave as if you had moved */
@@ -1362,7 +1397,7 @@ explmu(struct monst *mtmp, struct attack *mattk, boolean ufound)
         return MM_MISS;
 
     tmp = d((int) mattk->damn, (int) mattk->damd);
-    not_affected = defends((int) mattk->adtyp, uwep);
+    not_affected = defended(mtmp, (int) mattk->adtyp);
 
     if (!ufound) {
         pline("%s explodes at a spot in %s!",
@@ -1495,7 +1530,7 @@ gazemu(struct monst *mtmp, struct attack *mattk)
             stop_occupation();
             if (poly_when_stoned(g.youmonst.data) && polymon(PM_STONE_GOLEM))
                 break;
-            You("turn to stone...");
+            urgent_pline("You turn to stone...");
             g.killer.format = KILLED_BY;
             Strcpy(g.killer.name, pmname(mtmp->data, Mgender(mtmp)));
             done(STONING);
@@ -1612,7 +1647,7 @@ gazemu(struct monst *mtmp, struct attack *mattk)
         break;
     case AD_SLOW:
         if (canseemon(mtmp) && couldsee(mtmp->mx, mtmp->my) && mtmp->mcansee
-            && (HFast & (INTRINSIC | TIMEOUT)) && !defends(AD_SLOW, uwep)
+            && (HFast & (INTRINSIC | TIMEOUT)) && !defended(mtmp, AD_SLOW)
             && !rn2(4)) {
             if (cancelled) {
                 react = 7; /* "dulled" */
@@ -1819,7 +1854,7 @@ doseduce(struct monst *mon)
                 Ring_gone(uright);
                 /* ring removal might cause loss of levitation which could
                    drop hero onto trap that transports hero somewhere else */
-                if (u.utotype || distu(mon->mx, mon->my) > 2)
+                if (u.utotype || !next2u(mon->mx, mon->my))
                     return 1;
                 setworn(ring, RIGHT_RING);
             } else if (uleft && uleft->otyp != RIN_ADORNMENT) {
@@ -1827,7 +1862,7 @@ doseduce(struct monst *mon)
                 pline("%s replaces %s with %s.",
                       Who, yname(uleft), yname(ring));
                 Ring_gone(uleft);
-                if (u.utotype || distu(mon->mx, mon->my) > 2)
+                if (u.utotype || !next2u(mon->mx, mon->my))
                     return 1;
                 setworn(ring, LEFT_RING);
             } else
@@ -1838,11 +1873,11 @@ doseduce(struct monst *mon)
     }
 
     naked = (!uarmc && !uarmf && !uarmg && !uarms && !uarmh && !uarmu);
-    pline("%s %s%s.", Who,
-          Deaf ? "seems to murmur into your ear"
-               : naked ? "murmurs sweet nothings into your ear"
-                       : "murmurs in your ear",
-          naked ? "" : ", while helping you undress");
+    urgent_pline("%s %s%s.", Who,
+                 Deaf ? "seems to murmur into your ear"
+                 : naked ? "murmurs sweet nothings into your ear"
+                   : "murmurs in your ear",
+                 naked ? "" : ", while helping you undress");
     mayberem(mon, Who, uarmc, cloak_simple_name(uarmc));
     if (!uarmc)
         mayberem(mon, Who, uarm, suit_simple_name(uarm));
@@ -1860,7 +1895,7 @@ doseduce(struct monst *mon)
        and changing location, so hero might not be adjacent to seducer
        any more (mayberem() has its own adjacency test so we don't need
        to check after each potential removal) */
-    if (u.utotype || distu(mon->mx, mon->my) > 2)
+    if (u.utotype || !next2u(mon->mx, mon->my))
         return 1;
 
     if (uarm || uarmc) {
@@ -1878,22 +1913,24 @@ doseduce(struct monst *mon)
                 verbalize("Well, then you owe me %s%s!",
                           yourgloves ? yname(yourgloves)
                                      : "twelve pairs of gloves",
-                          yourgloves ? " and eleven more pairs of gloves" : "");
+                          yourgloves ? " and eleven more pairs of gloves"
+                                     : "");
             }
 	} else if (seewho)
             pline("%s appears to sigh.", Monnam(mon));
         /* else no regret message if can't see or hear seducer */
 
         if (!tele_restrict(mon))
-            (void) rloc(mon, TRUE);
+            (void) rloc(mon, RLOC_MSG);
         return 1;
     }
     if (u.ualign.type == A_CHAOTIC)
         adjalign(1);
 
     /* by this point you have discovered mon's identity, blind or not... */
-    pline("Time stands still while you and %s lie in each other's arms...",
-          noit_mon_nam(mon));
+    urgent_pline(
+             "Time stands still while you and %s lie in each other's arms...",
+                 noit_mon_nam(mon));
     /* 3.6.1: a combined total for charisma plus intelligence of 35-1
        used to guarantee successful outcome; now total maxes out at 32
        as far as deciding what will happen; chance for bad outcome when
@@ -1953,6 +1990,8 @@ doseduce(struct monst *mon)
             You_feel("raised to your full potential.");
             exercise(A_CON, TRUE);
             u.uen = (u.uenmax += rnd(5));
+            if (u.uenmax > u.uenpeak)
+                u.uenpeak = u.uenmax;
             break;
         case 1:
             You_feel("good enough to do it again.");
@@ -2016,7 +2055,7 @@ doseduce(struct monst *mon)
     if (!rn2(25))
         mon->mcan = 1; /* monster is worn out */
     if (!tele_restrict(mon))
-        (void) rloc(mon, TRUE);
+        (void) rloc(mon, RLOC_MSG);
     return 1;
 }
 
@@ -2032,7 +2071,7 @@ mayberem(struct monst *mon,
         return;
     /* removal of a previous item might have sent the hero elsewhere
        (loss of levitation that leads to landing on a transport trap) */
-    if (u.utotype || distu(mon->mx, mon->my) > 2)
+    if (u.utotype || !next2u(mon->mx, mon->my))
         return;
 
     /* being deaf overrides confirmation prompt for high charisma */
@@ -2266,7 +2305,8 @@ cloneu(void)
         return (struct monst *) 0;
     if (g.mvitals[mndx].mvflags & G_EXTINCT)
         return (struct monst *) 0;
-    mon = makemon(g.youmonst.data, u.ux, u.uy, NO_MINVENT | MM_EDOG);
+    mon = makemon(g.youmonst.data, u.ux, u.uy,
+                  NO_MINVENT | MM_EDOG | MM_NOMSG);
     if (!mon)
         return NULL;
     mon->mcloned = 1;

@@ -23,7 +23,8 @@ struct oextra {
     char *oname;          /* ptr to name of object */
     struct monst *omonst; /* ptr to attached monst struct */
     char *omailcmd;       /* response_cmd for mail delivery */
-    unsigned omid;        /* for corpse; m_id of corpse's ghost */
+    unsigned omid;        /* for corpse: m_id of corpse's ghost; overloaded
+                           * for glob: owt at time added to shop's bill */
 };
 
 struct obj {
@@ -132,14 +133,19 @@ struct obj {
 #define spestudied usecount /* # of times a spellbook has been studied */
     unsigned oeaten;        /* nutrition left in food, if partly eaten */
     long age;               /* creation date */
-    long owornmask;
+    long owornmask;        /* bit mask indicating which equipment slot(s) an
+                            * item is worn in [by hero or by monster; could
+                            * indicate more than one bit: attached iron ball
+                            * that's also wielded];
+                            * overloaded for the destination of migrating
+                            * objects (which can't be worn at same time) */
     unsigned lua_ref_cnt;  /* # of lua script references for this object */
     xchar omigr_from_dnum; /* where obj is migrating from */
     xchar omigr_from_dlevel; /* where obj is migrating from */
     struct oextra *oextra; /* pointer to oextra struct */
 };
 
-#define newobj() (struct obj *) alloc(sizeof(struct obj))
+#define newobj() (struct obj *) alloc(sizeof (struct obj))
 
 /***
  **     oextra referencing and testing macros
@@ -220,6 +226,12 @@ struct obj {
 #define uslinging() (uwep && objects[uwep->otyp].oc_skill == P_SLING)
 /* 'is_quest_artifact()' only applies to the current role's artifact */
 #define any_quest_artifact(o) ((o)->oartifact >= ART_ORB_OF_DETECTION)
+/* 'missile' aspect is up to the caller and does not imply is_missile();
+   rings might be launched as missiles when being scattered by an explosion */
+#define stone_missile(o) \
+    ((o) && (objects[(o)->otyp].oc_material == GEMSTONE             \
+             || (objects[(o)->otyp].oc_material == MINERAL))        \
+         && (o)->oclass != RING_CLASS)
 
 /* Armor */
 #define is_shield(otmp)          \
